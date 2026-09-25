@@ -557,7 +557,7 @@ section('골드 상점');
   fresh(1); G.reset();
   const u = UM.create('charmander');            // 불꽃 · 흔함
   F.place(0, u); UM.recomputeAll();
-  const base = u.attack;
+  const base = u.attack, baseSpd = u.attackSpeed;
 
   GM.gold = 0;
   check('골드가 없으면 못 산다', G.buy('type', 'FIRE').reason === 'NO_GOLD');
@@ -569,7 +569,17 @@ section('골드 상점');
   check('타입 업그레이드가 필드 개체 공격력에 곧바로 붙는다',
     Math.abs(u.attack / base - (1 + G.CFG.typeStep)) < 1e-6, `${(u.attack / base).toFixed(3)}`);
 
+  check('타입 업그레이드는 공격속도도 같이 올린다',
+    Math.abs(u.attackSpeed / baseSpd - (1 + G.CFG.typeSpeedStep)) < 1e-6 && G.CFG.typeSpeedStep > 0, `${(u.attackSpeed / baseSpd).toFixed(3)}`);
+
   G.buy('tier', 'T1');
+  check('등급 업그레이드도 공격속도를 같이 올리고 타입과 곱으로 쌓인다',
+    Math.abs(u.attackSpeed / baseSpd - (1 + G.CFG.typeSpeedStep) * (1 + G.CFG.tierSpeedStep)) < 1e-6 && G.CFG.tierSpeedStep > 0,
+    `${(u.attackSpeed / baseSpd).toFixed(3)}`);
+  const full = (a, b) => (1 + 10 * a) * (1 + 10 * b);
+  check('끝까지 올린 공격력 × 공격속도는 예전 "공격력만"(타입 1.5 · 등급 1.6)과 거의 같다',
+    Math.abs(full(G.CFG.typeStep, G.CFG.typeSpeedStep) / 1.5 - 1) < 0.03 && Math.abs(full(G.CFG.tierStep, G.CFG.tierSpeedStep) / 1.6 - 1) < 0.03,
+    `타입 ${full(G.CFG.typeStep, G.CFG.typeSpeedStep).toFixed(3)} · 등급 ${full(G.CFG.tierStep, G.CFG.tierSpeedStep).toFixed(3)}`);
   check('등급 업그레이드는 타입과 곱으로 쌓인다',
     Math.abs(u.attack / base - (1 + G.CFG.typeStep) * (1 + G.CFG.tierStep)) < 1e-6, `${(u.attack / base).toFixed(3)}`);
 
@@ -672,13 +682,73 @@ section('70라운드 후반 곡선');
     let e = d.attack * (1 + c) * (d.attackSpeed || 1);
     if (d.attackType === 'SPLASH') e *= 1.6; else if (d.attackType === 'PIERCE') e *= Math.min(d.pierce || 1, 2.2);
     else if (d.attackType === 'CHAIN') e *= 1 + (d.chain || 0) * 0.45;
-    return e * CP.mulOf(d) * RPD.RoleTuning.attack(d.role) * RPD.RoleTuning.attackSpeed(d.role); };
+    return e * CP.mulOf(d) * RPD.RoleTuning.attack(d.role) * RPD.RoleTuning.speedOf(d); };
   RPD.SpellData.list.filter(sp => sp.kind !== 'hidden').forEach(sp => {
     const want = sp.kind === 'immortal' ? CP.CFG.IMMORTAL : CP.CFG.TRANSCEND;
     const mat = sp.materials.reduce((a, m) => a + bp(PD.get(m)), 0);
     const r = bp(PD.get(sp.result)) / mat;
     check(`${PD.get(sp.result).name} = 재료 합의 ${want}배(역할 보정 포함 · 만들면 확실히 세진다)`, Math.abs(r - want) < 0.01, r.toFixed(3));
   });
+}
+
+/* ---------- 클리어 = 마지막 보스 처치 (세션 42) ---------- */
+section('마지막 보스');
+{
+  const EM = RPD.EnemyManager, WD = RPD.WaveData;
+  const walkOut = (wave) => {
+    fresh(wave); EM.reset && EM.reset();
+    const e = EM.spawn(WD.bossIdFor(wave, GM.mode), wave);
+    for (let i = 0; i < 20000 && e.alive !== false && EM.enemies.indexOf(e) >= 0; i++) EM.update(0.05);
+    return e;
+  };
+  let reason = null;
+  const onOver = RPD.bus.on('game:over', p => { reason = p && p.reason; });
+  const last = walkOut(RPD.Modes.NORMAL.finalWave);
+  check('마지막 라운드 보스를 놓치면 라이프가 남아도 진다',
+    last.leaked === true && GM.state === RPD.GameState.GAMEOVER && GM.life > 0 && reason === 'finalBoss',
+    `leaked=${last.leaked} state=${GM.state} life=${GM.life} reason=${reason}`);
+  reason = null;
+  walkOut(60);
+  check('마지막이 아닌 보스를 놓치면 라이프만 깎인다', GM.state === RPD.GameState.RUNNING && reason === null, `state=${GM.state}`);
+  RPD.bus.off('game:over', onOver);
+}
+
+/* ---------- 공격 대상 선택 (세션 42) ---------- */
+section('공격 대상 선택');
+{
+  const EM = RPD.EnemyManager, CM = RPD.CombatManager;
+  fresh(30); EM.reset();
+  const u = UM.create('charmander'); F.place(0, u); UM.recomputeAll();
+  const def0 = u.targeting;
+  UM.setTargeting(u, 'BOSS'); UM.recomputeAll();
+  check('개체에 고른 대상이 다시 계산해도 남는다', u.targeting === 'BOSS' && u.targetChoice === 'BOSS', u.targeting);
+  UM.setTargeting(u, null);
+  check('선택을 지우면 종 기본값으로 돌아간다', u.targeting === def0, u.targeting);
+  check('없는 대상은 받지 않는다', UM.setTargeting(u, 'NOPE') === false && u.targeting === def0);
+  UM.cycleTargeting(u);
+  const M = UM.TARGET_MODES;
+  check('T 키 순환이 다음 대상으로 넘어간다', u.targeting === M[(M.indexOf(def0) + 1) % M.length], u.targeting);
+
+  UM.setTargetingAll('BOSS');
+  const later = UM.create('squirtle'); F.place(1, later); UM.recomputeAll();
+  check('"모두 이렇게"는 지금 개체와 나중에 뽑은 개체 모두에 붙는다', u.targeting === 'BOSS' && later.targeting === 'BOSS');
+  UM.setTargeting(later, 'FIRST');
+  check('전체 설정보다 개체에 고른 것이 앞선다', later.targeting === 'FIRST' && u.targeting === 'BOSS');
+  GM.reset('NORMAL');
+  check('새 판이 시작되면 전체 설정이 지워진다', GM.targetAll === null);
+
+  // 보스 우선 — 잡몹이 출구에 더 가까워도 보스를 친다
+  fresh(30); EM.reset();
+  const hunter = UM.create('charmander'); F.place(0, hunter); UM.recomputeAll();
+  hunter.range = 1e9;   // 사거리 판정을 빼고 고르는 규칙만 본다
+  const boss = EM.spawn(RPD.WaveData.bossIdFor(30, GM.mode), 30, { distance: 10 });
+  const mob = EM.spawn('grunt', 30, { distance: 400 });
+  UM.setTargeting(hunter, 'FIRST');
+  const a = CM.findTarget(hunter);
+  UM.setTargeting(hunter, 'BOSS');
+  const b = CM.findTarget(hunter);
+  check('출구 앞은 출구에 가까운 잡몹, 보스 우선은 보스를 고른다', a === mob && b === boss, `${a && a.defId} / ${b && b.defId}`);
+  EM.reset();
 }
 
 /* ---------- 역할 보정 · 버퍼 (세션 33) ---------- */
@@ -696,6 +766,18 @@ section('역할 보정 · 버퍼');
   check('단일은 피해·공격속도가 둘 다 올랐다', us.attack > rawAtk(sg) && RT.attackSpeed('SINGLE_DPS') > 1);
   const ub = mk(bk.id);
   check('보스킬러는 피해·공격속도가 둘 다 올랐다', ub.attack > rawAtk(bk) && RT.attackSpeed('BOSS_KILLER') > 1);
+
+  // 공격 방식별 공격속도 (세션 36) — 한 번에 때리는 적이 적을수록 빠르다
+  const S = RT.byAttackType;
+  check('공격속도: 단일 > 관통 > 광역 > 연쇄', S.SINGLE > S.PIERCE && S.PIERCE > S.SPLASH && S.SPLASH > S.CHAIN,
+    `${S.SINGLE} · ${S.PIERCE} · ${S.SPLASH} · ${S.CHAIN}`);
+  const plain = d => d.attackSpeed * RT.attackSpeed(d.role) * (d.types.indexOf('FLYING') >= 0 ? RPD.TypeParams.attackSpeedMul : 1);
+  [sg, ch, PD.list.find(d => d.attackType === 'SPLASH' && !d.form)].forEach(d => {
+    fresh(1); const u = mk(d.id);
+    const want = plain(d) * RT.attackTypeSpeed(d.attackType) * RPD.SynergyManager.bonus.attackSpeedMul;
+    check(`${d.name}(${d.attackType || 'SINGLE'}) 실효 공격속도에 공격 방식 보정이 실린다`, Math.abs(u.attackSpeed / want - 1) < 1e-6,
+      `${u.attackSpeed.toFixed(3)} / ${want.toFixed(3)}`);
+  });
 
   // 버퍼 — 이웃에게 새 축이 붙는다
   const nbr = () => { const a = F.slots[0]; return F.slots.find(s => s !== a && s.unlocked && UM.isNeighbor(a, s)); };

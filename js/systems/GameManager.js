@@ -24,6 +24,7 @@
     var keep = this.mode && this.mode.id === modeId ? this.mode.difficulty : 'NORMAL';
     this.mode = RPD.effectiveMode(modeId, diffId || keep);
     this.wave = 0;
+    this.targetAll = null;   // 공격 대상 "전체 적용" — 판마다 초기화(UnitManager.setTargetingAll)
     var mod = this.mode.modifiers || {};
     var dexGold = RPD.DexBonus ? RPD.DexBonus.totals().startGold : 0;
     this.gold = Math.round(CFG.startGold * (mod.startGoldMul || 1)) + dexGold;
@@ -84,6 +85,19 @@
       this.setState(S.GAMEOVER);
       RPD.bus.emit('game:over', { wave: this.wave, elapsed: this.elapsed });
     }
+  };
+
+  /* 마지막 라운드 보스를 놓치면 라이프가 남아 있어도 진다 (세션 42 — 클리어 = 마지막 보스 처치).
+   * 예전엔 보스가 걸어 나가도 라이프만 남으면 클리어였고, 노멀 70R 보스는 실제로 아무도 못 잡았다. */
+  GameManager.failFinalBoss = function () {
+    if (this.state === S.GAMEOVER || this.state === S.VICTORY) return;
+    this.setState(S.GAMEOVER);
+    RPD.bus.emit('game:over', { wave: this.wave, elapsed: this.elapsed, reason: 'finalBoss' });
+  };
+
+  GameManager.isFinalWave = function (wave) {
+    var f = this.mode && this.mode.finalWave;
+    return f > 0 && wave >= f;
   };
 
   GameManager.gainLife = function (amount) {

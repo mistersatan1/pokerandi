@@ -54,6 +54,16 @@ function boot() {
   // 곡선 실험용 덮어쓰기: LATE=1.07 WALL_STEP=3
   if (process.env.LATE) R.WaveData.lateGrowth = Number(process.env.LATE);
   if (process.env.WALL_STEP) R.WaveData.wallStep = Number(process.env.WALL_STEP);
+  // 마지막 보스 체력 실험: FINAL_BOSS_HP=0.3 (그 모드의 modifiers.finalBossHpMul 을 덮어쓴다)
+  if (process.env.FINAL_BOSS_HP) {
+    Object.keys(R.Modes).forEach(k => { R.Modes[k].modifiers = R.Modes[k].modifiers || {}; R.Modes[k].modifiers.finalBossHpMul = Number(process.env.FINAL_BOSS_HP); });
+  }
+  // 불멸·초월 배율 실험: IMMORTAL_MUL=2.5 TRANSCEND_MUL=2.8 (재료 합의 몇 배 — craftpower.js 3번 규칙)
+  if (process.env.IMMORTAL_MUL || process.env.TRANSCEND_MUL) {
+    if (process.env.IMMORTAL_MUL) R.CraftPower.CFG.IMMORTAL = Number(process.env.IMMORTAL_MUL);
+    if (process.env.TRANSCEND_MUL) R.CraftPower.CFG.TRANSCEND = Number(process.env.TRANSCEND_MUL);
+    R.CraftPower.build();
+  }
   if (process.env.NO_CRAFTPOWER) { R.CraftPower.mul = {}; R.CraftPower.mulOf = () => 1; }
   return R;
 }
@@ -264,7 +274,9 @@ function act(stats) {
     if (val > bestVal) { bestVal = val; best = s; }
   }
   const upValue = bestVal;
-  const shopValue = pick ? pick.value * (pick.kind === 'type' ? G.CFG.typeStep : G.CFG.tierStep) : 0;
+  // 한 레벨이 공격력 · 공격속도를 같이 올린다 — DPS 로는 둘의 합만큼 늘어난다고 친다
+  const shopValue = pick ? pick.value * (pick.kind === 'type' ? G.CFG.typeStep + G.CFG.typeSpeedStep
+                                                              : G.CFG.tierStep + G.CFG.tierSpeedStep) : 0;
   if (!process.env.NO_SHOP && pick && shopValue >= upValue && GM.gold >= pick.price) {
     if (G.buy(pick.kind, pick.key).ok) stats.shopBuys++;
   } else if (best && GM.gold > EC.upgradeCost(best.unit) * 1.5) {
@@ -284,13 +296,35 @@ function playOne(modeId) {
       const all = F.getUnits().concat(R.StorageManager.units);
       const special = all.filter(u => u.def.tier === 'T6' || u.def.tier === 'T7').length;
       if (p.wave === 60) curStats.special60 = special;
+      /* 공격 대상 선택(세션 42)을 쓰는 플레이어 — 보스 라운드엔 [모두 이렇게 → 보스], 끝나면 종 기본값으로.
+       * BOT_TARGET=0 이면 안 쓴다(기능 전과 비교). */
+      if (process.env.BOT_TARGET !== '0') {
+        const bossRound = R.WaveData.isBossWave(p.wave, GM.mode);
+        if (bossRound && GM.targetAll !== 'BOSS') R.UnitManager.setTargetingAll('BOSS');
+        else if (!bossRound && GM.targetAll) R.UnitManager.setTargetingAll(null);
+      }
+      /* 벽 넘김 = 61R 시작 ~ 66R 시작 사이 라이프를 지켰나. 라운드가 겹쳐 들어와 61R 적이 새는 건 62~64 에 드러나고,
+       * 라이프 60 이 닳는 데 몇 라운드가 걸려 "65 도달"은 벽을 못 넘은 판도 셌다(세션 38). */
+      if (p.wave === 61) curStats.life61 = GM.life;
+      if (p.wave === 66) curStats.life66 = GM.life;
+      /* WALL_LOG=파일 — 58라운드부터 라운드 시작 시점의 라이프 · 필드 DPS 를 판마다 남긴다(벽을 어떻게 넘는지 보기) */
+      if (process.env.WALL_LOG && p.wave >= 49) {
+        const fu = F.getUnits(), imm = fu.filter(u => u.def.tier === 'T6' || u.def.tier === 'T7');
+        (curStats.trace = curStats.trace || []).push({ w: p.wave, life: GM.life,
+          dps: Math.round(fu.reduce((a, u) => a + u.dps, 0)), sp: special, n: fu.length,
+          immField: imm.length, immDps: Math.round(imm.reduce((a, u) => a + u.dps, 0)),
+          immCov: imm.map(u => { const c = R.EconomyManager.upgradeCoverage && R.EconomyManager.upgradeCoverage(u); return c ? Math.round(c.now) : null; }),
+          medCov: (() => { const cs = fu.map(u => { const c = R.EconomyManager.upgradeCoverage && R.EconomyManager.upgradeCoverage(u); return c ? c.now : null; }).filter(x => x != null).sort((a, b) => a - b); return cs.length ? Math.round(cs[cs.length >> 1]) : null; })(),
+          immDmg: imm.map(u => Math.round(u.totalDamage)), topDmg: Math.round(Math.max(0, ...fu.map(u => u.totalDamage))) });
+      }
       /* GIVE_IMMORTAL=n — 50라운드에 불멸 n마리를 쥐여 준다(가장 약한 필드 개체와 바꾼다).
        * 봇은 불멸(전설 3마리)을 거의 못 만들어서, "갖춘 플레이어"를 따로 흉내 낸다. */
       const give = Number(process.env.GIVE_IMMORTAL || 0);
       if (p.wave === 50 && give > 0) {
         /* 실제 주문처럼 전설 3마리를 치르고 바꾼다(가장 약한 전설부터 · 모자라면 가장 약한 개체).
          * 공짜로 주면 "불멸 = 순수한 덤"이 돼 벽의 의미를 부풀린다. */
-        const ids = ['moltres', 'zapdos', 'articuno', 'mewtwo', 'mew'].slice(0, give);
+        // GIVE_IDS=mewtwo,moltres — 어떤 불멸을 줄지(기본 파이어·썬더 — 둘 다 광역·연쇄라 단일 보스엔 약하다)
+        const ids = (process.env.GIVE_IDS ? process.env.GIVE_IDS.split(',') : ['moltres', 'zapdos', 'articuno', 'mewtwo', 'mew']).slice(0, give);
         for (const id of ids) {
           let freed = -1;
           for (let k = 0; k < 3; k++) {
@@ -306,12 +340,24 @@ function playOne(modeId) {
         R.UnitManager.recomputeAll();
       }
     });
+    /* 마지막 라운드 보스를 잡았나 · 놓쳤나 — 지금 규칙은 보스가 걸어 나가도 라이프가 남으면 클리어다 */
+    const finalBoss = (e, how) => {
+      if (!curStats || !e || !e.isBoss) return;
+      const fw = GM.mode.finalWave;
+      if (fw > 0 && GM.wave >= fw) {
+        curStats.finalBoss = how;
+        // 넣은 피해 / 최대 체력 — 보스 체력을 낮췄다면 잡았을지 어림하는 데 쓴다(넣은 피해 ≥ 새 체력이면 잡음)
+        curStats.finalBossFrac = how === 'killed' ? 1 : Math.max(0, (e.maxHp - Math.max(0, e.hp)) / e.maxHp);
+      }
+    };
+    R.bus.on('enemy:died', p => finalBoss(p.enemy, 'killed'));
+    R.bus.on('enemy:leaked', e => finalBoss(e, 'leaked'));
     R.bus.on('elite:result', p => {
       if (!curStats) return;
       if (p.ok) { curStats.eliteWin++; curStats.eliteGold += p.gold; } else curStats.eliteLose++;
     });
   }
-  const stats = { special60: null, crafts: 0, spells: 0, summons: 0, shopBuys: 0, elites: 0, eliteWin: 0, eliteLose: 0, eliteGold: 0, sells: 0, slots: 0, upgrades: 0, deploys: 0,
+  const stats = { special60: null, life61: null, life66: null, finalBoss: null, finalBossFrac: null, crafts: 0, spells: 0, summons: 0, shopBuys: 0, elites: 0, eliteWin: 0, eliteLose: 0, eliteGold: 0, sells: 0, slots: 0, upgrades: 0, deploys: 0,
                   expands: 0, shardBuys: 0, byTier: {}, goldSum: 0, goldN: 0 };
   curStats = stats;
   WM.begin();
@@ -365,6 +411,8 @@ const results = [];
 for (let i = 0; i < RUNS; i++) {
   const r = playOne(MODE);
   results.push(r);
+  if (process.env.WALL_LOG) require('fs').appendFileSync(process.env.WALL_LOG,
+    JSON.stringify({ round: r.round, win: r.win, special60: r.special60, finalBoss: r.finalBoss, finalBossFrac: r.finalBossFrac, trace: r.trace || [] }) + '\n');
   if (VERBOSE) {
     console.log(
       String(i + 1).padStart(2) +
@@ -396,10 +444,14 @@ console.log(`  판당 소환 ${(results.reduce((a, r) => a + r.summons, 0) / RUN
   // 60라운드 시점 불멸·초월 보유 여부로 나눠 본다 — "갖춰야 60을 넘는다"의 측정
   const at60 = results.filter(r => r.special60 != null);
   const has = at60.filter(r => r.special60 > 0), none = at60.filter(r => r.special60 === 0);
-  // 61R 에서 죽어도 "61 도달"이라 벽을 넘은 게 아니다 — 65 이상 간 판만 넘은 것으로 센다
-  const past = xs => xs.filter(r => r.round >= 65 || r.win).length;
+  // 벽 넘김 = 61~65 동안 라이프를 지킨 판(61R 시작 → 66R 시작 손실 WALL_HOLD 이하). 80판에서 허용 0 · 5 · 10 모두 같은 판을 골랐다.
+  const WALL_HOLD = 5;
+  const past = xs => xs.filter(r => r.life66 != null && r.life61 - r.life66 <= WALL_HOLD).length;
   const clr = xs => xs.length ? Math.round(xs.filter(r => r.win).length / xs.length * 100) + '%' : '-';
-  console.log(`  60R 도달 ${at60.length}판 → 벽 넘김(65+): 불멸·초월 있음 ${past(has)}/${has.length}(클리어 ${clr(has)})` +
+  const wins = results.filter(r => r.win);
+  if (wins.length) console.log(`  클리어 ${wins.length}판 중 마지막 보스: 잡음 ${wins.filter(r => r.finalBoss === 'killed').length}` +
+    ` · 놓침 ${wins.filter(r => r.finalBoss === 'leaked').length}`);
+  console.log(`  60R 도달 ${at60.length}판 → 벽 넘김(61~65 라이프 지킴): 불멸·초월 있음 ${past(has)}/${has.length}(클리어 ${clr(has)})` +
     ` · 없음 ${past(none)}/${none.length}(클리어 ${clr(none)})`);
 }
 {

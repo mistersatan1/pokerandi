@@ -355,6 +355,21 @@
     }
 
     if (el.slotClose) el.slotClose.addEventListener('click', function () { F.select(-1); });
+    // 정보 카드의 공격 대상 칩 · 전체 적용.
+    // 누르는 순간(pointerdown) 처리한다 — 전투 중엔 스킬 버프 등으로 카드가 자주 다시 그려져서,
+    // 누르고 떼는 사이에 버튼이 바뀌면 click 이 통째로 사라진다. 키보드(Enter/Space)는 click(detail 0)으로 온다.
+    var onTarget = function (e) {
+      var t = e.target && e.target.closest ? e.target.closest('[data-tgt],[data-tgt-all]') : null;
+      var slot = F.getSelected();
+      if (!t || !slot || !slot.unit) return;
+      if (e.preventDefault) e.preventDefault();
+      if (t.dataset.tgtAll) RPD.UnitManager.setTargetingAll(t.dataset.tgtAll);
+      else RPD.UnitManager.setTargeting(slot.unit, t.dataset.tgt);
+    };
+    if (el.slotBody && el.slotBody.addEventListener) {
+      el.slotBody.addEventListener('pointerdown', function (e) { if (e.button == null || e.button === 0) onTarget(e); });
+      el.slotBody.addEventListener('click', function (e) { if (e.detail === 0) onTarget(e); });
+    }
 
     if (el.synergyBody) {
       // 키보드로도 펼칠 수 있어야 한다 (줄이 role=button 이다)
@@ -594,6 +609,7 @@
     RPD.bus.on('game:shield', renderShield);
     RPD.bus.on('summon:stateChanged', renderSummonPanel);
     RPD.bus.on('units:recomputed', function () { renderSlotPanel({ slot: F.getSelected() }); });
+    RPD.bus.on('unit:targeting', function () { renderSlotPanel({ slot: F.getSelected() }); });
     RPD.bus.on('economy:gold', refreshActionButtons);
     RPD.bus.on('field:changed', refreshActionButtons);
     RPD.bus.on('field:select', refreshActionButtons);
@@ -908,6 +924,22 @@
     BOSS: '보스 우선'
   };
 
+  /* 공격 대상 고르기 — 칩 5개 + 전체 적용. 누른 칩이 이 개체의 선택이 된다(UnitManager.setTargeting). */
+  var TARGET_SHORT = { FIRST: '출구 앞', BOSS: '보스', STRONGEST: '센 적', WEAKEST: '약한 적', LAST: '갓 나온' };
+  function targetPickHtml(u) {
+    var all = GM.targetAll;
+    var chips = RPD.UnitManager.TARGET_MODES.map(function (m) {
+      return '<button type="button" class="tgt__chip' + (u.targeting === m ? ' is-on' : '') + '" data-tgt="' + m + '"' +
+        ' title="' + TARGET_LABEL[m] + '" aria-pressed="' + (u.targeting === m) + '">' + TARGET_SHORT[m] + '</button>';
+    }).join('');
+    var src = u.targetChoice ? '직접 고름' : all ? '전체 설정' : '기본값';
+    return '<div class="tgt">' +
+      '<div class="tgt__head"><span>공격 대상 <small>' + src + ' · T</small></span>' +
+        '<button type="button" class="tgt__all" data-tgt-all="' + u.targeting + '">모두 이렇게</button></div>' +
+      '<div class="tgt__chips">' + chips + '</div>' +
+    '</div>';
+  }
+
   /* 옆 버퍼에게서 받는 패시브 — 왜 공속이 올랐는지 보이게 */
   function receivedAura(u) {
     var x = u.auraExtras;
@@ -922,6 +954,14 @@
     if (x.bossDamage) parts.push('보스피해 +' + Math.round(x.bossDamage * 100) + '%');
     var names = x.from.map(function (id) { var a = RPD.AuraData.get(id); return a ? a.icon : ''; }).join('');
     return '<p class="sc__buffed">' + names + ' 받는 버프 · ' + parts.join(' · ') + '</p>';
+  }
+
+  /* 공격속도 — 초당 공격 횟수. 칸이 좁아 숫자와 단위만 넣고, 기본값 대비 변화는 마우스를 올리면 보인다. */
+  function aspdHtml(u) {
+    var base = u.def && u.def.attackSpeed;
+    var diff = base ? Math.round((u.attackSpeed / base - 1) * 100) : 0;
+    return '<span title="기본 ' + (base || 0).toFixed(2) + '회/초' + (diff ? ' · 버프·보정 ' + (diff > 0 ? '+' : '') + diff + '%' : '') + '">' +
+      u.attackSpeed.toFixed(2) + '<small>/초</small></span>';
   }
 
   function unitCardHtml(slot, u) {
@@ -942,16 +982,17 @@
 
     var stats = [
       ['DPS', U.formatNumber(Math.round(u.dps)), true],
-      ['공격', U.formatNumber(Math.round(u.attack)) + ' <small>×' + u.attackSpeed.toFixed(2) +
-        (RPD.CraftPower && RPD.CraftPower.labelOf(u.def) ? ' · ' + RPD.CraftPower.labelOf(u.def) : '') + '</small>'],
+      ['공격', U.formatNumber(Math.round(u.attack)) +
+        (RPD.CraftPower && RPD.CraftPower.labelOf(u.def) ? ' <small>' + RPD.CraftPower.labelOf(u.def) + '</small>' : '')],
+      ['공격속도', aspdHtml(u)],
       ['사거리', (u.range >= RPD.Range.GLOBAL ? '전체' : u.range)],
       ['방식', attackNote],
       ['대상', TARGET_LABEL[u.targeting] || u.targeting],
       ['사거리 강화', u.def.range >= RPD.Range.GLOBAL ? '<small>전체 사거리라 필요 없음</small>'
         : '+' + u.level + ' <small>/ ' + RPD.Config.upgradeMaxLevel + ' · 사거리 +' +
-          Math.round(u.level * RPD.Config.upgradeRangeStep * 100) + '%' + covNote(u) + '</small>']
+          Math.round(u.level * RPD.Config.upgradeRangeStep * 100) + '%' + covNote(u) + '</small>', false, true]
     ];
-    if (u.auraBonus > 0) stats[4] = ['버프', '+' + Math.round(u.auraBonus * 100) + '%'];
+    if (u.auraBonus > 0) stats[5] = ['버프', '+' + Math.round(u.auraBonus * 100) + '%'];
 
     var html =
       '<div class="sc__unit" style="--tier:' + tier.color + '">' +
@@ -964,9 +1005,11 @@
       '</div>' +
       '<dl class="sc__stats">' +
         stats.map(function (r) {
-          return '<div' + (r[2] ? ' class="is-key"' : '') + '><dt>' + r[0] + '</dt><dd>' + r[1] + '</dd></div>';
+          var cls = (r[2] ? 'is-key' : '') + (r[3] ? ' is-wide' : '');
+          return '<div' + (cls ? ' class="' + cls.trim() + '"' : '') + '><dt>' + r[0] + '</dt><dd>' + r[1] + '</dd></div>';
         }).join('') +
       '</dl>' +
+      targetPickHtml(u) +
       UI.trait(def.id, 'trait--card') +
       UI.aura(def.id, 'trait--card') +
       receivedAura(u) +
@@ -2171,8 +2214,9 @@
     bannerTimer = setTimeout(function () { el.banner.classList.remove('is-on'); }, 1600);
   };
 
-  function showResult(win) {
+  function showResult(win, p) {
     if (!el.result) return;
+    var bossFail = !win && p && p.reason === 'finalBoss';
     var s = RPD.StatsManager.summary();
     var card = el.result.querySelector('.result__card');
 
@@ -2181,6 +2225,7 @@
     if (el.resultTitle) {
       el.resultTitle.textContent = win
         ? '웨이브 ' + s.wave + '까지 지켜냈습니다'
+        : bossFail ? '마지막 보스를 놓쳤습니다'
         : '웨이브 ' + s.wave + '에서 멈췄습니다';
     }
 

@@ -332,6 +332,7 @@
     if (cost > 0) RPD.GameManager.loseLife(cost);
     RPD.bus.emit('enemy:leaked', enemy);
     RPD.bus.emit('enemy:countChanged', mgr.enemies.length);
+    if (enemy.isBoss && RPD.GameManager.isFinalWave(enemy.wave)) RPD.GameManager.failFinalBoss();
   }
 
   /* ---------- 조회 (PHASE 7 타겟팅이 쓸 API) ---------- */

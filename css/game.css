@@ -136,7 +136,7 @@ body:not([data-state="READY"]):not([data-state="IDLE"]) .startpanel { display: n
    * 클릭을 통과시켜 카드가 필드 조작을 막지 않게 한다(닫기 버튼만 받는다). */
   pointer-events: none;
 }
-.slotcard__close, .slotcard a { pointer-events: auto; }
+.slotcard__close, .slotcard a, .slotcard .tgt { pointer-events: auto; }   /* 카드는 필드 클릭을 막지 않고, 누를 곳만 받는다 */
 .slotcard.is-left { transform: translate(-100%, -50%); }
 .slotcard[hidden] { display: none; }
 .slotcard.is-sold { animation: cardPoof 0.28s ease-out; }
@@ -172,6 +172,17 @@ body:not([data-state="READY"]):not([data-state="IDLE"]) .startpanel { display: n
 .sc__stats dd { margin: 0; font-weight: 800; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sc__stats dd small { color: var(--muted); font-weight: 600; font-size: 10px; }
 .sc__stats .is-key dd { color: var(--gold); }
+.sc__stats .is-wide { grid-column: 1 / -1; }
+/* 공격 대상 고르기 (세션 42) */
+.tgt { margin-top: 6px; padding: 6px 7px; border-radius: 8px; background: var(--inset); }
+.tgt__head { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 11px; font-weight: 800; }
+.tgt__head small { color: var(--faint); font-weight: 600; font-size: 10px; }
+.tgt__all { font-size: 10px; font-weight: 800; padding: 2px 6px; border-radius: 6px; border: 1px solid var(--panel-3); background: transparent; color: var(--muted); cursor: pointer; }
+.tgt__all:hover { color: var(--text); border-color: var(--gold); }
+.tgt__chips { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 5px; }
+.tgt__chip { font-size: 10.5px; font-weight: 800; padding: 3px 6px; border-radius: 999px; border: 1px solid var(--panel-3); background: transparent; color: var(--muted); cursor: pointer; }
+.tgt__chip:hover { color: var(--text); }
+.tgt__chip.is-on { background: var(--gold); border-color: var(--gold); color: #1a1406; }
 .sc__foot { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 8px; }
 .sc__dmg { color: var(--faint); font-size: 11px; white-space: nowrap; }
 
@@ -520,6 +531,9 @@ body:not([data-state="READY"]):not([data-state="IDLE"]) .startpanel { display: n
 .gshop__gold::before { content: '◎ '; }
 .gshop__hint { flex: 1; color: var(--muted); font-size: 11px; }
 .gshop__body { overflow-y: auto; padding-top: 8px; display: grid; gap: 12px; }
+/* 아래에 칸이 더 남았으면 끝을 흐리게 — 스크롤바가 얇아 잘린 줄 모르고 지나치지 않게 */
+.gshop__body.is-more { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent); }
 .gshop__title { margin: 0 0 6px; font-size: 13px; font-weight: 900; }
 .gshop__title small { margin-left: 6px; color: var(--muted); font-weight: 600; font-size: 11px; }
 .gshop__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; }
@@ -535,7 +549,7 @@ body:not([data-state="READY"]):not([data-state="IDLE"]) .startpanel { display: n
 .gcard__pips { display: flex; gap: 2px; }
 .gcard__pips i { flex: 1; height: 4px; border-radius: 2px; background: var(--inset); }
 .gcard__pips i.is-on { background: var(--c); }
-.gcard__eff { font-size: 11px; color: var(--muted); }
+.gcard__eff { font-size: 10.5px; letter-spacing: -0.2px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gcard__eff b { color: #7dffa0; }
 .gcard__field { font-size: 10px; color: var(--faint); }
 .gcard__price { font-size: 12px; font-weight: 900; color: #ffd23f; }

@@ -267,6 +267,10 @@
     var modeMul = (mode && mode.modifiers && mode.modifiers.bossShareMul) || 1;
 
     var reference = this.trashWaveHp(Math.max(1, wave - 1), mode);
+    // 마지막 라운드 보스 — 놓치면 진다(GameManager.failFinalBoss). 벽(61R) 뒤 체력을 그대로 물려받아 아무도 못 잡던 것을 모드별로 맞춘다.
+    var mods = (mode && mode.modifiers) || {};
+    if (mode && mode.finalWave > 0 && wave >= mode.finalWave && mods.finalBossHpMul != null) modeMul *= mods.finalBossHpMul;
+
     return Math.round(reference * share * modeMul * (def.bossToughness || 1));
   };
 

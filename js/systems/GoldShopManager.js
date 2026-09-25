@@ -11,7 +11,10 @@
  *           **히든 개체는 자기 강함 등급(안흔함~전설) 대신 "히든" 칸만 받는다** — 조합식 목록에서
  *           히든을 한 칸으로 모은 것과 같은 규칙. 불멸과 초월은 한 칸을 같이 쓴다.
  *
- * 공격력 배율 = (1 + 타입 보너스) × (1 + 등급 보너스). 개체 강화·시너지·스킬 버프와는 곱으로 쌓인다.
+ * 한 레벨이 공격력과 공격속도를 같이 올린다(세션 37). 끝까지 올렸을 때의 곱은 예전 "공격력만"과 거의 같게 나눴다
+ *   타입 +5% → 공격력 +2.5% · 공속 +2%   (최대 1.25 × 1.20 = 1.50, 예전 1.50)
+ *   등급 +6% → 공격력 +3% · 공속 +2.5%   (최대 1.30 × 1.25 = 1.625, 예전 1.60)
+ * 배율 = (1 + 타입 보너스) × (1 + 등급 보너스) — 공격력 · 공격속도 따로. 개체 강화·시너지·스킬 버프와는 곱으로 쌓인다.
  * 수치는 첫 패스다 — 요청 ④(정예 소환)로 골드 수급이 늘면 가격을 다시 본다.
  */
 (function (global) {
@@ -21,8 +24,10 @@
   /* ---------- 설정 ---------- */
   var CFG = {
     maxLevel: 10,
-    typeStep: 0.05,          // 타입 1레벨당 공격력 +5% (최대 +50%)
-    tierStep: 0.06,          // 등급 1레벨당 공격력 +6% (최대 +60%)
+    typeStep: 0.025,         // 타입 1레벨당 공격력 +2.5% (최대 +25%)
+    typeSpeedStep: 0.02,     //            공격속도 +2%  (최대 +20%)
+    tierStep: 0.03,          // 등급 1레벨당 공격력 +3%   (최대 +30%)
+    tierSpeedStep: 0.025,    //            공격속도 +2.5% (최대 +25%)
     typeBaseCost: 60,
     costGrowth: 1.4,         // 레벨이 오를수록 이만큼씩 비싸진다
     /* 등급 칸 1레벨 가격. 높은 등급일수록 개체 하나가 버는 몫이 크니 비싸다.
@@ -75,17 +80,25 @@
   GoldShopManager.typeLevel = function (type) { return levelOf(this.typeLv, type); };
   GoldShopManager.tierLevel = function (slot) { return levelOf(this.tierLv, slot); };
 
-  GoldShopManager.typeBonus = function (def) {
+  /* 이 개체가 받는 타입 레벨 — 두 타입이면 높은 쪽 하나 */
+  GoldShopManager.typeLevelOf = function (def) {
     var best = 0, self = this;
     (def && def.types || []).forEach(function (t) { best = Math.max(best, self.typeLevel(t)); });
-    return best * CFG.typeStep;
+    return best;
   };
-  GoldShopManager.tierBonus = function (def) {
-    return this.tierLevel(this.tierSlotOf(def)) * CFG.tierStep;
-  };
-  /* UnitManager.recompute 가 공격력에 곱한다 */
+  GoldShopManager.tierLevelOf = function (def) { return this.tierLevel(this.tierSlotOf(def)); };
+
+  GoldShopManager.typeBonus = function (def) { return this.typeLevelOf(def) * CFG.typeStep; };
+  GoldShopManager.tierBonus = function (def) { return this.tierLevelOf(def) * CFG.tierStep; };
+  GoldShopManager.typeSpeedBonus = function (def) { return this.typeLevelOf(def) * CFG.typeSpeedStep; };
+  GoldShopManager.tierSpeedBonus = function (def) { return this.tierLevelOf(def) * CFG.tierSpeedStep; };
+
+  /* UnitManager.recompute 가 공격력 · 공격속도에 곱한다 */
   GoldShopManager.attackMul = function (def) {
     return (1 + this.typeBonus(def)) * (1 + this.tierBonus(def));
+  };
+  GoldShopManager.speedMul = function (def) {
+    return (1 + this.typeSpeedBonus(def)) * (1 + this.tierSpeedBonus(def));
   };
 
   /* ---------- 가격 · 구매 ---------- */

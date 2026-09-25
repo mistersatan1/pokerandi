@@ -200,6 +200,7 @@
    *   tierMul     SummonManager          (등급별 소환 가중치)
    *   goldMul       EconomyManager         (처치·클리어 보상)
    *   bossShareMul  WaveData.enemyMaxHp    (보스 체력 비중)
+   *   finalBossHpMul WaveData.enemyMaxHp   (마지막 라운드 보스 체력 — 클리어 = 그 보스 처치, 세션 42)
    */
   RPD.Modes = {
     NORMAL: {

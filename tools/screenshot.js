@@ -46,6 +46,12 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
   });
   await page.waitForTimeout(1500);
   await page.screenshot({ path: require('path').join(__dirname, '..', 'dist', '01_goldshop.png') });
+  console.log('goldshop fade (위)', await page.evaluate(() => document.querySelector('#goldShopOverlay .gshop__body').classList.contains('is-more')));
+  // ①-2 골드 상점 끝까지 내림 — 아래 흐림이 사라져야 한다
+  await page.evaluate(() => { const b = document.querySelector('#goldShopOverlay .gshop__body'); b.scrollTop = b.scrollHeight; });
+  await page.waitForTimeout(300);
+  console.log('goldshop fade (끝)', await page.evaluate(() => document.querySelector('#goldShopOverlay .gshop__body').classList.contains('is-more')));
+  await page.screenshot({ path: require('path').join(__dirname, '..', 'dist', '01b_goldshop_bottom.png') });
 
   // ② 61라운드 벽 — 불멸 2마리를 갖춘 보드
   await page.evaluate(() => window.RPD.GoldShopUI.hide());
@@ -56,13 +62,32 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     ['moltres', 'zapdos'].forEach((id, k) => { F.remove(weak[k].index); F.place(weak[k].index, R.UnitManager.create(id)); });
     R.UnitManager.recomputeAll(); R.bus.emit('field:changed', {});
     const idx = weak[1].index;
-    if (R.FieldManager.select) R.FieldManager.select(idx);
-    R.bus.emit('field:select', { index: idx });
+    R.FieldManager.select(idx);   // slot 을 같이 실어 보내야 정보 카드가 뜬다 (index 만 보내면 카드가 닫힌다)
     return { wave: R.GameManager.wave, hp61: Math.round(R.WaveData.growthTo(61) / R.WaveData.growthTo(60) * 100) / 100 };
   });
   console.log(info);
   await page.waitForTimeout(4000);
   await page.screenshot({ path: require('path').join(__dirname, '..', 'dist', '02_wall61.png') });
+
+  // ③ 포켓몬 정보 카드 확대 — 공격속도 줄
+  const card = await page.$('#slotCard');
+  if (card && await card.isVisible()) {
+    const box = await card.boundingBox();
+    await page.screenshot({ path: require('path').join(__dirname, '..', 'dist', '03_unitcard.png'),
+      clip: { x: Math.max(0, box.x - 8), y: Math.max(0, box.y - 8), width: box.width + 16, height: box.height + 16 } });
+    console.log('unitcard', await page.evaluate(() => document.querySelector('#slotCard .sc__stats').innerText.replace(/\n+/g, ' | ')));
+  } else console.log('unitcard 안 보임');
+
+  // ④ 공격 대상 고르기 — 카드의 [보스] 칩을 실제로 눌러 본다
+  const bossChip = page.locator('#slotCard [data-tgt="BOSS"]');
+  if (await bossChip.count()) {
+    await bossChip.click();   // 실제 마우스 클릭 — 캔버스가 가로채거나 카드가 다시 그려져도 먹히는지 본다
+    await page.waitForTimeout(300);
+    console.log('targeting', await page.evaluate(() => { const s = window.RPD.FieldManager.getSelected(); return s && s.unit && s.unit.targeting; }));
+    const box2 = await (await page.$('#slotCard')).boundingBox();
+    await page.screenshot({ path: require('path').join(__dirname, '..', 'dist', '06_target_pick.png'),
+      clip: { x: Math.max(0, box2.x - 8), y: Math.max(0, box2.y - 8), width: box2.width + 16, height: box2.height + 16 } });
+  } else console.log('대상 칩 없음');
   console.log('errors', errors.slice(0, 5));
   await browser.close();
 })();

@@ -240,6 +240,10 @@
           if (n) n.hidden = true;
         });
         handled = true;
+      } else if (key === 't') {
+        // 고른 포켓몬의 공격 대상을 다음 것으로(출구 앞 → 보스 → 센 적 → 약한 적 → 갓 나온)
+        var sel = RPD.FieldManager.getSelected();
+        handled = !!(sel && sel.unit && RPD.UnitManager.cycleTargeting(sel.unit));
       } else if (key === 'f') {
         handled = clickIf(document.querySelector('#ownedPop:not([hidden]) [data-act="deploy"]'));
       } else if (key === 'x' || key === 'delete') {

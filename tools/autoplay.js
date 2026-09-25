@@ -291,9 +291,14 @@ function playOne(modeId) {
       if (p.wave === 61) curStats.life61 = GM.life;
       if (p.wave === 66) curStats.life66 = GM.life;
       /* WALL_LOG=파일 — 58라운드부터 라운드 시작 시점의 라이프 · 필드 DPS 를 판마다 남긴다(벽을 어떻게 넘는지 보기) */
-      if (process.env.WALL_LOG && p.wave >= 58) {
+      if (process.env.WALL_LOG && p.wave >= 49) {
+        const fu = F.getUnits(), imm = fu.filter(u => u.def.tier === 'T6' || u.def.tier === 'T7');
         (curStats.trace = curStats.trace || []).push({ w: p.wave, life: GM.life,
-          dps: Math.round(F.getUnits().reduce((a, u) => a + u.dps, 0)), sp: special });
+          dps: Math.round(fu.reduce((a, u) => a + u.dps, 0)), sp: special, n: fu.length,
+          immField: imm.length, immDps: Math.round(imm.reduce((a, u) => a + u.dps, 0)),
+          immCov: imm.map(u => { const c = R.EconomyManager.upgradeCoverage && R.EconomyManager.upgradeCoverage(u); return c ? Math.round(c.now) : null; }),
+          medCov: (() => { const cs = fu.map(u => { const c = R.EconomyManager.upgradeCoverage && R.EconomyManager.upgradeCoverage(u); return c ? c.now : null; }).filter(x => x != null).sort((a, b) => a - b); return cs.length ? Math.round(cs[cs.length >> 1]) : null; })(),
+          immDmg: imm.map(u => Math.round(u.totalDamage)), topDmg: Math.round(Math.max(0, ...fu.map(u => u.totalDamage))) });
       }
       /* GIVE_IMMORTAL=n — 50라운드에 불멸 n마리를 쥐여 준다(가장 약한 필드 개체와 바꾼다).
        * 봇은 불멸(전설 3마리)을 거의 못 만들어서, "갖춘 플레이어"를 따로 흉내 낸다. */

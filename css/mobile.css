@@ -1,0 +1,165 @@
+/* mobile.css — 휴대폰 레이아웃 (모바일 ① · 세션 51).
+ * index.html 에서 가장 마지막에 불러온다: main · game · ui 의 같은 무게 규칙을 덮어야 해서다.
+ * PC(1100px 이상)에는 맨 위 몇 줄(☰·탭 숨김, HUD 순서)만 닿고 나머지는 전부 1100px 미만 분기 안이다. */
+
+/* PC 에만 있는 것 · 휴대폰에만 있는 것 */
+.hud__more { display: contents; }          /* PC: 예전과 똑같이 HUD 한 줄에 놓인다 */
+.hud__morebtn, .mtabs { display: none; }
+.hud #btnPause { order: 1; }               /* 순서도 예전 그대로: … 도감 · 일시정지 · 처음부터 */
+.hud #btnRestart { order: 2; }
+
+/* ================= 휴대폰 (모바일 ① 레이아웃 · 세션 51) =================
+ * 1100px 미만. 필드가 주인공 — 패널은 탭으로 여닫는 서랍에 넣고, 닫혀 있으면 필드가 화면을 다 쓴다.
+ * 서랍이 열리면 필드가 그만큼 줄어든다(덮지 않는다). 캔버스 크기가 바뀌면 Renderer 가 알아서 다시 맞춘다.
+ * .play · .dock · .side 를 display: contents 로 풀어 모든 패널을 .app 격자에 바로 놓는다 — HTML 을 옮기지 않는다.
+ *
+ *   가로                                   세로 (필드는 Renderer 가 90° 돌려 그린다)
+ *   ┌────────── HUD 한 줄 ─────────┐        ┌──── HUD ────┐
+ *   │ 필드            │서랍│ 소환   │        │ 필드(세로로  │
+ *   │                 │    │ 강화…  │        │ 긴 맵)       │
+ *   │                 │    │ 탭     │        ├──── 소환 ───┤
+ *   └─────────────────┴────┴───────┘        ├──── 탭 ─────┤
+ *                                            └──── 서랍 ───┘  */
+@media (max-width: 1099.98px) {
+  :root { --gap: 4px; --r-panel: 12px; --drawer-w: 0px; --drawer-h: 0px; --rail-w: 132px; }
+  body[data-mtab]:not([data-mtab=""]):not([data-mtab="shop"]) { --drawer-w: min(46vw, 420px); --drawer-h: 44dvh; }
+
+  .app {
+    height: 100vh; height: 100dvh; min-height: 0; padding: var(--gap);
+    grid-template-columns: minmax(0, 1fr) var(--drawer-w) var(--rail-w);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "hud    hud    hud"
+      "board  drawer action"
+      "board  drawer tabs";
+    overflow: hidden;
+  }
+  .play, .dock, .side { display: contents; }
+  #gameCanvas { --field-rotate: 0; }   /* 휴대폰 가로: 필드는 그대로(세로 분기에서 1) — Renderer.wantsRotation 이 읽는다 */
+  .hud { grid-area: hud; }
+  .board { grid-area: board; min-height: 0; min-width: 0; }
+  .pane--action { grid-area: action; }
+  .mtabs { grid-area: tabs; }
+  .pane--recipes, .pane--owned, .pane--synergy, .pane--dex { grid-area: drawer; display: none; min-width: 0; }
+  body[data-mtab="recipes"] .pane--recipes,
+  body[data-mtab="owned"] .pane--owned,
+  body[data-mtab="synergy"] .pane--synergy,
+  body[data-mtab="dex"] .pane--dex { display: flex; }
+
+  /* HUD — 한 줄: 라운드 · 라이프 · 골드 · 배속 · 일시정지 · ☰. 나머지 버튼은 ☰ 메뉴로 */
+  .hud { height: auto; min-height: 40px; padding: 3px 6px; gap: 4px; flex-wrap: nowrap; position: relative; }
+  .hud__brand, .hud__title { display: none; }
+  .hud .chip { height: 34px; padding: 0 7px; gap: 4px; }
+  .hud .chip__label { font-size: 11px; }
+  .hud .chip__num { font-size: 18px; }
+  .hud .gem { width: 17px; height: 17px; }
+  .hud .speed { height: 34px; padding: 2px; }
+  .hud .speed__btn { width: 30px; font-size: 13px; }
+  .hud .iconbtn { width: 34px; height: 34px; }
+  .hud__morebtn { display: grid; order: 3; font-size: 18px; }
+  .hud__more {
+    display: none; position: absolute; z-index: 70; top: calc(100% + 4px); right: 4px;
+    grid-template-columns: repeat(4, 52px); gap: 6px; padding: 8px;
+    border-radius: 12px; background: var(--panel); border: 1px solid var(--line-2); box-shadow: var(--shadow-panel);
+  }
+  .hud.is-more-open .hud__more { display: grid; }
+  .hud .hud__more .iconbtn { width: 52px; height: 44px; }   /* 세로 분기의 .hud .iconbtn(32px)보다 무겁게 */
+  .hud__more .audio { position: relative; }
+  .hud__more .audiopop { right: auto; left: 0; }
+
+  /* 필드 위 DOM 알림도 작게 — 작은 필드를 덮지 않게 */
+  .board__status { transform: scale(.72); transform-origin: top center; }
+  .nextreward { transform: scale(.62); transform-origin: top right; top: 4px; right: 4px; }
+  .startpanel { transform: scale(.85); }
+
+  /* 소환 · 강화 · 창고로 · 방출 — 가로에서는 오른쪽 줄: 소환 한 줄 · 작은 버튼 셋 한 줄 */
+  .pane--action { padding: 5px; gap: 4px; overflow: hidden; }
+  .pane--action .rangechips { display: none; }
+  .pane--action .kbd { display: none; }
+  .pane--action .action { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: none; gap: 4px; flex: none; }
+  .pane--action .summon { grid-column: 1 / -1; min-height: 54px; padding: 4px 6px; margin-bottom: 4px;
+    grid-template-columns: auto auto; grid-template-rows: auto auto; column-gap: 8px; row-gap: 0; justify-content: center; align-items: center;
+    box-shadow: inset 0 2px 0 rgba(255,255,255,0.25), 0 4px 0 var(--blue-edge); }
+  .pane--action .summon .ball--lg { grid-row: 1 / 3; width: 30px; height: 30px; }
+  .pane--action .summon__name, .pane--action .summon__cost { justify-self: start; }
+  .pane--action .summon__name { font-size: 16px; }
+  .pane--action .summon__cost { font-size: 14px; }
+  .pane--action .action__side { display: contents; }
+  .pane--action .sidebtn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0;
+    min-height: 44px; padding: 2px; margin: 0; text-align: center; }
+  .pane--action .sidebtn .ico { width: 15px; height: 15px; }
+  .pane--action .sidebtn__name { font-size: 11px; }
+  .pane--action .sidebtn__cost { display: none; }
+  .pane--action .shardline { padding: 0 4px; min-height: 0; font-size: 11px; }
+  .pane--action .spellshard { font-size: 11px; }
+  .pane--action .toast { position: fixed; left: 50%; right: auto; top: 48px; bottom: auto; width: min(320px, 90vw); transform: translateX(-50%); z-index: 80; }
+
+  /* 탭 */
+  .mtabs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; align-content: end; }
+  .mtab {
+    position: relative; display: flex; align-items: center; justify-content: center; gap: 4px;
+    min-height: 36px; padding: 2px 4px; border-radius: 10px; border: 1px solid var(--line-2);
+    background: var(--panel); color: var(--muted); font-size: 12px; font-weight: 900; white-space: nowrap;
+  }
+  .mtab .ico { width: 14px; height: 14px; }
+  .mtab[aria-pressed="true"] { background: linear-gradient(180deg, var(--blue-hi), var(--blue)); color: #fff; border-color: transparent; }
+  .mtab--shop { grid-column: 1 / -1; color: var(--gold-hi); }
+  .mtab__badge { position: absolute; top: -5px; right: -3px; min-width: 18px; padding: 0 4px; border-radius: 9px; background: var(--gold); color: #1a1406; font-size: 11px; line-height: 18px; }
+
+  /* 조합식 머리 — 좁은 서랍에서 [조합] 버튼이 잘리지 않게 줄바꿈 · 등급 칩은 가로 스크롤 */
+  .pane--recipes .pane__head { flex-wrap: wrap; row-gap: 4px; padding: 6px 8px; }
+  .pane--recipes .pane__head .tabs { order: 5; flex: 1 1 100%; overflow-x: auto; }
+  .pane--recipes .craftbtn { margin-left: auto; }
+  .tierfilter { flex-wrap: nowrap; overflow-x: auto; }
+  .tierfilter > * { flex: none; white-space: nowrap; }
+
+  /* 서랍 속 패널은 자기 안에서 스크롤 */
+  .pane--recipes .recipes__list, .pane--owned .owned__grid, .synergy__list, .dexmini__list { overflow: auto; }
+  .ownedpop, .recipepop { top: auto; bottom: 8px; left: 8px; right: 8px; max-height: 70%; overflow: auto; z-index: 20; }
+
+  /* 창(설명서 · 조합 사전 · 상점 · 정예 · 도감 · 모드 · 결과)은 필드 칸이 아니라 화면 전체에 */
+  .board > .book, .board > .help, .board > .dex, .board > .modepick, .board > .result { position: fixed; inset: 0; z-index: 60; padding: 6px; }
+  .board > .book .book__card, .board > .help .help__card { width: 100%; height: 100%; max-height: none; }
+
+  /* 정보 카드 — 칸 옆에 띄우는 대신 필드 한쪽에 붙는 판. 가로: 오른쪽 세로 판 · 세로: 아래쪽 판.
+   * PC 카드는 필드 클릭을 막지 않게 통째로 pointer-events: none 이지만, 휴대폰에선 손가락으로 판을 스크롤하고
+   * 공격 대상 칩을 눌러야 하므로 판 전체가 터치를 받는다(판이 덮은 칸은 판을 닫고 누른다). */
+  .slotcard { left: auto !important; right: 4px; top: 4px !important; bottom: 4px; width: min(250px, 42%); max-width: none;
+    overflow: auto; overscroll-behavior: contain; transform: none !important; pointer-events: auto; }
+}
+
+/* 휴대폰 세로 — 필드(Renderer 가 90° 돌려 세로로 긴 맵으로 그린다) 아래에 소환 줄 · 탭 · 서랍 */
+@media (max-width: 1099.98px) and (orientation: portrait) {
+  #gameCanvas { --field-rotate: 1; }   /* 휴대폰 세로: 필드를 90° 돌려 세로로 긴 맵(서랍을 열어도 방향은 그대로) */
+  body[data-mtab]:not([data-mtab=""]):not([data-mtab="shop"]) { --drawer-h: 38dvh; }
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto auto var(--drawer-h);
+    grid-template-areas: "hud" "board" "action" "tabs" "drawer";
+  }
+  /* 세로 HUD 는 한 줄(라운드 · 라이프 · 골드 · 배속 · 일시정지 · ☰) + 소환 확률 얇은 줄 */
+  .hud { flex-wrap: wrap; row-gap: 3px; column-gap: 3px; }
+  .hud .chip--odds { order: 9; flex: 1 1 100%; height: 22px; justify-content: space-between; }
+  .hud .chip--odds * { font-size: 10px !important; }
+  .hud__spacer { flex: 1 1 0; min-width: 0; }
+  .hud .chip { padding: 0 5px; height: 32px; }
+  .hud .chip__num { font-size: 16px; }
+  .hud .chip--round .chip__label { display: none; }
+  .hud .chip--round .chip__num::before { content: "R"; font-size: 11px; color: var(--muted); margin-right: 1px; }
+  .hud .chip--round .chip__sub { display: none; }
+  .hud .speed { height: 32px; }
+  .hud .speed__btn { width: 26px; font-size: 12px; }
+  .hud .iconbtn { width: 32px; height: 32px; }
+
+  .pane--action { flex-direction: row; align-items: stretch; padding: 4px; }
+  .pane--action .action { flex: 1; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 4px; }
+  .pane--action .summon { grid-column: auto; min-height: 50px; }
+  .pane--action .sidebtn { min-height: 50px; }
+  .pane--action .shardline { flex-direction: column; justify-content: center; }
+  .nextreward { top: auto; bottom: 4px; transform-origin: bottom right; }
+  .mtabs { grid-template-columns: repeat(5, 1fr); }
+  .mtab { flex-direction: column; gap: 1px; min-height: 44px; font-size: 11px; }
+  .mtab--shop { grid-column: auto; }
+  .slotcard { left: 4px !important; right: 4px; top: auto !important; width: auto; max-height: 58%; }
+}
+

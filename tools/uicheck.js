@@ -1582,7 +1582,7 @@ run('레이아웃 영역 9개가 CSS 에 정의돼 있다', () => {
 });
 
 run('자주 쓰는 해상도 4종의 분기가 있다', () => {
-  if (!/max-height:\s*820px/.test(css) || !/max-width:\s*1500px/.test(css) || !/max-width:\s*1100px/.test(css)) {
+  if (!/max-height:\s*820px/.test(css) || !/max-width:\s*1500px/.test(css) || !/max-width:\s*1099\.98px/.test(css)) {
     throw new Error('반응형 분기가 빠졌다');
   }
 });
@@ -1631,6 +1631,74 @@ run('정보 카드가 필드 클릭을 막지 않는다', () => {
   const block = game.slice(at, game.indexOf('}', at));
   if (block.indexOf('pointer-events: none') < 0) throw new Error('카드가 클릭을 가로챈다');
 });
+
+/* ---------- 모바일 ① — 필드를 돌렸을 때 칸 누르기 (세션 51) ---------- */
+console.log('\n모바일 필드 회전');
+{
+  const R = RPD.Renderer, F = RPD.FieldManager;
+  const saved = { canvas: R.canvas, gcs: sandbox.getComputedStyle };
+  // 화면 위치를 흉내 내는 캔버스 — 휴대폰 세로(갤럭시 S24 크기) · 가로
+  const fakeCanvas = (rect) => Object.assign(makeCanvas(), { getBoundingClientRect: () => rect });
+  const setRotate = (v) => { sandbox.getComputedStyle = () => ({ getPropertyValue: (k) => (k === '--field-rotate' ? v : '') }); };
+
+  /* 기대 화면 좌표는 Renderer 를 거치지 않고 따로 계산한다(같은 식을 두 번 믿으면 검사가 아니다).
+   * 세로: 1000x600 을 시계 방향 90° — 논리 x(적 등장→출구)가 위→아래, 논리 y 가 오른쪽→왼쪽. */
+  function expectScreen(rect, rotated, x, y) {
+    if (!rotated) {
+      const s = Math.min(rect.width / 1000, rect.height / 600);
+      return { x: rect.left + (rect.width - 1000 * s) / 2 + x * s, y: rect.top + (rect.height - 600 * s) / 2 + y * s, s };
+    }
+    const s = Math.min(rect.width / 600, rect.height / 1000);
+    const ox = (rect.width - 600 * s) / 2, oy = (rect.height - 1000 * s) / 2;
+    return { x: rect.left + ox + (600 - y) * s, y: rect.top + oy + x * s, s };
+  }
+
+  const cases = [
+    { name: '휴대폰 세로(돌림)', rect: { left: 4, top: 118, width: 352, height: 571 }, rot: '1', rotated: true },
+    { name: '휴대폰 가로', rect: { left: 4, top: 44, width: 632, height: 308 }, rot: '0', rotated: false },
+    { name: 'PC', rect: { left: 8, top: 76, width: 1300, height: 640 }, rot: '', rotated: false }
+  ];
+  F.init();
+  for (const c of cases) {
+    setRotate(c.rot);
+    R.init(fakeCanvas(c.rect));
+    check(`${c.name}: 필드 방향이 레이아웃대로다(${c.rotated ? '90° 돌림' : '그대로'})`, R.rotated === c.rotated, `rotated=${R.rotated}`);
+
+    // 칸 한가운데 · 네 모서리 가까이(칸 크기의 40%) — 전부 그 칸이어야 한다
+    const miss = [];
+    F.slots.forEach((slot, i) => {
+      const e = expectScreen(c.rect, c.rotated, slot.x, slot.y);
+      const d = slot.size * 0.4 * e.s;
+      for (const [dx, dy] of [[0, 0], [-d, -d], [d, -d], [-d, d], [d, d]]) {
+        const p = R.toLogical(e.x + dx, e.y + dy);
+        const hit = F.hitTest(p.x, p.y);
+        if (hit !== i) miss.push(`칸${i}(${dx.toFixed(0)},${dy.toFixed(0)})→${hit}`);
+      }
+    });
+    check(`${c.name}: 칸 ${F.slots.length}개를 눌러 정확히 그 칸을 고른다(가운데 + 네 모서리)`, miss.length === 0, miss.slice(0, 6).join(' · '));
+
+    // 그리는 변환과 누르는 변환이 같은 자리를 가리키는가 — 그림은 A 칸인데 누르면 B 칸이 되는 일이 없게
+    let T = null;
+    const cap = makeCtx();
+    cap.setTransform = function (a, b, cc, d, e2, f) { T = [a, b, cc, d, e2, f]; };
+    R.ctx = cap; R.layers = []; R.shakeX = R.shakeY = 0;
+    R.render(0);
+    const dpr = R.dpr;
+    const off = [];
+    F.slots.forEach((slot, i) => {
+      const e = expectScreen(c.rect, c.rotated, slot.x, slot.y);
+      const px = (T[0] * slot.x + T[2] * slot.y + T[4]) / dpr + c.rect.left;
+      const py = (T[1] * slot.x + T[3] * slot.y + T[5]) / dpr + c.rect.top;
+      if (Math.abs(px - e.x) > 0.5 || Math.abs(py - e.y) > 0.5) off.push(`칸${i} 그림(${px.toFixed(1)},${py.toFixed(1)}) ≠ 누름(${e.x.toFixed(1)},${e.y.toFixed(1)})`);
+      // 정보 카드 위치(DOM)도 같은 자리
+      const cc = R.toCanvasCss(slot.x, slot.y);
+      if (Math.abs(cc.x + c.rect.left - e.x) > 0.5 || Math.abs(cc.y + c.rect.top - e.y) > 0.5) off.push(`칸${i} 카드 위치 어긋남`);
+    });
+    check(`${c.name}: 그리는 자리 = 누르는 자리 = 정보 카드 자리`, off.length === 0, off.slice(0, 4).join(' · '));
+  }
+  sandbox.getComputedStyle = saved.gcs;
+  R.init(makeCanvas());
+}
 
 console.log(`\n────────────────────────────`);
 console.log(failures === 0 ? 'UI·연출 이상 없음' : `UI·연출 문제 ${failures}건`);

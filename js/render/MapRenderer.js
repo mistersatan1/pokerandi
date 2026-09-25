@@ -56,17 +56,19 @@
       paintBackground(ctx, bounds);
       paintPath(ctx, bounds);
     }
+    // 글자는 굽지 않고 매 프레임 — 구운 그림에 넣으면 필드를 돌렸을 때 같이 눕는다
+    paintEndpointLabels(ctx);
   };
 
   /* 배경은 캔버스 전체(논리 영역 바깥 가장자리 포함)를 한 번만 굽는다. */
   function bakeBackground(bounds) {
     if (typeof document === 'undefined' || !document.createElement) return null;
     var dpr = RPD.Renderer.dpr || 1;
-    var cssW = RPD.Renderer.cssWidth || RPD.VIEW.width;
-    var cssH = RPD.Renderer.cssHeight || RPD.VIEW.height;
+    var sc = RPD.Renderer.scale || 1;
     var off = document.createElement('canvas');
-    off.width = Math.max(1, Math.round(cssW * dpr));
-    off.height = Math.max(1, Math.round(cssH * dpr));
+    // 논리 크기 기준으로 굽는다 — 필드를 돌려 그릴 때(휴대폰 세로)는 화면 가로·세로와 논리 가로·세로가 바뀐다
+    off.width = Math.max(1, Math.round(bounds.w * sc * dpr));
+    off.height = Math.max(1, Math.round(bounds.h * sc * dpr));
     var octx = off.getContext('2d');
     if (!octx) return null;
     var k = (off.width / bounds.w);
@@ -319,9 +321,12 @@
     ctx.fillStyle = xg;
     ctx.fillRect(920, MAP.laneY.C - w / 2, 80, w);
 
-    ctx.font = '600 13px ' + RPD.FONT_STACK;
-    ctx.textBaseline = 'middle';
+  }
 
+  function paintEndpointLabels(ctx) {
+    var w = MAP.pathWidth;
+    ctx.save();
+    ctx.textBaseline = 'middle';
     ctx.font = '800 13px ' + RPD.FONT_STACK;
     ctx.lineWidth = 3.5;
     ctx.strokeStyle = 'rgba(12,28,50,0.75)';
@@ -334,6 +339,7 @@
     ctx.strokeText('출구', 990, MAP.laneY.C + w / 2 + 15);
     ctx.fillStyle = '#ffd0cb';
     ctx.fillText('출구', 990, MAP.laneY.C + w / 2 + 15);
+    ctx.restore();
   }
 
   /* ---------- 슬롯 (매 프레임) ---------- */
@@ -387,13 +393,14 @@
       ctx.stroke();
       ctx.setLineDash([]);
 
-      drawLock(ctx, slot.x, slot.y - 8, affordable ? '#ffd23f' : PALETTE.muted);
+      var lockAt = RPD.Renderer.at(slot.x, slot.y, 0, -8), costAt = RPD.Renderer.at(slot.x, slot.y, 0, 15);
+      drawLock(ctx, lockAt.x, lockAt.y, affordable ? '#ffd23f' : PALETTE.muted);
 
       ctx.font = '700 11px ' + RPD.FONT_STACK;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = affordable ? '#fff3b8' : PALETTE.muted;
-      ctx.fillText(slot.cost + 'G', slot.x, slot.y + 15);
+      ctx.fillText(slot.cost + 'G', costAt.x, costAt.y);
 
       ctx.restore();
       return;
@@ -453,6 +460,8 @@
   };
 
   function drawLock(ctx, cx, cy, color) {
+    ctx.save();
+    RPD.Renderer.upright(ctx, cx, cy);   // 필드를 돌려 그려도 자물쇠는 똑바로
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
     ctx.lineWidth = 2;
@@ -461,6 +470,7 @@
     ctx.stroke();
     roundRect(ctx, cx - 6.5, cy - 2, 13, 10, 2);
     ctx.fill();
+    ctx.restore();
   }
 
   function roundRect(ctx, x, y, w, h, r) {

@@ -51,6 +51,9 @@
     el.sfxVol = $('sfxVol');
     el.mute = $('btnMute');
     el.ownedPopEl = $('ownedPop');
+    el.moreBtn = $('btnMore');
+    el.hudMore = document.getElementById('hudMore');
+    el.mobileTabs = $('mobileTabs');
 
     if (el.dexOpen) {
       el.dexOpen.addEventListener('click', function () {
@@ -76,6 +79,7 @@
     bindAudio();
     bindHotkeys();
     bindHelp();
+    bindMobile();
 
     RPD.bus.on('game:wave', renderNextReward);
     RPD.bus.on('game:reset', renderNextReward);
@@ -208,6 +212,61 @@
     return true;
   }
 
+  /* ---------- 휴대폰 탭(서랍) · ☰ 메뉴 (모바일 ① · 세션 51) ----------
+   * 1100px 미만에서만 보이는 버튼들이다. 서랍은 body[data-mtab] 하나로 켜고 끈다 — 보이는 패널은 CSS 가 고른다.
+   * 같은 탭을 다시 누르면 닫힌다. [상점]은 골드 상점 창(G)을 여닫는다. */
+  HudPanels.setDrawer = function (tab) {
+    if (typeof document === 'undefined' || !document.body) return;
+    var cur = document.body.getAttribute('data-mtab') || '';
+    var next = tab === cur ? '' : (tab || '');
+    document.body.setAttribute('data-mtab', next);
+    var tabs = document.querySelectorAll ? document.querySelectorAll('.mtab[data-mtab]') : [];
+    for (var i = 0; i < tabs.length; i++) {
+      var t = tabs[i];
+      if (t.getAttribute('data-mtab') !== 'shop') t.setAttribute('aria-pressed', String(t.getAttribute('data-mtab') === next));
+    }
+    return next;
+  };
+
+  HudPanels.toggleMore = function (open) {
+    var hud = el.hudMore && el.hudMore.parentNode;
+    var btn = el.moreBtn;
+    if (!hud || !hud.classList) return false;
+    var on = open == null ? !hud.classList.contains('is-more-open') : !!open;
+    hud.classList.toggle('is-more-open', on);
+    if (btn && btn.setAttribute) btn.setAttribute('aria-expanded', String(on));
+    return on;
+  };
+
+  function bindMobile() {
+    if (typeof document === 'undefined' || !document.addEventListener) return;
+    if (el.mobileTabs && el.mobileTabs.addEventListener) {
+      el.mobileTabs.addEventListener('click', function (e) {
+        var b = e.target && e.target.closest ? e.target.closest('[data-mtab]') : null;
+        if (!b) return;
+        var tab = b.getAttribute('data-mtab');
+        if (tab === 'shop') { if (RPD.GoldShopUI) RPD.GoldShopUI.toggle(); return; }
+        HudPanels.setDrawer(tab);
+      });
+    }
+    if (el.moreBtn && el.moreBtn.addEventListener) el.moreBtn.addEventListener('click', function () { HudPanels.toggleMore(); });
+    // 메뉴 안 버튼을 누르면 닫는다(소리 설정은 작은 창이 따로 열리니 둔다) · 메뉴 밖을 누르면 닫는다
+    document.addEventListener('click', function (e) {
+      var hud = document.querySelector('.hud');
+      if (!hud || !hud.classList || !hud.classList.contains('is-more-open') || !e.target || !e.target.closest) return;
+      if (e.target.closest('#btnMore') || e.target.closest('.audio')) return;
+      if (e.target.closest('#hudMore .iconbtn') || !e.target.closest('#hudMore')) HudPanels.toggleMore(false);
+    });
+    // 조합 가능 개수를 [조합식] 탭에도 — 서랍이 닫혀 있어도 보이게
+    RPD.bus.on('recipe:changed', function () {
+      var badge = $('mtabCraft');
+      if (!badge || !RPD.RecipeManager) return;
+      var n = (RPD.RecipeManager.view || []).filter(function (v) { return v.ready; }).length;
+      badge.hidden = n === 0;
+      badge.textContent = n;
+    });
+  }
+
   function bindHotkeys() {
     if (typeof document === 'undefined' || !document.addEventListener) return;
     document.addEventListener('keydown', function (e) {
@@ -234,6 +293,7 @@
         handled = true;
       } else if (key === 'escape') {
         RPD.FieldManager.select(-1);
+        HudPanels.toggleMore(false);
         if (RPD.SpellUI) RPD.SpellUI.close();
         ['ownedPop', 'recipePop', 'audioPop', 'helpOverlay', 'bookOverlay', 'goldShopOverlay', 'eliteOverlay'].forEach(function (id) {
           var n = document.getElementById(id);

@@ -124,5 +124,105 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
   await page.screenshot({ path: require('path').join(__dirname, '..', 'dist', '09_bossrush_final.png') });
 
   console.log('errors', errors.slice(0, 5));
+
+  /* ---------- 모바일 ① — 휴대폰 흉내(갤럭시 S24 · 아이폰 15, 세로 · 가로) ----------
+   * 장면: 필드 · 서랍 열림. 재기: 칸의 화면 크기(px). 확인: 칸을 실제 터치로 눌러 그 칸이 골라지는가 ·
+   * 단축키로 하는 일을 전부 화면 버튼으로도 할 수 있는가. 결과는 dist/mobile_report.json 에도 남긴다. */
+  const { devices } = playwright;
+  const report = [];
+  for (const dev of ['Galaxy S24', 'Galaxy S24 landscape', 'iPhone 15', 'iPhone 15 landscape']) {
+    const mctx = await browser.newContext({ ...devices[dev], defaultBrowserType: undefined });
+    const mp = await mctx.newPage();
+    const merr = [];
+    mp.on('pageerror', e => merr.push(e.message));
+    await mp.goto(URL);
+    await mp.waitForTimeout(1200);
+    await mp.evaluate(() => {
+      const R = window.RPD;
+      if (R.TutorialManager && R.TutorialManager.skip) R.TutorialManager.skip();
+      document.querySelectorAll('.modepick, .result, .help, .book').forEach(o => o.hidden = true);
+      R.Game.resetAll('NORMAL', 'NORMAL'); R.Game.startRun('NORMAL', 'NORMAL');
+      R.GameManager.setWave(23); R.WaveManager.startRound(23);
+      const F = R.FieldManager;
+      const team = ['charizard', 'blastoise', 'venusaur', 'dragonite', 'gengar', 'alakazam', 'arcanine', 'lapras', 'gyarados', 'machamp'];
+      let i = 0;
+      F.slots.filter(s => s.unlocked).forEach(s => { if (i < team.length) F.place(s.index, R.UnitManager.create(team[i++])); });
+      R.UnitManager.recomputeAll(); R.bus.emit('field:changed', {});
+    });
+    await mp.waitForTimeout(2600);   // 라운드 배너가 지나가게
+    const tag = dev.replace(/ /g, '_');
+    await mp.screenshot({ path: require('path').join(__dirname, '..', 'dist', 'm_' + tag + '_field.png') });
+
+    // 칸 크기 · 필드 방향
+    const geo = await mp.evaluate(() => {
+      const R = window.RPD.Renderer, F = window.RPD.FieldManager;
+      const c = document.getElementById('gameCanvas').getBoundingClientRect();
+      return { vw: innerWidth, vh: innerHeight, dpr: devicePixelRatio, canvas: [Math.round(c.width), Math.round(c.height)],
+        rotated: R.rotated, slotCss: +(F.slots[0].size * R.scale).toFixed(1),
+        pageScroll: document.documentElement.scrollHeight > innerHeight + 1 || document.documentElement.scrollWidth > innerWidth + 1 };
+    });
+
+    // 실제 터치로 칸 누르기 — 화면 위치는 Renderer 를 거치지 않고 따로 계산(시계 방향 90°)
+    const targets = await mp.evaluate(() => {
+      const R = window.RPD.Renderer, F = window.RPD.FieldManager;
+      window.RPD.GameManager.gold = 0;   // 잠긴 칸을 눌러도 사지 않게
+      const r = document.getElementById('gameCanvas').getBoundingClientRect();
+      return F.slots.map(slot => {
+        if (!R.rotated) {
+          const s = Math.min(r.width / 1000, r.height / 600);
+          return { i: slot.index, x: r.left + (r.width - 1000 * s) / 2 + slot.x * s, y: r.top + (r.height - 600 * s) / 2 + slot.y * s };
+        }
+        const s = Math.min(r.width / 600, r.height / 1000);
+        return { i: slot.index, x: r.left + (r.width - 600 * s) / 2 + (600 - slot.y) * s, y: r.top + (r.height - 1000 * s) / 2 + slot.x * s };
+      });
+    });
+    const wrong = [];
+    for (const t of targets) {
+      await mp.evaluate(() => window.RPD.FieldManager.select(-1));
+      await mp.touchscreen.tap(t.x, t.y);
+      const got = await mp.evaluate(() => window.RPD.FieldManager.selectedIndex);
+      if (got !== t.i) wrong.push(t.i + '→' + got);
+    }
+    await mp.evaluate(() => window.RPD.FieldManager.select(-1));
+    await mp.waitForTimeout(1300);   // 잠긴 칸을 눌러 뜬 "골드 필요" 글자가 사라지게
+
+    // 단축키로 하는 일 → 화면 버튼으로 닿는가(필요하면 ☰ 메뉴 · 서랍 · 정보 카드를 연 뒤)
+    const visible = sel => mp.evaluate(q => { const n = document.querySelector(q); if (!n) return false;
+      const b = n.getBoundingClientRect(); const cs = getComputedStyle(n);
+      return b.width > 4 && b.height > 4 && cs.visibility !== 'hidden' && cs.display !== 'none' && b.right > 0 && b.bottom > 0 && b.left < innerWidth && b.top < innerHeight; }, sel);
+    const reach = {};
+    for (const [k, sel] of [['Space 소환', '#btnSummon'], ['W 강화', '#btnUpgrade'], ['S 창고로', '#btnStore'], ['X 방출', '#btnSell'],
+                            ['1·2·3 배속', '.speed__btn[data-speed="3"]'], ['P 일시정지', '#btnPause']]) reach[k] = await visible(sel);
+    await mp.tap('#btnMore'); await mp.waitForTimeout(200);
+    for (const [k, sel] of [['H 설명서', '#btnHelp'], ['Enter 주문', '#btnChat'], ['R 조합 사전', '#btnBook'], ['G 골드 상점', '#btnGoldShop'],
+                            ['E 정예 소환', '#btnElite'], ['도감', '#btnDex'], ['소리', '#btnAudio'], ['처음부터', '#btnRestart']]) reach[k + ' (☰)'] = await visible(sel);
+    if (/portrait|Galaxy S24$|iPhone 15$/.test(dev) && !/landscape/.test(dev)) await mp.screenshot({ path: require('path').join(__dirname, '..', 'dist', 'm_' + tag + '_menu.png') });
+    await mp.tap('#btnMore'); await mp.waitForTimeout(200);
+    await mp.tap('.mtab[data-mtab="recipes"]'); await mp.waitForTimeout(400);
+    reach['C 조합 (조합식 탭)'] = await visible('#btnCraft');
+    await mp.screenshot({ path: require('path').join(__dirname, '..', 'dist', 'm_' + tag + '_drawer.png') });
+    await mp.tap('.mtab[data-mtab="owned"]'); await mp.waitForTimeout(300);
+    reach['F 필드로 · 보유 (보유 탭)'] = await visible('#storageList');
+    await mp.tap('.mtab[data-mtab="owned"]'); await mp.waitForTimeout(300);   // 서랍 닫기
+    const t0 = targets.find(t => t.i === 0);
+    await mp.touchscreen.tap(t0.x, t0.y); await mp.waitForTimeout(300);
+    // 공격 대상 칩은 보이기만 하면 안 되고 실제로 눌려야 한다(카드 안을 스크롤해서라도)
+    await mp.evaluate(() => { const c = document.querySelector('#slotCard [data-tgt="BOSS"]'); if (c) c.scrollIntoView({ block: 'nearest' }); });
+    await mp.waitForTimeout(150);
+    reach['T 공격 대상 (정보 카드)'] = await visible('#slotCard [data-tgt="BOSS"]');
+    if (reach['T 공격 대상 (정보 카드)']) {
+      await mp.tap('#slotCard [data-tgt="BOSS"]'); await mp.waitForTimeout(200);
+      reach['T 공격 대상 — 칩을 눌러 바뀜'] = await mp.evaluate(() => { const s = window.RPD.FieldManager.getSelected(); return !!(s && s.unit && s.unit.targeting === 'BOSS'); });
+      if (/landscape/.test(dev)) await mp.screenshot({ path: require('path').join(__dirname, '..', 'dist', 'm_' + tag + '_card.png') });
+    }
+    reach['Esc 닫기 (정보 카드 ×)'] = await visible('#btnSlotClose');
+    const missing = Object.keys(reach).filter(k => !reach[k]);
+
+    report.push({ device: dev, ...geo, slotPx: +(geo.slotCss * geo.dpr).toFixed(0), tapWrong: wrong, tapCount: targets.length, missing, errors: merr.slice(0, 3) });
+    console.log('mobile', dev, JSON.stringify({ canvas: geo.canvas, rotated: geo.rotated, slotCss: geo.slotCss, tapOk: targets.length - wrong.length + '/' + targets.length, missing, scroll: geo.pageScroll, errors: merr.slice(0, 2) }));
+    await mctx.close();
+  }
+  require('fs').writeFileSync(require('path').join(__dirname, '..', 'dist', 'mobile_report.json'), JSON.stringify(report, null, 2));
+
   await browser.close();
 })();

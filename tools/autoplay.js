@@ -296,6 +296,13 @@ function playOne(modeId) {
       const all = F.getUnits().concat(R.StorageManager.units);
       const special = all.filter(u => u.def.tier === 'T6' || u.def.tier === 'T7').length;
       if (p.wave === 60) curStats.special60 = special;
+      /* 공격 대상 선택(세션 42)을 쓰는 플레이어 — 보스 라운드엔 [모두 이렇게 → 보스], 끝나면 종 기본값으로.
+       * BOT_TARGET=0 이면 안 쓴다(기능 전과 비교). */
+      if (process.env.BOT_TARGET !== '0') {
+        const bossRound = R.WaveData.isBossWave(p.wave, GM.mode);
+        if (bossRound && GM.targetAll !== 'BOSS') R.UnitManager.setTargetingAll('BOSS');
+        else if (!bossRound && GM.targetAll) R.UnitManager.setTargetingAll(null);
+      }
       /* 벽 넘김 = 61R 시작 ~ 66R 시작 사이 라이프를 지켰나. 라운드가 겹쳐 들어와 61R 적이 새는 건 62~64 에 드러나고,
        * 라이프 60 이 닳는 데 몇 라운드가 걸려 "65 도달"은 벽을 못 넘은 판도 셌다(세션 38). */
       if (p.wave === 61) curStats.life61 = GM.life;

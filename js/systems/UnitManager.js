@@ -159,6 +159,7 @@
     if (SK) unit.attackSpeed *= SK.speedMul();
     // 비행 타입은 스스로도 공격속도를 얻는다 (시너지와 별개)
     if (unit.typeFlags.FLYING) unit.attackSpeed *= RPD.TypeParams.attackSpeedMul;
+    if (unit.typeFlags.FLYING) unit.attackSpeed *= syn.flyingAttackSpeedMul || 1;   // 비행에게만 붙는 시너지 몫
 
     // 강화 — 사거리. 전체 사거리(GLOBAL)는 늘릴 게 없어 강화 자체가 막혀 있다(EconomyManager.canUpgrade)
     unit.range = def.range >= RPD.Range.GLOBAL ? def.range

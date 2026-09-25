@@ -316,7 +316,8 @@ function playOne(modeId) {
       if (p.wave === 50 && give > 0) {
         /* 실제 주문처럼 전설 3마리를 치르고 바꾼다(가장 약한 전설부터 · 모자라면 가장 약한 개체).
          * 공짜로 주면 "불멸 = 순수한 덤"이 돼 벽의 의미를 부풀린다. */
-        const ids = ['moltres', 'zapdos', 'articuno', 'mewtwo', 'mew'].slice(0, give);
+        // GIVE_IDS=mewtwo,moltres — 어떤 불멸을 줄지(기본 파이어·썬더 — 둘 다 광역·연쇄라 단일 보스엔 약하다)
+        const ids = (process.env.GIVE_IDS ? process.env.GIVE_IDS.split(',') : ['moltres', 'zapdos', 'articuno', 'mewtwo', 'mew']).slice(0, give);
         for (const id of ids) {
           let freed = -1;
           for (let k = 0; k < 3; k++) {

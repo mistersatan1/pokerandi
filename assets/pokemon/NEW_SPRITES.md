@@ -1,0 +1,111 @@
+# 아직 로스터에 없는 포켓몬 그림
+
+업로드한 시트 세 장에서 잘라 낸 그림이다. 96×96 투명 PNG.
+**아직 게임 데이터(`js/data/pokemon.js`)에 없어서 화면에는 나오지 않는다.** 조합식 작업 때 로스터에 넣는다.
+
+- 시트 1: 1세대 #056~#101 · 시트 2: #102~#151 · 시트 3: 골덕 · 강챙이
+- 다시 뽑을 때: `python3 tools/extract_gen1_sheets.py` (시트 경로는 파일 안에서 고친다)
+- 테스트판은 로스터에 있는 그림만 넣으므로 이 파일들 때문에 커지지 않는다.
+
+이제 1세대 151종 그림이 전부 있다(`mankey` 는 기존 그림 유지).
+덤으로 `politoed`(왕구리, 2세대) 그림도 있다 — 첫 시트의 #062 자리에 들어 있던 것.
+
+## 목록 (97종)
+
+- `abra`
+- `aerodactyl`
+- `alakazam`
+- `arcanine`
+- `articuno`
+- `bellsprout`
+- `chansey`
+- `cloyster`
+- `cubone`
+- `dewgong`
+- `ditto`
+- `dodrio`
+- `doduo`
+- `dragonair`
+- `dragonite`
+- `dratini`
+- `drowzee`
+- `eevee`
+- `electabuzz`
+- `electrode`
+- `exeggcute`
+- `exeggutor`
+- `farfetchd`
+- `flareon`
+- `gastly`
+- `gengar`
+- `geodude`
+- `goldeen`
+- `golduck`
+- `golem`
+- `graveler`
+- `grimer`
+- `growlithe`
+- `gyarados`
+- `haunter`
+- `hitmonchan`
+- `hitmonlee`
+- `horsea`
+- `hypno`
+- `jolteon`
+- `jynx`
+- `kabuto`
+- `kabutops`
+- `kadabra`
+- `kangaskhan`
+- `kingler`
+- `koffing`
+- `krabby`
+- `lapras`
+- `lickitung`
+- `machamp`
+- `machoke`
+- `machop`
+- `magikarp`
+- `magmar`
+- `magnemite`
+- `magneton`
+- `marowak`
+- `mew`
+- `mewtwo`
+- `moltres`
+- `mr_mime`
+- `muk`
+- `omanyte`
+- `omastar`
+- `onix`
+- `pinsir`
+- `politoed`
+- `poliwag`
+- `poliwhirl`
+- `poliwrath`
+- `ponyta`
+- `porygon`
+- `primeape`
+- `rapidash`
+- `rhydon`
+- `rhyhorn`
+- `scyther`
+- `seadra`
+- `seaking`
+- `seel`
+- `shellder`
+- `slowbro`
+- `slowpoke`
+- `snorlax`
+- `starmie`
+- `staryu`
+- `tangela`
+- `tauros`
+- `tentacool`
+- `tentacruel`
+- `vaporeon`
+- `victreebel`
+- `voltorb`
+- `weepinbell`
+- `weezing`
+- `zapdos`

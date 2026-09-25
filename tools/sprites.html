@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>스프라이트 미리보기</title>
+<link rel="stylesheet" href="../css/main.css">
+<style>
+  body { padding: 20px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.sub { margin: 0 0 22px; color: var(--bone-dim); font-size: 13px; }
+  h2 { font-size: 14px; margin: 26px 0 10px; color: var(--bone-dim);
+       border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 10px; }
+  .cell { text-align: center; padding: 8px 4px; border-radius: 10px;
+          background: var(--panel); border: 1px solid var(--line); }
+  .cell canvas { width: 72px; height: 72px; display: block; margin: 0 auto 4px; }
+  .n { font-size: 12px; font-weight: 700; }
+  .t { font-size: 10px; color: var(--bone-faint); line-height: 1.4; }
+</style>
+</head>
+<body>
+<h1>생성 스프라이트 미리보기</h1>
+<p class="sub">이미지 파일 없이 코드로 그린 결과입니다. assets 폴더에 PNG를 넣으면 그쪽이 우선합니다.</p>
+<div id="out"></div>
+
+<script src="../js/core/RPD.js"></script>
+<script src="../js/core/Utils.js"></script>
+<script src="../js/core/EventBus.js"></script>
+<script src="../js/core/Assets.js"></script>
+<script src="../js/core/PathFollower.js"></script>
+<script src="../js/data/types.js"></script>
+<script src="../js/data/map.js"></script>
+<script src="../js/data/rarity.js"></script>
+<script src="../js/data/pokemon.js"></script>
+<script src="../js/data/enemies.js"></script>
+<script src="../js/render/SpriteFactory.js"></script>
+<script>
+(function () {
+  var out = document.getElementById('out');
+
+  function section(title, defs, opts) {
+    var h = document.createElement('h2');
+    h.textContent = title + '  (' + defs.length + ')';
+    out.appendChild(h);
+
+    var grid = document.createElement('div');
+    grid.className = 'grid';
+    defs.forEach(function (d) {
+      var cell = document.createElement('div');
+      cell.className = 'cell';
+      var made = RPD.SpriteFactory.get(d, opts || {});
+      if (made) cell.appendChild(made.cloneNode ? cloneCanvas(made) : made);
+      var n = document.createElement('div');
+      n.className = 'n';
+      n.textContent = d.name + ((opts && opts.awakened) ? ' ★' : '');
+      var t = document.createElement('div');
+      t.className = 't';
+      t.textContent = (d.types || []).map(function (x) { return RPD.Types[x].label; }).join('/') +
+                      (d.stage ? ' · ' + d.stage + '단계' : '');
+      cell.appendChild(n); cell.appendChild(t);
+      grid.appendChild(cell);
+    });
+    out.appendChild(grid);
+  }
+
+  function cloneCanvas(src) {
+    var c = document.createElement('canvas');
+    c.width = src.width; c.height = src.height;
+    c.getContext('2d').drawImage(src, 0, 0);
+    return c;
+  }
+
+  RPD.RARITY_ORDER.forEach(function (r) {
+    var ids = RPD.PokemonData.all().filter(function (id) {
+      return RPD.PokemonData.byId[id].rarity === r;
+    });
+    section(RPD.Rarity[r].label, ids.map(function (id) { return RPD.PokemonData.byId[id]; }));
+  });
+
+  section('적', RPD.EnemyData.list.filter(function (id) { return !RPD.EnemyData[id].isBoss; })
+    .map(function (id) { return RPD.EnemyData[id]; }));
+  section('보스', RPD.EnemyData.list.filter(function (id) { return RPD.EnemyData[id].isBoss; })
+    .map(function (id) { return RPD.EnemyData[id]; }));
+
+  var sample = RPD.PokemonData.all().slice(0, 8).map(function (id) { return RPD.PokemonData.byId[id]; });
+  section('각성 비교 (같은 개체, 각성 상태)', sample, { awakened: true });
+})();
+</script>
+</body>
+</html>

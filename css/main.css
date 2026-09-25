@@ -1,0 +1,144 @@
+/* main.css — 디자인 토큰과 전체 레이아웃.
+ *
+ * 리디자인 방향: 짙은 네이비 게임 HUD + 밝은 필드.
+ * 패널은 어둡고 조용하게, 필드와 포켓몬 그림이 화면의 주인공이 되게 한다.
+ * 금색은 "지금 할 수 있는 것"(완성 조합·선택·골드)에만, 빨강은 라이프에만 쓴다.
+ *
+ * 웹폰트를 쓰지 않는다: index.html 을 더블클릭(file://)해도 글자가 절대 깨지지 않아야 하므로.
+ */
+
+:root {
+  --bg:        #07122b;
+  --panel:     #0f2248;
+  --panel-2:   #142c5a;
+  --panel-3:   #1a386f;
+  --inset:     #0a1a39;
+  --line:      rgba(140, 180, 255, 0.16);
+  --line-2:    rgba(140, 180, 255, 0.30);
+  --hi:        rgba(190, 215, 255, 0.10);
+
+  --text:      #eef4ff;
+  --muted:     #97abd2;
+  --faint:     #5e75a1;
+
+  --blue:      #2f7bff;
+  --blue-hi:   #62a4ff;
+  --blue-deep: #1646b8;
+  --blue-edge: #0e2f82;
+
+  --gold:      #ffc93c;
+  --gold-hi:   #ffe07a;
+  --gold-deep: #c98612;
+  --hp:        #ff4d63;
+  --ok:        #5ee08a;
+  --bad:       #ff7a86;
+
+  --r-panel: 16px;
+  --r-row:   12px;
+  --r-chip:  10px;
+
+  --hud-h:    60px;
+  --side-w:   300px;
+  --dock-h:   clamp(188px, 25vh, 244px);
+  --action-w: 248px;
+  --gap:      8px;
+
+  --font: "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, -apple-system, sans-serif;
+
+  --shadow-panel: 0 1px 0 rgba(255,255,255,0.05) inset, 0 6px 18px rgba(2, 8, 24, 0.45);
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; margin: 0; }
+
+body {
+  background:
+    radial-gradient(1400px 600px at 50% -20%, #173067 0%, transparent 60%),
+    var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
+}
+
+button { font-family: inherit; font-size: inherit; color: inherit; cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+canvas:focus-visible { outline-offset: -2px; }
+
+/* 화면 구조
+ *
+ *   ┌──────────────── HUD ─────────────────┐
+ *   │ 필드                        │ 시너지 │
+ *   ├────────┬──────────┬─────────┤        │
+ *   │ 소환   │ 조합식    │ 보유    │ 도감   │
+ *   └────────┴──────────┴─────────┴────────┘
+ *
+ * 필드가 남는 높이를 전부 가져간다(minmax(0,1fr)). 화면이 낮아지면
+ * 하단 패널이 먼저 줄어든다 — 필드보다 UI 가 우선되지 않게. */
+.app {
+  height: 100vh;
+  padding: var(--gap);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--side-w);
+  grid-template-rows: var(--hud-h) minmax(0, 1fr);
+  gap: var(--gap);
+  overflow: hidden;
+}
+
+.hud  { grid-column: 1 / -1; }
+.play {
+  min-height: 0; min-width: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) var(--dock-h);
+  gap: var(--gap);
+}
+.side {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+.dock {
+  min-height: 0; min-width: 0;
+  display: grid;
+  grid-template-columns: var(--action-w) minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: var(--gap);
+}
+
+@media (max-width: 1500px) {
+  :root { --side-w: 272px; --action-w: 222px; }
+}
+@media (max-height: 820px) {
+  :root { --hud-h: 52px; --dock-h: 176px; --gap: 6px; }
+}
+@media (max-height: 700px) {
+  :root { --dock-h: 160px; }
+}
+
+/* 1100px 미만은 한 화면에 다 넣지 않는다. 세로로 풀고 각 영역에 자체 스크롤을 준다.
+ * 패널이 내용만큼 길어지면 페이지가 화면 열 개 높이가 되어 오히려 못 쓴다. */
+@media (max-width: 1100px) {
+  .app { height: auto; min-height: 100vh; overflow: visible; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto; }
+  .play { grid-template-rows: 62vw auto; }
+  .dock { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); grid-auto-rows: minmax(0, auto); }
+  .dock .pane--action { grid-column: 1 / -1; }
+  .dock > .pane { height: 300px; }
+  .dock .pane--action { height: auto; }
+  .pane--action .action { grid-template-columns: 1.2fr 1fr 1fr; }
+  .pane--action .summon { min-height: 84px; }
+  .pane--action .action__side { display: contents; }
+  .side { flex-direction: row; flex-wrap: wrap; }
+  .side > .pane { flex: 1 1 320px; height: 340px; }
+  .hud { flex-wrap: wrap; height: auto; padding: 4px; }
+  .chip--odds { order: 1; width: 100%; justify-content: space-between; }
+  .toast { left: auto; width: 280px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}

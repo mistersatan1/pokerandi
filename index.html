@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>포켓몬 랜덤 디펜스</title>
+<link rel="stylesheet" href="css/main.css">
+<link rel="stylesheet" href="css/game.css">
+<link rel="stylesheet" href="css/ui.css">
+</head>
+<body data-state="READY">
+
+<div class="app">
+
+  <!-- ============ TOP HUD ============ -->
+  <header class="hud">
+    <div class="hud__brand">
+      <span class="ball" aria-hidden="true"></span>
+      <span class="hud__title">포켓몬 랜덤 디펜스</span>
+    </div>
+
+    <div class="chip chip--round">
+      <span class="chip__label">라운드</span>
+      <span class="chip__num" id="statWave">—</span>
+      <span class="chip__sub" id="statNextUnlock" hidden></span>
+    </div>
+
+    <div class="chip chip--odds" id="oddsBar" aria-label="현재 소환 확률"></div>
+
+    <div class="hud__spacer"></div>
+
+    <div class="chip chip--life" title="라이프">
+      <span class="gem gem--heart" aria-hidden="true"></span>
+      <span class="chip__num" id="statLife">0</span>
+      <span class="chip__sub" id="statShield" hidden></span>
+    </div>
+    <div class="chip chip--gold" title="골드">
+      <span class="gem gem--coin" aria-hidden="true"></span>
+      <span class="chip__num" id="statGold">0</span>
+    </div>
+
+    <div class="speed" id="speedGroup" role="group" aria-label="게임 속도">
+      <button type="button" class="speed__btn is-on" data-speed="1">x1</button>
+      <button type="button" class="speed__btn" data-speed="2">x2</button>
+      <button type="button" class="speed__btn" data-speed="3">x3</button>
+    </div>
+    <div class="audio">
+      <button type="button" class="iconbtn" id="btnAudio" title="소리" aria-label="소리 설정"><span class="ico ico--sound"></span></button>
+      <div class="audiopop" id="audioPop" hidden>
+        <label class="audiopop__row"><span>배경음</span>
+          <input type="range" id="musicVol" min="0" max="100" step="5" aria-label="배경음 음량"></label>
+        <label class="audiopop__row"><span>효과음</span>
+          <input type="range" id="sfxVol" min="0" max="100" step="5" aria-label="효과음 음량"></label>
+        <button type="button" class="btn btn--ghost btn--block" id="btnMute">음소거</button>
+        <div class="keyhelp">
+          <p class="keyhelp__title">단축키</p>
+          <dl>
+            <dt>Space</dt><dd>소환</dd>
+            <dt>W</dt><dd>사거리 강화 (고른 칸)</dd>
+            <dt>S</dt><dd>창고로 (고른 칸)</dd>
+            <dt>F</dt><dd>필드로 (보유 창에서 고른 포켓몬)</dd>
+            <dt>X · Del</dt><dd>방출 (고른 칸 · 보유 창)</dd>
+            <dt>C</dt><dd>조합 (가장 좋은 것)</dd>
+            <dt>1 · 2 · 3</dt><dd>배속</dd>
+            <dt>P</dt><dd>일시정지</dd>
+            <dt>R</dt><dd>조합 사전</dd>
+            <dt>G</dt><dd>골드 상점</dd>
+            <dt>E</dt><dd>정예 소환</dd>
+            <dt>Enter</dt><dd>주문 입력</dd>
+            <dt>H</dt><dd>설명서</dd>
+            <dt>Esc</dt><dd>선택·창 닫기</dd>
+          </dl>
+          <p class="keyhelp__tip">끌어서 옮기기: 보유 칸(창고) → 필드 칸 · 필드 포켓몬 → 보유 패널</p>
+        </div>
+      </div>
+    </div>
+    <button type="button" class="iconbtn iconbtn--help" id="btnHelp" title="설명서 (H)" aria-label="설명서">?</button>
+    <button type="button" class="iconbtn iconbtn--chat" id="btnChat" title="주문 (Enter)" aria-label="주문 입력">💬</button>
+    <button type="button" class="iconbtn iconbtn--book" id="btnBook" title="조합 사전 (R)" aria-label="조합 사전">조합<br>사전</button>
+    <button type="button" class="iconbtn iconbtn--gshop" id="btnGoldShop" title="골드 상점 (G)" aria-label="골드 상점">골드<br>상점</button>
+    <button type="button" class="iconbtn iconbtn--elite" id="btnElite" title="정예 소환 (E)" aria-label="정예 소환">정예<br>소환</button>
+    <button type="button" class="iconbtn" id="btnDex" title="도감" aria-label="도감"><span class="ico ico--book"></span></button>
+    <button type="button" class="iconbtn" id="btnPause" title="일시정지" aria-label="일시정지" disabled><span class="ico ico--pause"></span></button>
+    <button type="button" class="iconbtn iconbtn--ghost" id="btnRestart" title="처음부터" aria-label="처음부터"><span class="ico ico--restart"></span></button>
+  </header>
+
+  <!-- ============ LEFT: 필드 + 하단 ============ -->
+  <main class="play">
+    <div class="board">
+      <canvas id="gameCanvas" width="1000" height="600" aria-label="전투 필드"></canvas>
+
+      <div class="board__status" id="waveStatus" hidden>
+        <span class="board__phase" id="wavePhase">준비</span>
+        <span class="board__sep"></span>
+        <span class="board__label">남은 적</span>
+        <span class="board__enemies" id="statEnemies">0</span>
+        <span class="board__timer" id="waveTimer">0</span>
+        <span class="board__sep"></span>
+        <span class="board__clock" id="statTime">0:00</span>
+      </div>
+
+      <div class="board__banner" id="waveBanner" aria-live="polite"></div>
+      <div class="nextreward" id="nextReward" title="보스를 잡으면 받는 보상"></div>
+      <div class="rewardpop" id="rewardPop" aria-live="polite" hidden></div>
+      <div class="reveal" id="summonReveal" aria-live="polite">
+        <span class="reveal__art" id="revealArt"></span>
+        <span class="reveal__rarity" id="revealRarity"></span>
+        <span class="reveal__name" id="revealName"></span>
+        <span class="reveal__role" id="revealRole"></span>
+      </div>
+
+      <div class="slotcard" id="slotCard" hidden>
+        <button type="button" class="slotcard__close" id="btnSlotClose" aria-label="닫기">×</button>
+        <div class="slotcard__body" id="slotBody"></div>
+      </div>
+
+      <div class="startpanel">
+        <p class="startpanel__hint" id="boardHint">칸마다 덮는 경로 길이가 다릅니다. 칸을 클릭해 확인하고 배치하세요.</p>
+        <p class="trainerinfo" id="trainerInfo" hidden></p>
+        <p class="startpanel__hint startpanel__hint--help">처음이라면 오른쪽 위 <b>?</b> (또는 <kbd>H</kbd>) — 단축키 · 조각 상점 설명</p>
+        <button type="button" class="bigbtn bigbtn--gold" id="btnStart">
+          <span class="bigbtn__name">게임 시작</span>
+          <span class="bigbtn__sub" id="startMode">노멀</span>
+        </button>
+      </div>
+
+      <div class="modepick" id="modeOverlay" hidden>
+        <div class="modepick__card pane">
+          <h2 class="pane__title">모드 선택</h2>
+          <div class="modepick__list" id="modeList"></div>
+          <button type="button" class="btn btn--ghost" id="btnModeCancel">닫기</button>
+        </div>
+      </div>
+
+      <div class="dex" id="dexOverlay" hidden>
+        <div class="dex__card pane">
+          <div class="dex__head">
+            <h2 class="pane__title"><span class="ico ico--book"></span>포켓몬 도감</h2>
+            <span class="dex__count" id="dexCount">0 / 0</span>
+          </div>
+          <div class="dex__bonus" id="dexBonus"></div>
+          <div class="dex__grid" id="dexGrid"></div>
+          <button type="button" class="btn btn--ghost" id="btnDexClose">닫기</button>
+        </div>
+      </div>
+
+
+      <div class="chatlog" id="chatLog" aria-live="polite"></div>
+      <div class="chatbar" id="chatBar" hidden>
+        <span class="chatbar__label">주문</span>
+        <input type="text" class="chatbar__input" id="chatInput" maxlength="40" placeholder="주문을 외쳐 보세요 (Enter 보내기 · Esc 닫기)" autocomplete="off" aria-label="주문 입력">
+      </div>
+      <div class="spellscene" id="spellScene" hidden></div>
+
+      <div class="book gshop elite" id="eliteOverlay" hidden>
+        <div class="book__card pane gshop__card">
+          <div class="book__head">
+            <h2 class="pane__title">정예 소환</h2>
+            <span class="gshop__gold" id="eliteGold">0</span>
+            <span class="gshop__hint">라운드당 1회 · 잡으면 골드 + 포켓몬 · 놓치면 라이프 대폭 감소 + 5라운드 소환 금지</span>
+            <button type="button" class="help__close" id="btnEliteClose" aria-label="닫기">×</button>
+          </div>
+          <p class="elite__status" id="eliteStatus"></p>
+          <div class="elite__grid" id="eliteList"></div>
+        </div>
+      </div>
+
+      <div class="book gshop" id="goldShopOverlay" hidden>
+        <div class="book__card pane gshop__card">
+          <div class="book__head">
+            <h2 class="pane__title">골드 상점</h2>
+            <span class="gshop__gold" id="goldShopGold">0</span>
+            <span class="gshop__hint">한 판 동안 유지 · 앞으로 뽑을 포켓몬에도 적용</span>
+            <button type="button" class="help__close" id="btnGoldShopClose" aria-label="닫기">×</button>
+          </div>
+          <div class="gshop__body">
+            <section class="gshop__sec">
+              <h3 class="gshop__title">등급별 업그레이드 <small>히든은 강함 등급 대신 [히든] 칸만 받는다</small></h3>
+              <div class="gshop__grid" id="goldShopTiers"></div>
+            </section>
+            <section class="gshop__sec">
+              <h3 class="gshop__title">타입별 업그레이드 <small>두 타입이면 높은 쪽 하나만</small></h3>
+              <div class="gshop__grid" id="goldShopTypes"></div>
+            </section>
+          </div>
+        </div>
+      </div>
+
+      <div class="book" id="bookOverlay" hidden>
+        <div class="book__card pane">
+          <div class="book__head">
+            <h2 class="pane__title">조합 사전 <span class="book__count" id="bookCount"></span></h2>
+            <input type="search" class="book__search" id="bookSearch" placeholder="이름 · 초성(ㄹㅈㅁ) · 영어 · 재료 이름" aria-label="조합식 검색">
+            <button type="button" class="help__close" id="btnBookClose" aria-label="닫기">×</button>
+          </div>
+          <div class="book__filters">
+            <div class="book__tiers" id="bookTiers"></div>
+            <select id="bookRole" class="book__select" aria-label="역할·타입"></select>
+            <select id="bookSort" class="book__select" aria-label="정렬">
+              <option value="tier">등급순</option>
+              <option value="near">보유 기준 가까운 순</option>
+              <option value="cost">흔함 환산 적은 순</option>
+              <option value="name">이름순</option>
+            </select>
+          </div>
+          <div class="book__list" id="bookList"></div>
+        </div>
+      </div>
+
+      <div class="help" id="helpOverlay" hidden>
+        <div class="help__card pane">
+          <div class="help__head">
+            <h2 class="pane__title">설명서</h2>
+            <div class="tabs" id="helpTabs">
+              <button type="button" class="rf is-on" data-help="keys">단축키 · 조작</button>
+              <button type="button" class="rf" data-help="shard">조각 상점</button>
+            </div>
+            <button type="button" class="help__close" id="btnHelpClose" aria-label="닫기">×</button>
+          </div>
+
+          <section class="help__page" data-page="keys">
+            <h3>키보드</h3>
+            <table class="help__keys">
+              <tr><td><kbd>Space</kbd></td><td>소환</td></tr>
+              <tr><td><kbd>W</kbd></td><td>사거리 강화 — 필드에서 고른 포켓몬의 사거리 +8%/회 (최대 5회). 공격력은 골드 상점(G)</td></tr>
+              <tr><td><kbd>S</kbd></td><td>창고로 — 필드에서 고른 포켓몬</td></tr>
+              <tr><td><kbd>F</kbd></td><td>필드로 — 보유 창에서 고른 포켓몬을 빈 칸에</td></tr>
+              <tr><td><kbd>X</kbd> <kbd>Del</kbd></td><td>방출 — 고른 칸, 없으면 보유 창의 창고 개체</td></tr>
+              <tr><td><kbd>C</kbd></td><td>조합 — 지금 만들 수 있는 것 중 가장 높은 등급</td></tr>
+              <tr><td><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></td><td>게임 속도</td></tr>
+              <tr><td><kbd>P</kbd></td><td>일시정지 · 이어하기</td></tr>
+              <tr><td><kbd>R</kbd></td><td>조합 사전 — 모든 조합식 · 흔함 환산 · 검색</td></tr>
+              <tr><td><kbd>G</kbd></td><td>골드 상점 — 타입별 · 등급별 판 전체 업그레이드</td></tr>
+              <tr><td><kbd>E</kbd></td><td>정예 소환 — 잡으면 골드 + 포켓몬, 놓치면 라이프 감소 + 5라운드 소환 금지</td></tr>
+              <tr><td><kbd>Enter</kbd></td><td>주문 입력 — 숨겨진 조합(히든·불멸·초월)</td></tr>
+              <tr><td><kbd>H</kbd></td><td>이 설명서 열기 · 닫기</td></tr>
+              <tr><td><kbd>Esc</kbd></td><td>선택 해제 · 열린 창 닫기</td></tr>
+            </table>
+            <p class="help__note">버튼이 잠겨 있을 때(골드 부족 등)는 키를 눌러도 아무 일도 없습니다.</p>
+
+            <h3>마우스</h3>
+            <ul class="help__list">
+              <li><b>필드 칸 클릭</b> — 그 포켓몬의 정보. 잠긴 칸은 한 번 더 누르면 골드로 삽니다.</li>
+              <li><b>필드 → 필드 끌기</b> — 자리 옮기기. 누가 있으면 맞바꿉니다.</li>
+              <li><b>보유 칸(창고) → 필드 끌기</b> — 창고에서 꺼내 배치. 찬 칸이면 맞바꿉니다.</li>
+              <li><b>필드 → 보유 패널 끌기</b> — 창고로 보냅니다.</li>
+              <li><b>조합식의 포켓몬 그림 클릭</b> — 그 포켓몬을 만드는 법. 재료를 누르면 한 단계씩 내려갑니다.</li>
+              <li><b>보유 칸 클릭</b> — 필드에 배치 · 방출 · 들어가는 조합식.</li>
+            </ul>
+          </section>
+
+          <section class="help__page" data-page="shard" hidden>
+            <h3>조각(◆)이란</h3>
+            <p>원하는 포켓몬을 <b>골라서</b> 사는 화폐입니다. 소환은 무작위지만 조각은 콕 집어 삽니다.
+              조합식에 재료가 딱 하나 모자랄 때 쓰는 <b>구제책</b>입니다.</p>
+
+            <h3>얻는 법</h3>
+            <table class="help__keys">
+              <tr><td>포켓몬 방출</td><td>흔함 1 · 안흔함 2 · 특별함 3 · 희귀함 5 · 전설 8</td></tr>
+              <tr><td>보스 보상</td><td>받을 자리(필드·창고)가 없으면 그 값만큼 조각으로 대신 받습니다</td></tr>
+            </table>
+
+            <h3>여는 법</h3>
+            <p>아래 조합식 패널의 <b>[◆ 조각 상점]</b> 탭. 가진 조각은 소환 버튼 아래 <b>◆ 조각</b> 에 보입니다.</p>
+
+            <h3>가격</h3>
+            <table class="help__keys">
+              <tr><td>흔함</td><td>5</td></tr>
+              <tr><td>안흔함</td><td>10</td></tr>
+              <tr><td>특별함</td><td>25</td></tr>
+              <tr><td>희귀함</td><td>245 — 25라운드부터</td></tr>
+              <tr><td>전설</td><td>550 — 33라운드부터</td></tr>
+            </table>
+
+            <h3>목록 보는 법</h3>
+            <ul class="help__list">
+              <li><b>초록 테두리 · "조합에 바로 필요"</b> — 이것 하나만 사면 조합식이 완성됩니다. 가장 먼저 볼 것.</li>
+              <li><b>"곧 필요"</b> — 재료가 둘 모자란 조합식의 재료.</li>
+              <li>회색 줄은 지금 못 삽니다. 이유가 오른쪽에 적혀 있습니다(<i>25라운드부터 · 조각 부족 · 자리 없음</i>).</li>
+              <li>산 포켓몬은 필드 빈 칸에, 없으면 창고로 갑니다.</li>
+            </ul>
+
+            <h3>요령</h3>
+            <ul class="help__list">
+              <li>안흔함은 <b>같은 흔함 2마리</b>로 만듭니다. 흔함 한 마리가 모자라면 5조각이면 됩니다.</li>
+              <li>남는 흔함을 바로 방출하기보다, 두 마리가 되면 안흔함이 되는지 먼저 확인하세요.</li>
+              <li>쓸 데 없는 포켓몬을 방출해 조각으로 바꾸면 창고 자리도 비고 재료도 삽니다.</li>
+            </ul>
+          </section>
+        </div>
+      </div>
+
+      <div class="result" id="resultOverlay" hidden>
+        <div class="result__card pane">
+          <p class="result__kicker" id="resultKicker">게임 오버</p>
+          <h2 class="result__title" id="resultTitle">웨이브 12에서 멈췄습니다</h2>
+          <dl class="result__stats" id="resultStats"></dl>
+          <p class="result__best" id="resultBest"></p>
+          <p class="result__trainer" id="resultTrainer" hidden></p>
+          <p class="result__note" id="resultNote"></p>
+          <button type="button" class="bigbtn bigbtn--gold" id="btnResultRestart"><span class="bigbtn__name">다시 시작</span></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="dock">
+      <!-- 소환 / 행동 -->
+      <section class="pane pane--action">
+        <div class="rangechips" id="rangeChips"></div>
+        <div class="action">
+          <button type="button" class="summon" id="btnSummon" disabled>
+            <span class="ball ball--lg" aria-hidden="true"></span>
+            <span class="summon__name">소환</span>
+            <kbd class="kbd kbd--summon">Space</kbd>
+            <span class="summon__cost"><span class="gem gem--coin gem--sm"></span><span id="summonCost">45</span></span>
+          </button>
+          <div class="action__side">
+            <button type="button" class="sidebtn" id="btnUpgrade" disabled>
+              <kbd class="kbd">W</kbd>
+              <span class="ico ico--up"></span>
+              <span class="sidebtn__name">강화</span>
+              <span class="sidebtn__cost" id="upgradeCost">—</span>
+            </button>
+            <button type="button" class="sidebtn" id="btnStore" disabled>
+              <kbd class="kbd">S</kbd>
+              <span class="ico ico--box"></span>
+              <span class="sidebtn__name">창고로</span>
+              <span class="sidebtn__cost" id="storeHint">—</span>
+            </button>
+            <button type="button" class="sidebtn sidebtn--danger" id="btnSell" disabled>
+              <kbd class="kbd">X</kbd>
+              <span class="ico ico--trash"></span>
+              <span class="sidebtn__name">방출</span>
+              <span class="sidebtn__cost" id="sellValue">—</span>
+            </button>
+          </div>
+        </div>
+        <div class="spellshard" id="spellShard" hidden></div>
+        <div class="shardline" title="조각 — 중복 방출·라운드 보상으로 모인다">
+          <span class="shardline__icon">◆</span>
+          <span class="shardline__label">조각</span>
+          <span class="shardline__num" id="shardCount">0</span>
+        </div>
+        <div class="toast" id="actionToast" aria-live="polite"></div>
+      </section>
+
+      <!-- 조합식 -->
+      <section class="pane pane--recipes">
+        <header class="pane__head">
+          <h2 class="pane__title"><span class="ico ico--spark"></span>조합식</h2>
+          <span class="pane__count" id="recipeCount"></span>
+          <div class="tabs" id="recipeFilter">
+            <button type="button" class="rf is-on" data-filter="all">전체</button>
+            <button type="button" class="rf" data-filter="ready">완성가능</button>
+            <button type="button" class="rf" data-filter="pending">미완성</button>
+            <button type="button" class="rf rf--shard" data-filter="shards">◆ 조각 상점</button>
+          </div>
+          <button type="button" class="craftbtn" id="btnCraft" disabled title="완성 가능한 것 중 가장 높은 등급을 조합">
+            <span class="craftbtn__name">조합</span>
+            <kbd class="kbd kbd--craft">C</kbd>
+            <span class="craftbtn__hint" id="craftHint">—</span>
+            <span class="craftbtn__badge" id="craftBadge" hidden>0</span>
+          </button>
+        </header>
+        <div class="tierfilter" id="tierFilter"></div>
+        <div class="recipepop" id="recipePop" hidden></div>
+        <div class="recipes__list" id="recipeList">
+          <p class="empty">게임을 시작하면 조합식이 나옵니다.</p>
+        </div>
+      </section>
+
+      <!-- 보유 포켓몬 -->
+      <section class="pane pane--owned">
+        <header class="pane__head">
+          <h2 class="pane__title">보유 포켓몬</h2>
+          <span class="pane__count" id="ownedCount"></span>
+          <span class="storagebadge" title="창고 사용 칸">창고 <b id="storageBadge">0</b></span>
+          <button type="button" class="minibtn" id="btnExpandStorage">확장</button>
+        </header>
+        <div class="ownedsort" id="ownedSort" role="group" aria-label="보유 포켓몬 정렬">
+          <button type="button" class="tchip is-on" data-sort="field">필드 먼저</button>
+          <button type="button" class="tchip" data-sort="tier">등급순</button>
+          <button type="button" class="tchip" data-sort="count">수량순</button>
+          <button type="button" class="tchip" data-sort="name">이름순</button>
+          <button type="button" class="tchip" data-sort="type">타입별</button>
+        </div>
+        <div class="owned__grid" id="storageList"></div>
+        <div class="ownedpop" id="ownedPop" hidden></div>
+      </section>
+    </div>
+  </main>
+
+  <!-- ============ RIGHT: 시너지 / 도감 ============ -->
+  <aside class="side">
+    <section class="pane pane--synergy">
+      <header class="pane__head">
+        <h2 class="pane__title"><span class="ico ico--synergy"></span>타입 시너지</h2>
+        <span class="pane__count" id="synergyCount"></span>
+      </header>
+      <div class="synergy__list" id="synergyBody"></div>
+    </section>
+
+    <section class="pane pane--dex">
+      <header class="pane__head">
+        <h2 class="pane__title"><span class="ico ico--book"></span>도감</h2>
+        <span class="dexmini__count" id="dexMiniCount">0/55</span>
+      </header>
+      <div class="dexmini__bar"><span id="dexMiniBar"></span></div>
+      <ul class="dexmini__list" id="dexMiniList"></ul>
+      <button type="button" class="btn btn--ghost btn--block" id="btnDexOpen">전체 도감 보기</button>
+    </section>
+  </aside>
+
+</div>
+
+<!-- 클래식 script 로드. ES 모듈을 쓰지 않는 이유는 index.html 을 더블클릭(file://)해도
+     CORS 없이 바로 실행되게 하기 위해서다. 순서가 곧 의존성이다. -->
+<script src="js/core/RPD.js"></script>
+<script src="js/core/Utils.js"></script>
+<script src="js/core/EventBus.js"></script>
+<script src="js/core/Assets.js"></script>
+<script src="js/core/PathFollower.js"></script>
+<script src="js/core/Loop.js"></script>
+<script src="js/core/AudioManager.js"></script>
+
+<script src="js/data/types.js"></script>
+<script src="js/data/map.js"></script>
+<script src="js/data/tiers.js"></script>
+<script src="js/data/pokemon.js"></script>
+<script src="js/data/enemies.js"></script>
+<script src="js/data/enemyskins.js"></script>
+<script src="js/data/waves.js"></script>
+<script src="js/data/recipes.js"></script>
+<script src="js/data/dexbonus.js"></script>
+<script src="js/data/skills.js"></script>
+<script src="js/data/traits.js"></script>
+<script src="js/data/auras.js"></script>
+<script src="js/data/titles.js"></script>
+<script src="js/data/spells.js"></script>
+<script src="js/data/roletuning.js"></script>
+<script src="js/data/craftpower.js"></script>
+<script src="js/data/attackfx.js"></script>
+
+<script src="js/systems/GameManager.js"></script>
+<script src="js/systems/FieldManager.js"></script>
+<script src="js/systems/EconomyManager.js"></script>
+<script src="js/systems/GoldShopManager.js"></script>
+<script src="js/systems/EliteManager.js"></script>
+<script src="js/systems/StatsManager.js"></script>
+<script src="js/systems/SynergyManager.js"></script>
+<script src="js/systems/UnitManager.js"></script>
+<script src="js/systems/SummonManager.js"></script>
+<script src="js/systems/EnemyManager.js"></script>
+<script src="js/systems/CombatManager.js"></script>
+<script src="js/systems/SkillManager.js"></script>
+<script src="js/systems/TraitManager.js"></script>
+<script src="js/systems/BossManager.js"></script>
+<script src="js/systems/RecipeManager.js"></script>
+<script src="js/systems/StorageManager.js"></script>
+<script src="js/systems/ShardManager.js"></script>
+<script src="js/systems/RewardManager.js"></script>
+<script src="js/systems/WaveManager.js"></script>
+<script src="js/systems/SaveManager.js"></script>
+<script src="js/systems/ProgressManager.js"></script>
+<script src="js/systems/SpellManager.js"></script>
+
+<script src="js/render/SpriteFactory.js"></script>
+<script src="js/render/Renderer.js"></script>
+<script src="js/render/MapRenderer.js"></script>
+<script src="js/render/FxRenderer.js"></script>
+<script src="js/render/UnitRenderer.js"></script>
+<script src="js/render/EnemyRenderer.js"></script>
+<script src="js/render/AttackFxRenderer.js"></script>
+
+<script src="js/ui/Icons.js"></script>
+<script src="js/ui/UIManager.js"></script>
+<script src="js/ui/HudPanels.js"></script>
+<script src="js/ui/RecipeBook.js"></script>
+<script src="js/ui/GoldShopUI.js"></script>
+<script src="js/ui/EliteUI.js"></script>
+<script src="js/ui/SpellUI.js"></script>
+<script src="js/main.js"></script>
+
+</body>
+</html>

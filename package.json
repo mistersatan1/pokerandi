@@ -1,0 +1,15 @@
+{
+  "name": "pokemon-random-defense",
+  "private": true,
+  "description": "포켓몬 랜덤 디펜스 (포랜디) — 브라우저 랜덤 디펜스. index.html 을 열면 바로 실행된다.",
+  "scripts": {
+    "check": "node tools/integritycheck.js && node tools/bootsmoke.js && node tools/rendersmoke.js && node tools/redesigncheck.js && node tools/uicheck.js",
+    "autoplay": "node tools/autoplay.js 20",
+    "tierpower": "node tools/tierpower.js",
+    "build": "node tools/build-tester.js",
+    "screenshot": "node tools/build-tester.js && node tools/screenshot.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.0"
+  }
+}

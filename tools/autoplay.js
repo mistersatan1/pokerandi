@@ -264,7 +264,9 @@ function act(stats) {
     if (val > bestVal) { bestVal = val; best = s; }
   }
   const upValue = bestVal;
-  const shopValue = pick ? pick.value * (pick.kind === 'type' ? G.CFG.typeStep : G.CFG.tierStep) : 0;
+  // 한 레벨이 공격력 · 공격속도를 같이 올린다 — DPS 로는 둘의 합만큼 늘어난다고 친다
+  const shopValue = pick ? pick.value * (pick.kind === 'type' ? G.CFG.typeStep + G.CFG.typeSpeedStep
+                                                              : G.CFG.tierStep + G.CFG.tierSpeedStep) : 0;
   if (!process.env.NO_SHOP && pick && shopValue >= upValue && GM.gold >= pick.price) {
     if (G.buy(pick.kind, pick.key).ok) stats.shopBuys++;
   } else if (best && GM.gold > EC.upgradeCost(best.unit) * 1.5) {

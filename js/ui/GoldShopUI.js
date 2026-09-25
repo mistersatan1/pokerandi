@@ -8,13 +8,19 @@
 
   var REASON = { NO_GOLD: '골드 부족', MAX_LEVEL: '최대', NOT_PLAYING: '게임 중에만' };
 
+  function eff(name, lv, step, max) {
+    var pct = function (x) { return Math.round(x * 1000) / 10; };    // 2.5% 같은 반 단위가 있다
+    // 칸이 좁아 한 줄에 넣는다: "공속 +22.5→+25%"
+    return '<span class="gcard__eff">' + name + ' +' + pct(lv * step) + (max ? '%' : '→<b>+' + pct((lv + 1) * step) + '%</b>') + '</span>';
+  }
+
   function card(kind, key, label, color) {
     var G = RPD.GoldShopManager, CFG = G.CFG;
     var lv = kind === 'type' ? G.typeLevel(key) : G.tierLevel(key);
     var step = kind === 'type' ? CFG.typeStep : CFG.tierStep;
+    var sstep = kind === 'type' ? CFG.typeSpeedStep : CFG.tierSpeedStep;
     var c = G.check(kind, key);
     var max = lv >= CFG.maxLevel;
-    var now = Math.round(lv * step * 100), next = Math.round((lv + 1) * step * 100);
     var n = G.affected(kind, key);
     var pips = '';
     for (var i = 0; i < CFG.maxLevel; i++) pips += '<i class="' + (i < lv ? 'is-on' : '') + '"></i>';
@@ -23,7 +29,7 @@
       '<span class="gcard__name">' + label + '</span>' +
       '<span class="gcard__lv">Lv ' + lv + '<small>/' + CFG.maxLevel + '</small></span>' +
       '<span class="gcard__pips">' + pips + '</span>' +
-      '<span class="gcard__eff">공격력 +' + now + '%' + (max ? '' : ' → <b>+' + next + '%</b>') + '</span>' +
+      eff('공격', lv, step, max) + eff('공속', lv, sstep, max) +
       '<span class="gcard__field">필드 ' + n + '마리</span>' +
       '<span class="gcard__price">' + (max ? '최대 레벨' : (c.price || G.cost(kind, key)) + 'G' +
         (c.ok ? '' : ' · ' + (REASON[c.reason] || ''))) + '</span>' +

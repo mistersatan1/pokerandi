@@ -539,7 +539,7 @@ body:not([data-state="READY"]):not([data-state="IDLE"]) .startpanel { display: n
 .gcard__pips { display: flex; gap: 2px; }
 .gcard__pips i { flex: 1; height: 4px; border-radius: 2px; background: var(--inset); }
 .gcard__pips i.is-on { background: var(--c); }
-.gcard__eff { font-size: 11px; color: var(--muted); }
+.gcard__eff { font-size: 10.5px; letter-spacing: -0.2px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gcard__eff b { color: #7dffa0; }
 .gcard__field { font-size: 10px; color: var(--faint); }
 .gcard__price { font-size: 12px; font-weight: 900; color: #ffd23f; }

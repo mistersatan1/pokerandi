@@ -155,6 +155,7 @@
     unit.attack = atk * (1 + aura);
     unit.attackSpeed = def.attackSpeed * syn.attackSpeedMul * (1 + dex.attackSpeed) *
       (RPD.RoleTuning ? RPD.RoleTuning.speedOf(def) : 1);
+    if (RPD.GoldShopManager) unit.attackSpeed *= RPD.GoldShopManager.speedMul(def);
     if (SK) unit.attackSpeed *= SK.speedMul();
     // 비행 타입은 스스로도 공격속도를 얻는다 (시너지와 별개)
     if (unit.typeFlags.FLYING) unit.attackSpeed *= RPD.TypeParams.attackSpeedMul;

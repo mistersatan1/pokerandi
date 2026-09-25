@@ -557,7 +557,7 @@ section('골드 상점');
   fresh(1); G.reset();
   const u = UM.create('charmander');            // 불꽃 · 흔함
   F.place(0, u); UM.recomputeAll();
-  const base = u.attack;
+  const base = u.attack, baseSpd = u.attackSpeed;
 
   GM.gold = 0;
   check('골드가 없으면 못 산다', G.buy('type', 'FIRE').reason === 'NO_GOLD');
@@ -569,7 +569,17 @@ section('골드 상점');
   check('타입 업그레이드가 필드 개체 공격력에 곧바로 붙는다',
     Math.abs(u.attack / base - (1 + G.CFG.typeStep)) < 1e-6, `${(u.attack / base).toFixed(3)}`);
 
+  check('타입 업그레이드는 공격속도도 같이 올린다',
+    Math.abs(u.attackSpeed / baseSpd - (1 + G.CFG.typeSpeedStep)) < 1e-6 && G.CFG.typeSpeedStep > 0, `${(u.attackSpeed / baseSpd).toFixed(3)}`);
+
   G.buy('tier', 'T1');
+  check('등급 업그레이드도 공격속도를 같이 올리고 타입과 곱으로 쌓인다',
+    Math.abs(u.attackSpeed / baseSpd - (1 + G.CFG.typeSpeedStep) * (1 + G.CFG.tierSpeedStep)) < 1e-6 && G.CFG.tierSpeedStep > 0,
+    `${(u.attackSpeed / baseSpd).toFixed(3)}`);
+  const full = (a, b) => (1 + 10 * a) * (1 + 10 * b);
+  check('끝까지 올린 공격력 × 공격속도는 예전 "공격력만"(타입 1.5 · 등급 1.6)과 거의 같다',
+    Math.abs(full(G.CFG.typeStep, G.CFG.typeSpeedStep) / 1.5 - 1) < 0.03 && Math.abs(full(G.CFG.tierStep, G.CFG.tierSpeedStep) / 1.6 - 1) < 0.03,
+    `타입 ${full(G.CFG.typeStep, G.CFG.typeSpeedStep).toFixed(3)} · 등급 ${full(G.CFG.tierStep, G.CFG.tierSpeedStep).toFixed(3)}`);
   check('등급 업그레이드는 타입과 곱으로 쌓인다',
     Math.abs(u.attack / base - (1 + G.CFG.typeStep) * (1 + G.CFG.tierStep)) < 1e-6, `${(u.attack / base).toFixed(3)}`);
 

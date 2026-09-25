@@ -54,6 +54,12 @@ function boot() {
   // 곡선 실험용 덮어쓰기: LATE=1.07 WALL_STEP=3
   if (process.env.LATE) R.WaveData.lateGrowth = Number(process.env.LATE);
   if (process.env.WALL_STEP) R.WaveData.wallStep = Number(process.env.WALL_STEP);
+  // 불멸·초월 배율 실험: IMMORTAL_MUL=2.5 TRANSCEND_MUL=2.8 (재료 합의 몇 배 — craftpower.js 3번 규칙)
+  if (process.env.IMMORTAL_MUL || process.env.TRANSCEND_MUL) {
+    if (process.env.IMMORTAL_MUL) R.CraftPower.CFG.IMMORTAL = Number(process.env.IMMORTAL_MUL);
+    if (process.env.TRANSCEND_MUL) R.CraftPower.CFG.TRANSCEND = Number(process.env.TRANSCEND_MUL);
+    R.CraftPower.build();
+  }
   if (process.env.NO_CRAFTPOWER) { R.CraftPower.mul = {}; R.CraftPower.mulOf = () => 1; }
   return R;
 }

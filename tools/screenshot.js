@@ -222,6 +222,132 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     console.log('mobile', dev, JSON.stringify({ canvas: geo.canvas, rotated: geo.rotated, slotCss: geo.slotCss, tapOk: targets.length - wrong.length + '/' + targets.length, missing, scroll: geo.pageScroll, errors: merr.slice(0, 2) }));
     await mctx.close();
   }
+  /* ---------- 모바일 ② 터치 — 실제 손가락 이벤트(CDP Input.dispatchTouchEvent)로 ----------
+   * 칸 비껴 누르기 · 흔들린 누르기는 자리를 안 바꿈 · 진짜 끌기는 바꿈 · 필드→[보유] 탭에 놓기 · 보유 칸 길게 눌러 필드로 ·
+   * 목록 쓸기는 집지 않음 · 길게 누르기 말풍선(버튼은 안 눌림) · 두 번 탭 확대 없음 · 누름 영역 40px 미만 0개. */
+  const touchReport = [];
+  for (const dev of ['Galaxy S24', 'Galaxy S24 landscape']) {
+    const tctx = await browser.newContext({ ...devices[dev], defaultBrowserType: undefined });
+    const tp = await tctx.newPage();
+    const terr = [];
+    tp.on('pageerror', e => terr.push(e.message));
+    await tp.goto(URL); await tp.waitForTimeout(1200);
+    const cdp = await tctx.newCDPSession(tp);
+    const T = (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([x, y]) => ({ x, y })) });
+    const hold = ms => tp.waitForTimeout(ms);
+    const tapAt = async (x, y) => { await T('touchStart', [[x, y]]); await hold(40); await T('touchEnd', []); await hold(80); };
+    const drag = async (x1, y1, x2, y2, steps = 8, holdMs = 0) => {
+      await T('touchStart', [[x1, y1]]); if (holdMs) await hold(holdMs);
+      for (let k = 1; k <= steps; k++) { await T('touchMove', [[x1 + (x2 - x1) * k / steps, y1 + (y2 - y1) * k / steps]]); await hold(16); }
+      await T('touchEnd', []); await hold(120);
+    };
+    await tp.evaluate(() => {
+      const R = window.RPD;
+      if (R.TutorialManager && R.TutorialManager.skip) R.TutorialManager.skip();
+      document.querySelectorAll('.modepick, .result, .help, .book').forEach(o => o.hidden = true);
+      R.Game.resetAll('NORMAL', 'NORMAL'); R.Game.startRun('NORMAL', 'NORMAL');
+      R.Loop && R.Loop.setPaused && R.Loop.setPaused(true);
+      const F = R.FieldManager, open = F.slots.filter(s => s.unlocked);
+      F.place(open[0].index, R.UnitManager.create('charmander'));
+      F.place(open[1].index, R.UnitManager.create('squirtle'));
+      R.StorageManager.add(R.UnitManager.create('pikachu'));
+      R.UnitManager.recomputeAll(); R.bus.emit('field:changed', {}); R.GameManager.gold = 0;
+    });
+    await hold(300);
+    // 칸의 화면 위치(가운데 · 크기) — Renderer 를 거치지 않고 따로 계산
+    const S = await tp.evaluate(() => {
+      const R = window.RPD.Renderer, F = window.RPD.FieldManager, r = document.getElementById('gameCanvas').getBoundingClientRect();
+      const rot = R.rotated, s = rot ? Math.min(r.width / 600, r.height / 1000) : Math.min(r.width / 1000, r.height / 600);
+      const ox = rot ? (r.width - 600 * s) / 2 : (r.width - 1000 * s) / 2, oy = rot ? (r.height - 1000 * s) / 2 : (r.height - 600 * s) / 2;
+      return F.slots.map(sl => ({ i: sl.index, x: r.left + ox + (rot ? (600 - sl.y) : sl.x) * s, y: r.top + oy + (rot ? sl.x : sl.y) * s, half: sl.size / 2 * s, unit: sl.unit ? sl.unit.defId : null, unlocked: sl.unlocked }));
+    });
+    const state = () => tp.evaluate(() => ({ sel: window.RPD.FieldManager.selectedIndex, at: window.RPD.FieldManager.slots.map(s => s.unit ? s.unit.defId : null),
+      stored: window.RPD.StorageManager.units.map(u => u.defId) }));
+    const res = {};
+    const A = S.find(s => s.unit === 'charmander'), B = S.find(s => s.unit === 'squirtle');
+    // ① 칸 가장자리 밖 6px 을 눌러도 그 칸(가장 가까운 칸이 그 칸인 방향으로)
+    const away = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => ({ x: A.x + dx * (A.half + 6), y: A.y + dy * (A.half + 6) }));
+    let edgeOk = 0;
+    for (const pt of away) {
+      await tp.evaluate(() => window.RPD.FieldManager.select(-1));
+      await tapAt(pt.x, pt.y);
+      const st = await state();
+      const nearest = S.map(s => ({ i: s.i, d: Math.hypot(Math.max(0, Math.abs(pt.x - s.x) - s.half), Math.max(0, Math.abs(pt.y - s.y) - s.half)) })).sort((a, b) => a.d - b.d)[0];
+      if (st.sel === nearest.i) edgeOk++;
+    }
+    res['칸 가장자리 밖 6px 누르기 → 가장 가까운 칸'] = edgeOk + '/4';
+    // ② 흔들린 누르기: A 의 B 쪽 가장자리 안에서 눌러 B 쪽으로 8px(문턱 10px 미만) 밀고 떼기 → 자리 그대로
+    const dir = { x: Math.sign(B.x - A.x), y: Math.sign(B.y - A.y) };
+    const sx = A.x + dir.x * (A.half - 3), sy = A.y + dir.y * (A.half - 3);
+    await tp.evaluate(() => window.RPD.FieldManager.select(-1));
+    await drag(sx, sy, sx + dir.x * 8, sy + dir.y * 8, 4);
+    let st = await state();
+    res['흔들린 누르기(8px)는 자리를 안 바꾼다'] = st.at[A.i] === 'charmander' && st.at[B.i] === 'squirtle';
+    // ③ 진짜 끌기 A → B 는 자리를 바꾼다
+    await drag(A.x, A.y, B.x, B.y, 10);
+    st = await state();
+    res['A → B 끌기는 자리를 바꾼다'] = st.at[A.i] === 'squirtle' && st.at[B.i] === 'charmander';
+    // ④ 필드 → [보유] 탭에 놓기(서랍 닫힌 채) → 창고로
+    const tab = await tp.evaluate(() => { const b = document.querySelector('.mtab[data-mtab="owned"]').getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; });
+    await drag(B.x, B.y, tab.x, tab.y, 12);
+    st = await state();
+    res['필드 → [보유] 탭에 놓으면 창고로'] = st.at[B.i] === null && st.stored.includes('charmander');
+    // ⑤ 보유 칸 길게 눌러(0.4초) 집어 빈 필드 칸에 놓기 → 배치 / ⑥ 누르자마자 쓸기 → 집지 않음
+    await tp.evaluate(() => window.RPD.UIManager && document.querySelector('.mtab[data-mtab="owned"]').click());
+    await hold(350);
+    const empty = (await tp.evaluate(() => window.RPD.FieldManager.slots.filter(s => s.unlocked && !s.unit).map(s => s.index)))[0];
+    const E = (await tp.evaluate(() => {
+      const R = window.RPD.Renderer, F = window.RPD.FieldManager, r = document.getElementById('gameCanvas').getBoundingClientRect();
+      const rot = R.rotated, s = rot ? Math.min(r.width / 600, r.height / 1000) : Math.min(r.width / 1000, r.height / 600);
+      const ox = rot ? (r.width - 600 * s) / 2 : (r.width - 1000 * s) / 2, oy = rot ? (r.height - 1000 * s) / 2 : (r.height - 600 * s) / 2;
+      return F.slots.map(sl => ({ i: sl.index, x: r.left + ox + (rot ? (600 - sl.y) : sl.x) * s, y: r.top + oy + (rot ? sl.x : sl.y) * s }));
+    })).find(s => s.i === empty);
+    const cell = await tp.evaluate(() => { const c = document.querySelector('.scell.has-stored[data-def="pikachu"]'); if (!c) return null; c.scrollIntoView({ block: 'nearest' }); const b = c.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; });
+    if (cell) {
+      await drag(cell.x, cell.y, cell.x, cell.y - 60, 6, 0);   // 쓸기 — 집으면 안 된다
+      st = await state();
+      res['보유 칸을 바로 쓸면 집지 않는다(스크롤)'] = st.stored.includes('pikachu') && !st.at.includes('pikachu');
+      const cell2 = await tp.evaluate(() => { const c = document.querySelector('.scell.has-stored[data-def="pikachu"]'); c.scrollIntoView({ block: 'nearest' }); const b = c.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; });
+      await drag(cell2.x, cell2.y, E.x, E.y, 14, 420);         // 길게 눌렀다 끌기
+      st = await state();
+      res['보유 칸 길게 눌러 집어 필드에 놓기'] = st.at[empty] === 'pikachu';
+    } else { res['보유 칸 길게 눌러 집어 필드에 놓기'] = '보유 칸 없음'; }
+    await tp.evaluate(() => document.querySelector('.mtab[data-mtab="owned"]').click());   // 서랍 닫기
+    await hold(300);
+    // ⑦ 길게 누르기 → 설명 말풍선 · 버튼은 안 눌림 (☰ 메뉴의 골드 상점)
+    await tp.evaluate(() => document.getElementById('btnMore').click()); await hold(200);
+    const gs = await tp.evaluate(() => { const b = document.getElementById('btnGoldShop').getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; });
+    await T('touchStart', [[gs.x, gs.y]]); await hold(650);
+    const tipTxt = await tp.evaluate(() => { const t = document.querySelector('.tipbubble'); return t && !t.hidden ? t.textContent : null; });
+    if (/landscape/.test(dev) === false) await tp.screenshot({ path: require('path').join(__dirname, '..', 'dist', 'm_touch_tip.png') });
+    await T('touchEnd', []); await hold(250);
+    res['길게 누르기 → 설명 말풍선'] = tipTxt;
+    res['말풍선을 띄운 뒤 버튼은 안 눌림'] = await tp.evaluate(() => document.getElementById('goldShopOverlay').hidden);
+    await tp.evaluate(() => { const h = document.querySelector('.hud'); if (h.classList.contains('is-more-open')) document.getElementById('btnMore').click(); });
+    // ⑧ 두 번 탭 확대 없음 · 필드는 브라우저 손버릇을 안 받는다
+    const mid = S.find(s => !s.unit && !s.unlocked) || S[S.length - 1];
+    await tapAt(mid.x + 40, mid.y + 40); await hold(60); await tapAt(mid.x + 40, mid.y + 40); await hold(300);
+    res['두 번 탭해도 확대되지 않는다'] = await tp.evaluate(() => (window.visualViewport ? window.visualViewport.scale : 1) === 1);
+    res['필드 touch-action: none'] = await tp.evaluate(() => getComputedStyle(document.getElementById('gameCanvas')).touchAction === 'none');
+    // ⑨ 누름 영역 40px 미만(필드 · 서랍 4개 · ☰ · 정보 카드)
+    const smalls = new Set();
+    const scan = async () => (await tp.evaluate(() => [...document.querySelectorAll('button, [role=button], select, .scell, .tchip, .rf, [data-tgt], [data-tgt-all]')].filter(n => {
+      const r = n.getBoundingClientRect(), cs = getComputedStyle(n);
+      if (r.width < 1 || r.height < 1 || cs.visibility === 'hidden' || cs.display === 'none' || r.bottom < 0 || r.top > innerHeight || r.right < 0 || r.left > innerWidth) return false;
+      return r.width < 40 || r.height < 40;
+    }).map(n => (n.id ? '#' + n.id : '.' + String(n.className).split(' ')[0]) + ' ' + Math.round(n.getBoundingClientRect().width) + 'x' + Math.round(n.getBoundingClientRect().height)))).forEach(x => smalls.add(x));
+    await scan();
+    for (const t of ['recipes', 'owned', 'synergy', 'dex']) { await tp.evaluate(tt => document.querySelector('.mtab[data-mtab="' + tt + '"]').click(), t); await hold(200); await scan(); }
+    await tp.evaluate(() => document.querySelector('.mtab[data-mtab="dex"]').click());
+    await tp.evaluate(() => document.getElementById('btnMore').click()); await hold(150); await scan(); await tp.evaluate(() => document.getElementById('btnMore').click());
+    await tp.evaluate(() => window.RPD.FieldManager.select(window.RPD.FieldManager.slots.find(s => s.unit).index)); await hold(200); await scan();
+    res['누름 영역 40px 미만'] = [...smalls];
+    touchReport.push({ device: dev, ...res, errors: terr.slice(0, 3) });
+    console.log('touch', dev, JSON.stringify(res), terr.slice(0, 2));
+    await tctx.close();
+  }
+  report.push({ touch: touchReport });
+
   require('fs').writeFileSync(require('path').join(__dirname, '..', 'dist', 'mobile_report.json'), JSON.stringify(report, null, 2));
 
   await browser.close();

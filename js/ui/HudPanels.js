@@ -257,6 +257,8 @@
       if (e.target.closest('#btnMore') || e.target.closest('.audio')) return;
       if (e.target.closest('#hudMore .iconbtn') || !e.target.closest('#hudMore')) HudPanels.toggleMore(false);
     });
+    bindLongPressTips();
+
     // 조합 가능 개수를 [조합식] 탭에도 — 서랍이 닫혀 있어도 보이게
     RPD.bus.on('recipe:changed', function () {
       var badge = $('mtabCraft');
@@ -264,6 +266,62 @@
       var n = (RPD.RecipeManager.view || []).filter(function (v) { return v.ready; }).length;
       badge.hidden = n === 0;
       badge.textContent = n;
+    });
+  }
+
+  /* ---------- 길게 누르기 → 설명 말풍선 (모바일 ② · 세션 52) ----------
+   * PC 는 마우스를 올리면 title 설명이 뜨지만 손가락에는 "올리기"가 없다. 0.5초 길게 누르면 그 설명을 말풍선으로 띄우고,
+   * 그 손을 뗄 때 버튼이 눌리지 않게 한 번 막는다. 움직이면(스크롤) 취소. 필드 캔버스 · 보유 칸(길게 눌러 집기)은 제외. */
+  var TIP_HOLD_MS = 500;
+  var tip = { timer: 0, x: 0, y: 0, node: null, eatClick: false, bubble: null, hideAt: 0 };
+  HudPanels.showTip = function (text, rect) {
+    if (!text || typeof document === 'undefined' || !document.createElement) return null;
+    var b = tip.bubble;
+    if (!b) { b = document.createElement('div'); b.className = 'tipbubble'; b.setAttribute('role', 'tooltip'); document.body.appendChild(b); tip.bubble = b; }
+    b.textContent = text;
+    b.hidden = false;
+    if (rect && b.style) {
+      var vw = global.innerWidth || 800;
+      b.style.left = Math.max(8, Math.min(vw - 8, rect.left + rect.width / 2)) + 'px';
+      b.style.top = Math.max(8, rect.top - 8) + 'px';
+    }
+    clearTimeout(tip.hideAt);
+    tip.hideAt = setTimeout(function () { if (tip.bubble) tip.bubble.hidden = true; }, 2600);
+    return b;
+  };
+  function bindLongPressTips() {
+    document.addEventListener('pointerdown', function (e) {
+      if (tip.bubble) tip.bubble.hidden = true;
+      if (e.pointerType !== 'touch' || !e.target || !e.target.closest) return;
+      var n = e.target.closest('[title]');
+      if (!n || n.id === 'gameCanvas' || e.target.closest('.scell')) return;
+      tip.node = n; tip.x = e.clientX; tip.y = e.clientY;
+      clearTimeout(tip.timer);
+      tip.timer = setTimeout(function () {
+        if (!tip.node) return;
+        HudPanels.showTip(tip.node.getAttribute('title'), tip.node.getBoundingClientRect ? tip.node.getBoundingClientRect() : null);
+        tip.eatClick = true;
+        tip.node = null;
+      }, TIP_HOLD_MS);
+    }, true);
+    document.addEventListener('pointermove', function (e) {
+      if (tip.node && Math.abs(e.clientX - tip.x) + Math.abs(e.clientY - tip.y) > 10) { clearTimeout(tip.timer); tip.node = null; }
+    }, true);
+    ['pointerup', 'pointercancel'].forEach(function (ev) {
+      document.addEventListener(ev, function () { clearTimeout(tip.timer); tip.node = null; }, true);
+    });
+    // 말풍선을 띄운 길게 누르기 끝의 click 은 먹는다(설명을 보려다 소환·방출이 눌리면 안 된다)
+    document.addEventListener('click', function (e) {
+      if (!tip.eatClick) return;
+      tip.eatClick = false;
+      if (e.stopPropagation) e.stopPropagation();
+      if (e.preventDefault) e.preventDefault();
+    }, true);
+    // 길게 누르기에 브라우저 기본 메뉴(복사 · 이미지 저장)가 뜨지 않게 — 입력칸은 둔다
+    document.addEventListener('contextmenu', function (e) {
+      var t = e.target && e.target.tagName;
+      if (t === 'INPUT' || t === 'TEXTAREA') return;
+      if (e.pointerType === 'touch' || (global.matchMedia && global.matchMedia('(pointer: coarse)').matches)) e.preventDefault();
     });
   }
 

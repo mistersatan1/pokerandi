@@ -21,7 +21,7 @@
  *   └─────────────────┴────┴───────┘        ├──── 탭 ─────┤
  *                                            └──── 서랍 ───┘  */
 @media (max-width: 1099.98px) {
-  :root { --gap: 4px; --r-panel: 12px; --drawer-w: 0px; --drawer-h: 0px; --rail-w: 132px; }
+  :root { --gap: 4px; --r-panel: 12px; --drawer-w: 0px; --drawer-h: 0px; --rail-w: 140px; }
   body[data-mtab]:not([data-mtab=""]):not([data-mtab="shop"]) { --drawer-w: min(46vw, 420px); --drawer-h: 44dvh; }
 
   .app {
@@ -128,6 +128,31 @@
     overflow: auto; overscroll-behavior: contain; transform: none !important; pointer-events: auto; }
 }
 
+/* ================= 모바일 ② 터치 — 손가락 크기 (세션 52) =================
+ * 누르는 것은 전부 40px 이상(애플 44pt · 머티리얼 48dp 사이의 우리 기준). 검사: tools/screenshot.js 의 누름 크기 감사. */
+@media (max-width: 1099.98px) {
+  .hud { min-height: 46px; }
+  .hud .speed { height: 46px; padding: 2px; }
+  .hud .speed__btn { width: 40px; min-height: 40px; }
+  .hud .iconbtn, .hud #btnPause, .hud #btnMore { width: 40px; height: 40px; }
+  .hud .chip { height: 40px; }
+  .mtab { min-height: 40px; }
+  .pane--action .sidebtn { min-width: 40px; }
+  .rf, .tchip, .tierfilter > * { min-height: 40px; min-width: 40px; }
+  .pane--recipes .craftbtn, #btnExpandStorage, #btnDexOpen { min-height: 40px; }
+  .slotcard__close { width: 40px; height: 40px; font-size: 22px; }
+  .tgt__chip, .tgt__all { min-height: 40px; padding: 0 12px; }
+  .tgt__chips { gap: 5px; }
+
+  /* 브라우저 손버릇 막기 — 필드는 게임이 전부 받는다(두 번 탭 확대 · 스크롤 · 당겨서 새로고침 없음).
+   * 버튼은 두 번 탭 확대만 막는다(manipulation). 패널 안 스크롤과 두 손가락 확대(접근성)는 그대로 둔다. */
+  html, body { overscroll-behavior: none; }
+  body { -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+  input, textarea { -webkit-user-select: text; user-select: text; }
+  #gameCanvas { touch-action: none; }
+  button, .mtab, .scell, .rrow, [data-tgt] { touch-action: manipulation; }
+}
+
 /* 휴대폰 세로 — 필드(Renderer 가 90° 돌려 세로로 긴 맵으로 그린다) 아래에 소환 줄 · 탭 · 서랍 */
 @media (max-width: 1099.98px) and (orientation: portrait) {
   #gameCanvas { --field-rotate: 1; }   /* 휴대폰 세로: 필드를 90° 돌려 세로로 긴 맵(서랍을 열어도 방향은 그대로) */
@@ -139,17 +164,19 @@
   }
   /* 세로 HUD 는 한 줄(라운드 · 라이프 · 골드 · 배속 · 일시정지 · ☰) + 소환 확률 얇은 줄 */
   .hud { flex-wrap: wrap; row-gap: 3px; column-gap: 3px; }
-  .hud .chip--odds { order: 9; flex: 1 1 100%; height: 22px; justify-content: space-between; }
+  .hud .chip--odds { order: 9; flex: 1 1 0; min-width: 0; height: 40px; justify-content: space-between; }
+  .hud .speed { order: 8; }                 /* 둘째 줄: 배속(손가락 크기 40px 셋) + 소환 확률 */
+  .hud #btnPause { order: 4; } .hud .hud__morebtn { order: 5; }
+  .hud__spacer { order: 3; }
+  .hud::after { content: ""; order: 6; flex: 1 1 100%; height: 0; }   /* 여기서 줄을 바꾼다 */
   .hud .chip--odds * { font-size: 10px !important; }
   .hud__spacer { flex: 1 1 0; min-width: 0; }
-  .hud .chip { padding: 0 5px; height: 32px; }
+  .hud .chip { padding: 0 6px; }
   .hud .chip__num { font-size: 16px; }
   .hud .chip--round .chip__label { display: none; }
   .hud .chip--round .chip__num::before { content: "R"; font-size: 11px; color: var(--muted); margin-right: 1px; }
   .hud .chip--round .chip__sub { display: none; }
-  .hud .speed { height: 32px; }
-  .hud .speed__btn { width: 26px; font-size: 12px; }
-  .hud .iconbtn { width: 32px; height: 32px; }
+  .hud .speed__btn { font-size: 13px; }
 
   .pane--action { flex-direction: row; align-items: stretch; padding: 4px; }
   .pane--action .action { flex: 1; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 4px; }
@@ -162,4 +189,14 @@
   .mtab--shop { grid-column: auto; }
   .slotcard { left: 4px !important; right: 4px; top: auto !important; width: auto; max-height: 58%; }
 }
+
+/* 길게 누르기 말풍선 · 보유 탭 끌어 놓기 표시 (모바일 ② · 세션 52) — 어느 화면 크기든 손가락이면 뜬다 */
+.tipbubble {
+  position: fixed; z-index: 120; transform: translate(-50%, -100%);
+  max-width: min(280px, 86vw); padding: 7px 10px; border-radius: 10px;
+  background: #0b1a3a; border: 1px solid var(--line-2); box-shadow: 0 6px 18px rgba(0,0,0,.45);
+  color: var(--text); font-size: 12.5px; font-weight: 700; line-height: 1.35; pointer-events: none;
+}
+.tipbubble[hidden] { display: none; }
+.mtab.is-droptarget { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold); color: var(--gold-hi); }
 

@@ -140,6 +140,21 @@
     return -1;
   };
 
+  /* 손가락용 — 칸을 조금 비껴 눌러도 가장 가까운 칸(모바일 ② · 세션 52).
+   * 정확히 칸 안이면 그 칸, 아니면 칸 가장자리에서 pad(논리 단위) 안에 있는 가장 가까운 칸. 마우스는 hitTest 그대로. */
+  FieldManager.hitTestNear = function (x, y, pad) {
+    var exact = this.hitTest(x, y);
+    if (exact >= 0 || !(pad > 0)) return exact;
+    var best = -1, bestD = pad;
+    for (var i = 0; i < this.slots.length; i++) {
+      var s = this.slots[i], half = s.size / 2;
+      var dx = Math.max(0, Math.abs(x - s.x) - half), dy = Math.max(0, Math.abs(y - s.y) - half);
+      var d = Math.sqrt(dx * dx + dy * dy);
+      if (d <= bestD) { bestD = d; best = i; }
+    }
+    return best;
+  };
+
   FieldManager.setHover = function (index) {
     if (this.hoverIndex === index) return;
     this.hoverIndex = index;

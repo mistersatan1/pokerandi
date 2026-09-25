@@ -1700,6 +1700,36 @@ console.log('\n모바일 필드 회전');
   R.init(makeCanvas());
 }
 
+/* ---------- 모바일 ② — 손가락 누름 영역 (세션 52) ---------- */
+console.log('\n모바일 터치 누름 영역');
+{
+  const F = RPD.FieldManager;
+  F.init();
+  const pad = 18;   // 논리 단위 — 휴대폰 배율 약 0.55 에서 화면 10px
+  const nearest = (x, y) => {   // 따로 계산: 칸 가장자리까지 거리가 가장 짧은 칸
+    let best = -1, bd = Infinity;
+    F.slots.forEach((s, i) => { const h = s.size / 2; const dx = Math.max(0, Math.abs(x - s.x) - h), dy = Math.max(0, Math.abs(y - s.y) - h); const d = Math.hypot(dx, dy); if (d < bd) { bd = d; best = i; } });
+    return { i: best, d: bd };
+  };
+  const bad = [];
+  F.slots.forEach((s, i) => {
+    const h = s.size / 2;
+    for (const [dx, dy] of [[h + pad * 0.7, 0], [-(h + pad * 0.7), 0], [0, h + pad * 0.7], [0, -(h + pad * 0.7)]]) {
+      const x = s.x + dx, y = s.y + dy, want = nearest(x, y);
+      const got = F.hitTestNear(x, y, pad);
+      if (got !== (want.d <= pad ? want.i : -1)) bad.push(`칸${i}(${dx.toFixed(0)},${dy.toFixed(0)})→${got}/${want.i}`);
+    }
+  });
+  check('칸을 조금 비껴 눌러도(가장자리 밖 pad 안) 가장 가까운 칸을 고른다', bad.length === 0, bad.slice(0, 5).join(' · '));
+  const exactSame = F.slots.every((s, i) => F.hitTestNear(s.x, s.y, pad) === i && F.hitTest(s.x, s.y) === i);
+  check('칸 안을 누르면 누름 영역과 상관없이 그 칸', exactSame);
+  let farPoint = null;
+  for (let x = 5; x < 1000 && !farPoint; x += 7) for (let y = 5; y < 600; y += 7) { if (nearest(x, y).d > pad * 2) { farPoint = { x, y }; break; } }
+  check('칸에서 먼 곳을 누르면 아무 칸도 고르지 않는다', !!farPoint && F.hitTestNear(farPoint.x, farPoint.y, pad) === -1, JSON.stringify(farPoint));
+  const outside = F.slots[0];
+  check('마우스(hitTest)는 그대로 정확하다 — 칸 밖 1px 은 칸이 아니다', F.hitTest(outside.x + outside.size / 2 + 1, outside.y) !== 0);
+}
+
 console.log(`\n────────────────────────────`);
 console.log(failures === 0 ? 'UI·연출 이상 없음' : `UI·연출 문제 ${failures}건`);
 process.exit(failures === 0 ? 0 : 1);

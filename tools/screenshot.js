@@ -88,6 +88,24 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     await page.screenshot({ path: require('path').join(__dirname, '..', 'dist', '06_target_pick.png'),
       clip: { x: Math.max(0, box2.x - 8), y: Math.max(0, box2.y - 8), width: box2.width + 16, height: box2.height + 16 } });
   } else console.log('대상 칩 없음');
+  // ⑤ 70라운드 마지막 보스 — 체력 ×0.35 · 모두 보스 우선
+  await setup(70);
+  const boss70 = await page.evaluate(() => {
+    const R = window.RPD;
+    R.FieldManager.select(-1);
+    R.UnitManager.setTargetingAll('BOSS');
+  });
+  await page.waitForTimeout(3500);   // 보스는 라운드 시작 조금 뒤에 들어온다
+  console.log('boss70', await page.evaluate(() => { const b = window.RPD.EnemyManager.boss;
+    return b ? { name: b.name, maxHp: Math.round(b.maxHp), hp: Math.round(b.hp) } : null; }));
+  await page.screenshot({ path: require('path').join(__dirname, '..', 'dist', '07_final_boss.png') });
+
+  // ⑥ 마지막 보스를 놓치면 — 결과 화면
+  await page.evaluate(() => window.RPD.GameManager.failFinalBoss());
+  await page.waitForTimeout(800);
+  console.log('result', await page.evaluate(() => { const t = document.querySelector('.result__card'); return t ? t.innerText.split('\n').slice(0, 3).join(' | ') : null; }));
+  await page.screenshot({ path: require('path').join(__dirname, '..', 'dist', '08_final_boss_lost.png') });
+
   console.log('errors', errors.slice(0, 5));
   await browser.close();
 })();

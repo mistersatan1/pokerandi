@@ -205,9 +205,11 @@
   RPD.Modes = {
     NORMAL: {
       id: 'NORMAL', label: '일반', finalWave: 70, hpMul: 1.0, bossEvery: 10,
-      tagline: '70라운드를 지켜내면 승리 · 난이도 4단계',
+      tagline: '70라운드 마지막 보스를 잡으면 승리 · 난이도 4단계',
       desc: '기준이 되는 모드. 10라운드마다 보스가 오고, 9·17·25·33라운드에 새 등급이 열린다.',
-      modifiers: {}
+      /* 세션 43: 마지막 보스를 놓치면 진다(세션 42). 61R 벽(×3.5)을 물려받은 70R 보스는 아무도 못 잡아서 ×0.35.
+       * 보스 우선을 쓰는 봇 80판씩 어림 — 불멸 없음 16% · 광역 불멸 34% · 뮤츠 74% (전체 대비 클리어). */
+      modifiers: { finalBossHpMul: 0.35 }
     },
     ENDLESS: {
       id: 'ENDLESS', label: '엔드리스', finalWave: 0, hpMul: 0.9, bossEvery: 7,
@@ -238,7 +240,8 @@
         slotLimit: 14,
         lifeMul: 0.75,
         startGoldMul: 1.3,
-        tierMul: { T3: 0.75, T4: 0.65, T5: 0.55 }
+        tierMul: { T3: 0.75, T4: 0.65, T5: 0.55 },
+        finalBossHpMul: 0.35     // 노멀과 같은 70R 보스 — 따로 재지 않았다(세션 43)
       }
     }
   };

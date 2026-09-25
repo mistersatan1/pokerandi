@@ -82,9 +82,10 @@
       { count: 4, label: '광역 반경 +55% · 부수 피해 +25%', bonus: { splashRadiusMul: 1.55, splashDamageAdd: 0.25 } }
     ],
     FLYING: [
-      { count: 2, label: '공격속도 +12%', bonus: { attackSpeedMul: 1.12 } },
-      { count: 4, label: '공격속도 +26%', bonus: { attackSpeedMul: 1.26 } },
-      { count: 6, label: '공격속도 +42%', bonus: { attackSpeedMul: 1.42 } }
+      // 세션 49: +12 · 26 · 42% → +8 · 16 · 26%. 팀 전체 공속이라 94% 의 보드에서 켜져 비행 종 실전 피해가 등급 중앙의 1.6~2.8배였다.
+      { count: 2, label: '공격속도 +8%', bonus: { attackSpeedMul: 1.08 } },
+      { count: 4, label: '공격속도 +16%', bonus: { attackSpeedMul: 1.16 } },
+      { count: 6, label: '공격속도 +26%', bonus: { attackSpeedMul: 1.26 } }
     ],
     FIGHTING: [
       { count: 2, label: '보스 피해 +20%', bonus: { bossDamageAdd: 0.20 } },

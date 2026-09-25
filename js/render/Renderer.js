@@ -48,7 +48,9 @@
     var cssW = Math.max(1, Math.round(rect.width));
     var cssH = Math.max(1, Math.round(rect.height));
 
-    this.dpr = Math.min(global.devicePixelRatio || 1, 2);   // 3x 이상은 성능 대비 이득이 없다
+    // 3x 이상은 성능 대비 이득이 없다. 느린 휴대폰이면 FramePacer 가 상한을 더 내린다(1.5 · 1.25 · 1)
+    var cap = RPD.FramePacer ? RPD.FramePacer.maxDpr() : 2;
+    this.dpr = Math.min(global.devicePixelRatio || 1, cap);
     this.cssWidth = cssW;
     this.cssHeight = cssH;
 

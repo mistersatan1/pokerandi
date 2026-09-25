@@ -467,6 +467,23 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
   } catch (e) { app.notch = '흉내 불가: ' + e.message; }
   await nctx.close();
   server.close();
+  // ---------- 모바일 ④ — 화질 사다리(세션 54): 같은 장면을 가장 고운 칸(해상도 2배)과 가장 낮은 칸(1배 · 30fps)으로 ----------
+  const qctx = await browser.newContext({ ...devices['Galaxy S24'], defaultBrowserType: undefined });
+  const qp = await qctx.newPage();
+  await qp.goto(URL); await qp.waitForTimeout(1000);
+  await prepAppPage(qp); await qp.waitForTimeout(2600);
+  const quality = {};
+  await qp.evaluate(() => window.RPD.Loop.setPaused(true));
+  await qp.waitForTimeout(300);
+  quality.top = await qp.evaluate(() => ({ level: window.RPD.FramePacer.level, dpr: window.RPD.Renderer.dpr, canvas: window.RPD.Renderer.canvas.width }));
+  await qp.screenshot({ path: pathM.join(ROOT, 'dist', 'm_perf_quality_top.png') });
+  await qp.evaluate(() => { const P = window.RPD.FramePacer; while (P.stepDown()) {} P.wake(); });
+  await qp.waitForTimeout(300);
+  quality.low = await qp.evaluate(() => ({ level: window.RPD.FramePacer.level, dpr: window.RPD.Renderer.dpr, canvas: window.RPD.Renderer.canvas.width }));
+  await qp.screenshot({ path: pathM.join(ROOT, 'dist', 'm_perf_quality_low.png') });
+  await qctx.close();
+  app.quality = quality;
+
   console.log('app', JSON.stringify(app));
   report.push({ app });
 

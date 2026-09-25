@@ -46,6 +46,7 @@
     RPD.UnitRenderer.init();
     if (RPD.AttackFx) RPD.AttackFx.init();
 
+    if (RPD.FramePacer) RPD.FramePacer.init();
     RPD.Renderer.init(canvas);
     RPD.MapRenderer.init();
     RPD.UIManager.init();
@@ -106,7 +107,9 @@
     });
 
     RPD.Loop.onRender(function (dt) {
-      RPD.Renderer.render(dt);
+      // 쉬는 동안 · 가려졌을 때는 덜 그리고, 느린 휴대폰은 화질을 내린다(FramePacer). 게임 시간은 위 update 가 그대로 간다
+      var drawDt = RPD.FramePacer ? RPD.FramePacer.tick(dt) : dt;
+      if (drawDt) RPD.Renderer.render(drawDt);
       clockAcc += dt;
       if (clockAcc >= 0.25) { clockAcc = 0; RPD.UIManager.refreshClock(); }
     });

@@ -15,6 +15,7 @@ npm run autoplay     # 자동 플레이 20판 (노멀)
 npm run tierpower    # 등급·얻는 법·역할별 강함 표
 npm run build        # 테스터용 단일 HTML → dist/포켓몬랜덤디펜스_테스트.html
 npm run screenshot   # 빌드 후 실제 크로미움으로 장면 캡처 → dist/*.png
+node tools/perf.js 4  # 휴대폰 성능 — CPU 4배 느린 갤럭시 흉내로 fps · 메인 스레드 바쁨% (PERF_EXP=nopacer 로 적용 전 비교)
 ```
 
 캡처 준비(한 번): `npm install && npx playwright install chromium`.
@@ -36,6 +37,7 @@ npm run screenshot   # 빌드 후 실제 크로미움으로 장면 캡처 → di
 | `js/systems/*Manager.js` | 규칙. 골드 상점 `GoldShopManager` · 정예 `EliteManager` · 보상 `RewardManager` |
 | `js/ui/UIManager.js` | 화면 대부분. 크다 — 파일 상단 구조 설명부터 읽는다 |
 | `css/mobile.css` | 휴대폰(1100px 미만) 레이아웃 — 가장 마지막에 불러온다. 필드 90° 돌림은 `Renderer.js`(`--field-rotate`) |
+| `js/render/FramePacer.js` | 언제 · 얼마나 곱게 그릴지 — 전투 최대 60fps · 쉬는 중 10fps · 느리면 화질 사다리(해상도 2→1.5→1.25→1→30fps). 게임 규칙 · 시간은 안 건드림 |
 | `js/core/Pwa.js` · `sw.js` · `manifest.webmanifest` | 홈 화면 앱 — 오프라인 저장 목록(자동으로 모음) · 설치 · 전체 화면. https·localhost 에서만(file:// · 테스트판은 끔). 아이콘은 `node tools/icons.js` |
 
 ## 작업 규칙 (사용자와 합의된 것)
@@ -100,7 +102,7 @@ npm run screenshot   # 빌드 후 실제 크로미움으로 장면 캡처 → di
      단축키·기능 하나도 안 빠지고 전부 화면 버튼으로도 가능 ← **세션 51 완료**(서랍을 열면 칸이 14~15px 로 작아지는 한계는 ②에서)
   ② 터치 — 길게 누르기 · 끌어 옮기기 · 손가락 크기 누름 영역 등 터치 조작 ← **세션 52 완료**(칸 근처 10px · 버튼 40px · 끌기 문턱 10px · 보유 길게 눌러 집기 · 말풍선)
   ③ 홈 화면 앱화 — 매니페스트 · 아이콘 · 전체 화면 · 오프라인 ← **세션 53 완료**(https 주소에 올려야 설치된다 — 올릴 곳은 사용자 결정)
-  ④ 성능 — 저사양 휴대폰에서 프레임 · 발열 · 배터리
+  ④ 성능 — 저사양 휴대폰에서 프레임 · 발열 · 배터리 ← **세션 54 완료**(`FramePacer` · `tools/perf.js`. 실기기 확인은 아직 — 헤드리스는 GPU 가 없어 그리기가 실제보다 비싸다)
 - 봇이 불멸을 스스로 거의 못 만든다 — 사람이 60R 전에 불멸을 갖출 수 있는지는 **플레이로 확인 필요**.
 - 61R 인데 HUD 라운드 옆에 "2R 뒤 희귀함"이 뜬다 — 다음 해금 표시 버그로 보임(미확인).
 - 메타몽: 인수인계에는 "소환 가능"이었으나 조합식 v2 표대로 히든으로 넣었다 — 결정 대기.

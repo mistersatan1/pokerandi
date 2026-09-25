@@ -1787,6 +1787,57 @@ const pngSize = f => { const b = fs.readFileSync(path.join(ROOT, f)); return b.s
   check('목록에서 파일이 없는 것은 원래 그림이 없는 기본 적 그림뿐(대체 그림으로 그린다)', gone.every(f => /^assets\/enemies\/[a-z_]+\.png$/.test(f)), gone.slice(0, 5).join(' · '));
 }
 
+/* ---------- 모바일 ④ — 그리기 조절 FramePacer (세션 54) ---------- */
+console.log('\n성능 — 그리기 조절(FramePacer)');
+{
+  const FP = RPD.FramePacer, GM = RPD.GameManager, S = RPD.GameState;
+  let T = 0;
+  const realClock = FP.clock, realDpr = FP.deviceDpr, realResize = RPD.Renderer.resize;
+  FP.clock = () => T;
+  RPD.Renderer.resize = function () {};           // 캔버스 없는 검사 환경
+  const wasState = GM.state, wasPaused = RPD.Loop.paused;
+  // hz 로 sec 초 동안 화면 새로고침 → 그린 횟수
+  const run = (hz, sec) => { let n = 0; const dt = 1 / hz; for (let i = 0; i < hz * sec; i++) { T += dt * 1000; if (FP.tick(dt)) n += 1; } return n; };
+  const fresh = (dpr) => { FP.reset(); FP.deviceDpr = () => dpr; FP._wakeUntil = 0; FP.mode = 'battle'; };
+
+  GM.state = S.RUNNING; RPD.Loop.paused = false; fresh(3);
+  check('전투 · 60Hz 화면: 매 새로고침마다 그린다(60/60)', run(60, 1) === 60);
+  check('전투 · 120Hz 화면: 1초에 60번만 그린다(눈에 보이는 차이 없는 두 배 일을 안 한다)', Math.abs(run(120, 1) - 60) <= 1);
+  const hz90 = run(90, 2) / 2, hz144 = run(144, 2) / 2;
+  check('90Hz · 144Hz 화면도 1초에 약 60번(남은 시간을 버리면 90Hz 가 45fps 로 떨어진다)', Math.abs(hz90 - 60) <= 1 && Math.abs(hz144 - 60) <= 2, hz90 + ' · ' + hz144);
+  fresh(3); run(90, 12);
+  check('90Hz 화면에서 화질을 괜히 내리지 않는다', FP.level === 0, String(FP.level));
+  RPD.Loop.paused = true;
+  const idle = run(60, 3) / 3;
+  check('일시정지(손 안 댐): 1초에 약 10번만 그린다', idle >= 9 && idle <= 11, String(idle));
+  FP.wake(); const woke = run(60, 0.5);
+  check('손을 대면(누르기 · 움직이기 · 키) 바로 제속도 — 끌기 · 칸 고르기 표시가 끊기지 않는다', woke === 30, String(woke));
+  GM.state = S.READY; RPD.Loop.paused = false; FP._wakeUntil = 0;
+  check('판 시작 전 · 결과 화면도 쉬는 중(10fps)', Math.abs(run(60, 2) / 2 - 10) <= 1);
+  GM.state = S.RUNNING;
+
+  fresh(3); run(60, 12);
+  check('전투가 60fps 로 돌면 화질을 안 내린다', FP.level === 0 && FP.maxDpr() === 2);
+  fresh(3);
+  const steps = [];
+  for (let k = 0; k < 6; k++) { run(30, 4.1); steps.push(FP.level); }
+  check('느리면(30fps) 4초마다 한 칸씩: 해상도 2 → 1.5 → 1.25 → 1 → 30fps 고정, 거기서 멈춘다',
+    JSON.stringify(steps) === JSON.stringify([1, 2, 3, 4, 4, 4]), JSON.stringify(steps));
+  check('마지막 칸은 1초에 30번 그린다', Math.abs(run(60, 1) - 30) <= 1);
+  fresh(3); run(60, 2.02); run(30, 2.02); run(60, 2.02); run(30, 2.02); run(60, 2.02);
+  check('잠깐 느린 건(라운드 시작 등 2초 창 하나) 화질을 안 내린다', FP.level === 0, String(FP.level));
+  fresh(1); run(30, 4.1);
+  check('원래 1배 화면인 휴대폰은 해상도 칸을 건너뛰고 바로 30fps 칸', FP.level === 4, String(FP.level));
+  fresh(1.5); run(30, 4.1);
+  check('1.5배 화면이면 2배 칸은 건너뛰고 1.25배로', FP.maxDpr() === 1.25, String(FP.maxDpr()));
+  RPD.Loop.paused = true; fresh(3); run(20, 10);
+  check('쉬는 중(일부러 덜 그림)은 느림으로 치지 않는다', FP.level === 0, String(FP.level));
+
+  FP.clock = realClock; FP.deviceDpr = realDpr; RPD.Renderer.resize = realResize; FP.reset();
+  GM.state = wasState; RPD.Loop.paused = wasPaused;
+  check('Renderer 가 FramePacer 의 해상도 상한을 쓴다', /FramePacer\.maxDpr\(\)/.test(fs.readFileSync(path.join(ROOT, 'js/render/Renderer.js'), 'utf8')));
+}
+
 /* sw.js 를 가짜 브라우저(저장소 · 인터넷)에서 돌려 "어디서 주는지"를 본다 */
 async function swChecks() {
   console.log('\n홈 화면 앱 — 서비스 워커(오프라인)');

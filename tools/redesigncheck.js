@@ -713,6 +713,44 @@ section('마지막 보스');
   RPD.bus.off('game:over', onOver);
 }
 
+/* ---------- 공격 대상 선택 (세션 42) ---------- */
+section('공격 대상 선택');
+{
+  const EM = RPD.EnemyManager, CM = RPD.CombatManager;
+  fresh(30); EM.reset();
+  const u = UM.create('charmander'); F.place(0, u); UM.recomputeAll();
+  const def0 = u.targeting;
+  UM.setTargeting(u, 'BOSS'); UM.recomputeAll();
+  check('개체에 고른 대상이 다시 계산해도 남는다', u.targeting === 'BOSS' && u.targetChoice === 'BOSS', u.targeting);
+  UM.setTargeting(u, null);
+  check('선택을 지우면 종 기본값으로 돌아간다', u.targeting === def0, u.targeting);
+  check('없는 대상은 받지 않는다', UM.setTargeting(u, 'NOPE') === false && u.targeting === def0);
+  UM.cycleTargeting(u);
+  const M = UM.TARGET_MODES;
+  check('T 키 순환이 다음 대상으로 넘어간다', u.targeting === M[(M.indexOf(def0) + 1) % M.length], u.targeting);
+
+  UM.setTargetingAll('BOSS');
+  const later = UM.create('squirtle'); F.place(1, later); UM.recomputeAll();
+  check('"모두 이렇게"는 지금 개체와 나중에 뽑은 개체 모두에 붙는다', u.targeting === 'BOSS' && later.targeting === 'BOSS');
+  UM.setTargeting(later, 'FIRST');
+  check('전체 설정보다 개체에 고른 것이 앞선다', later.targeting === 'FIRST' && u.targeting === 'BOSS');
+  GM.reset('NORMAL');
+  check('새 판이 시작되면 전체 설정이 지워진다', GM.targetAll === null);
+
+  // 보스 우선 — 잡몹이 출구에 더 가까워도 보스를 친다
+  fresh(30); EM.reset();
+  const hunter = UM.create('charmander'); F.place(0, hunter); UM.recomputeAll();
+  hunter.range = 1e9;   // 사거리 판정을 빼고 고르는 규칙만 본다
+  const boss = EM.spawn(RPD.WaveData.bossIdFor(30, GM.mode), 30, { distance: 10 });
+  const mob = EM.spawn('grunt', 30, { distance: 400 });
+  UM.setTargeting(hunter, 'FIRST');
+  const a = CM.findTarget(hunter);
+  UM.setTargeting(hunter, 'BOSS');
+  const b = CM.findTarget(hunter);
+  check('출구 앞은 출구에 가까운 잡몹, 보스 우선은 보스를 고른다', a === mob && b === boss, `${a && a.defId} / ${b && b.defId}`);
+  EM.reset();
+}
+
 /* ---------- 역할 보정 · 버퍼 (세션 33) ---------- */
 section('역할 보정 · 버퍼');
 {

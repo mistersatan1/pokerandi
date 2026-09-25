@@ -170,7 +170,7 @@
     unit.splash = def.splash || 0;
     unit.pierce = def.pierce || 1;
     unit.chain = (def.chain || 0) + (def.attackType === 'CHAIN' ? syn.chainAdd : 0);
-    unit.targeting = def.targeting || 'FIRST';
+    unit.targeting = UnitManager.targetingOf(unit);
     unit.ignoreArmor = !!def.ignoreArmor;
     unit.auraBonus = aura;
 
@@ -201,6 +201,47 @@
     else if (unit.attackType === 'PIERCE') expected *= Math.min(unit.pierce, 2.2);
     else if (unit.attackType === 'CHAIN') expected *= 1 + unit.chain * 0.45;
     unit.dps = expected;
+  };
+
+  /* ---------- 공격 대상 선택 (세션 42) ----------
+   * 우선순위: 개체에 고른 것 > "전체 적용"으로 고른 것(판 동안, 새로 뽑은 개체에도) > 종 기본값.
+   * 보스를 쳐야 할 때 잡몹을 먼저 치는 개체를 사람이 바로잡을 수 있게. 스킬도 같은 선택을 따른다(SkillManager). */
+  UnitManager.TARGET_MODES = ['FIRST', 'BOSS', 'STRONGEST', 'WEAKEST', 'LAST'];
+
+  UnitManager.targetingOf = function (unit) {
+    var all = RPD.GameManager && RPD.GameManager.targetAll;
+    return unit.targetChoice || all || (unit.def && unit.def.targeting) || 'FIRST';
+  };
+
+  function applyTargeting(unit) {
+    unit.targeting = UnitManager.targetingOf(unit);
+    unit.target = null;          // 바로 다시 고르게
+    unit.targetCheckAt = 0;
+  }
+
+  /* mode 가 null 이면 이 개체의 선택을 지우고 전체 설정 · 종 기본값으로 돌아간다 */
+  UnitManager.setTargeting = function (unit, mode) {
+    if (!unit || (mode != null && UnitManager.TARGET_MODES.indexOf(mode) < 0)) return false;
+    unit.targetChoice = mode || null;
+    applyTargeting(unit);
+    RPD.bus.emit('unit:targeting', { unit: unit, mode: unit.targeting });
+    return true;
+  };
+
+  UnitManager.cycleTargeting = function (unit) {
+    if (!unit) return false;
+    var M = UnitManager.TARGET_MODES;
+    return UnitManager.setTargeting(unit, M[(M.indexOf(unit.targeting) + 1) % M.length]);
+  };
+
+  /* 필드 · 창고의 모든 개체와 앞으로 뽑을 개체에 한꺼번에. 개체별 선택은 지운다. */
+  UnitManager.setTargetingAll = function (mode) {
+    if (mode != null && UnitManager.TARGET_MODES.indexOf(mode) < 0) return false;
+    RPD.GameManager.targetAll = mode || null;
+    var units = RPD.FieldManager.getUnits().concat(RPD.StorageManager ? RPD.StorageManager.units : []);
+    units.forEach(function (u) { u.targetChoice = null; applyTargeting(u); });
+    RPD.bus.emit('unit:targeting', { all: true, mode: mode || null });
+    return true;
   };
 
   UnitManager.recomputeAll = function () {

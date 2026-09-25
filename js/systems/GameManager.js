@@ -24,6 +24,7 @@
     var keep = this.mode && this.mode.id === modeId ? this.mode.difficulty : 'NORMAL';
     this.mode = RPD.effectiveMode(modeId, diffId || keep);
     this.wave = 0;
+    this.targetAll = null;   // 공격 대상 "전체 적용" — 판마다 초기화(UnitManager.setTargetingAll)
     var mod = this.mode.modifiers || {};
     var dexGold = RPD.DexBonus ? RPD.DexBonus.totals().startGold : 0;
     this.gold = Math.round(CFG.startGold * (mod.startGoldMul || 1)) + dexGold;

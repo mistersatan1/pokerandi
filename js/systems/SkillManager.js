@@ -173,8 +173,12 @@
       out.push(e);
     }
 
-    // 출구에 가까운 적부터 — 놓치면 라이프가 깎이는 순서다
-    out.sort(function (a, b) { return b.distance - a.distance; });
+    // 출구에 가까운 적부터 — 놓치면 라이프가 깎이는 순서다. 공격 대상을 '보스 우선'으로 고른 개체는 보스를 맨 앞에.
+    var bossFirst = unit.targeting === 'BOSS';
+    out.sort(function (a, b) {
+      if (bossFirst && a.isBoss !== b.isBoss) return a.isBoss ? -1 : 1;
+      return b.distance - a.distance;
+    });
     if (skill.maxTargets && out.length > skill.maxTargets) out.length = skill.maxTargets;
     return out;
   }
@@ -228,7 +232,7 @@
   }
 
   function castSingle(unit, skill, targets) {
-    var focus = pickFocus(skill, targets);
+    var focus = pickFocus(skill, targets, unit);
     if (!focus) return;
     var base = unit.attack * skill.damageMul;
     var hits = skill.hits || 1;
@@ -251,8 +255,10 @@
     }
   }
 
-  function pickFocus(skill, targets) {
+  function pickFocus(skill, targets, unit) {
     if (!targets.length) return null;
+    // 공격 대상을 '보스 우선'으로 고른 개체는 스킬도 보스에게 (collect 가 보스를 맨 앞에 둔다)
+    if (unit && unit.targeting === 'BOSS' && targets[0].isBoss) return targets[0];
     var best = targets[0];
     for (var i = 1; i < targets.length; i++) {
       var e = targets[i];

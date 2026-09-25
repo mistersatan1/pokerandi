@@ -1010,6 +1010,7 @@
         }).join('') +
       '</dl>' +
       targetPickHtml(u) +
+      (def.bossDamage ? '<p class="sc__buffed">👑 보스에게 주는 피해 +' + Math.round(def.bossDamage * 100) + '% (광역 불멸 보정)</p>' : '') +
       UI.trait(def.id, 'trait--card') +
       UI.aura(def.id, 'trait--card') +
       receivedAura(u) +

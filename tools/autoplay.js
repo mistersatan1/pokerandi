@@ -58,6 +58,8 @@ function boot() {
   if (process.env.FINAL_BOSS_HP) {
     Object.keys(R.Modes).forEach(k => { R.Modes[k].modifiers = R.Modes[k].modifiers || {}; R.Modes[k].modifiers.finalBossHpMul = Number(process.env.FINAL_BOSS_HP); });
   }
+  // 광역 불멸 보스 피해 실험: AOE_BOSS_DMG=1.5 (파이어 · 썬더의 pokemon.js bossDamage 를 덮어쓴다)
+  if (process.env.AOE_BOSS_DMG) ['moltres', 'zapdos'].forEach(id => { R.PokemonData.get(id).bossDamage = Number(process.env.AOE_BOSS_DMG); });
   // 불멸·초월 배율 실험: IMMORTAL_MUL=2.5 TRANSCEND_MUL=2.8 (재료 합의 몇 배 — craftpower.js 3번 규칙)
   if (process.env.IMMORTAL_MUL || process.env.TRANSCEND_MUL) {
     if (process.env.IMMORTAL_MUL) R.CraftPower.CFG.IMMORTAL = Number(process.env.IMMORTAL_MUL);

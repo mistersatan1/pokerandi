@@ -691,6 +691,28 @@ section('70라운드 후반 곡선');
   });
 }
 
+/* ---------- 클리어 = 마지막 보스 처치 (세션 42) ---------- */
+section('마지막 보스');
+{
+  const EM = RPD.EnemyManager, WD = RPD.WaveData;
+  const walkOut = (wave) => {
+    fresh(wave); EM.reset && EM.reset();
+    const e = EM.spawn(WD.bossIdFor(wave, GM.mode), wave);
+    for (let i = 0; i < 20000 && e.alive !== false && EM.enemies.indexOf(e) >= 0; i++) EM.update(0.05);
+    return e;
+  };
+  let reason = null;
+  const onOver = RPD.bus.on('game:over', p => { reason = p && p.reason; });
+  const last = walkOut(RPD.Modes.NORMAL.finalWave);
+  check('마지막 라운드 보스를 놓치면 라이프가 남아도 진다',
+    last.leaked === true && GM.state === RPD.GameState.GAMEOVER && GM.life > 0 && reason === 'finalBoss',
+    `leaked=${last.leaked} state=${GM.state} life=${GM.life} reason=${reason}`);
+  reason = null;
+  walkOut(60);
+  check('마지막이 아닌 보스를 놓치면 라이프만 깎인다', GM.state === RPD.GameState.RUNNING && reason === null, `state=${GM.state}`);
+  RPD.bus.off('game:over', onOver);
+}
+
 /* ---------- 역할 보정 · 버퍼 (세션 33) ---------- */
 section('역할 보정 · 버퍼');
 {

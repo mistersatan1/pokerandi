@@ -86,6 +86,19 @@
     }
   };
 
+  /* 마지막 라운드 보스를 놓치면 라이프가 남아 있어도 진다 (세션 42 — 클리어 = 마지막 보스 처치).
+   * 예전엔 보스가 걸어 나가도 라이프만 남으면 클리어였고, 노멀 70R 보스는 실제로 아무도 못 잡았다. */
+  GameManager.failFinalBoss = function () {
+    if (this.state === S.GAMEOVER || this.state === S.VICTORY) return;
+    this.setState(S.GAMEOVER);
+    RPD.bus.emit('game:over', { wave: this.wave, elapsed: this.elapsed, reason: 'finalBoss' });
+  };
+
+  GameManager.isFinalWave = function (wave) {
+    var f = this.mode && this.mode.finalWave;
+    return f > 0 && wave >= f;
+  };
+
   GameManager.gainLife = function (amount) {
     this.life += amount;
     RPD.bus.emit('game:life', { life: this.life, delta: amount });

@@ -2181,8 +2181,9 @@
     bannerTimer = setTimeout(function () { el.banner.classList.remove('is-on'); }, 1600);
   };
 
-  function showResult(win) {
+  function showResult(win, p) {
     if (!el.result) return;
+    var bossFail = !win && p && p.reason === 'finalBoss';
     var s = RPD.StatsManager.summary();
     var card = el.result.querySelector('.result__card');
 
@@ -2191,6 +2192,7 @@
     if (el.resultTitle) {
       el.resultTitle.textContent = win
         ? '웨이브 ' + s.wave + '까지 지켜냈습니다'
+        : bossFail ? '마지막 보스를 놓쳤습니다'
         : '웨이브 ' + s.wave + '에서 멈췄습니다';
     }
 

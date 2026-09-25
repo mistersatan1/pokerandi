@@ -54,6 +54,10 @@ function boot() {
   // 곡선 실험용 덮어쓰기: LATE=1.07 WALL_STEP=3
   if (process.env.LATE) R.WaveData.lateGrowth = Number(process.env.LATE);
   if (process.env.WALL_STEP) R.WaveData.wallStep = Number(process.env.WALL_STEP);
+  // 마지막 보스 체력 실험: FINAL_BOSS_HP=0.3 (그 모드의 modifiers.finalBossHpMul 을 덮어쓴다)
+  if (process.env.FINAL_BOSS_HP) {
+    Object.keys(R.Modes).forEach(k => { R.Modes[k].modifiers = R.Modes[k].modifiers || {}; R.Modes[k].modifiers.finalBossHpMul = Number(process.env.FINAL_BOSS_HP); });
+  }
   // 불멸·초월 배율 실험: IMMORTAL_MUL=2.5 TRANSCEND_MUL=2.8 (재료 합의 몇 배 — craftpower.js 3번 규칙)
   if (process.env.IMMORTAL_MUL || process.env.TRANSCEND_MUL) {
     if (process.env.IMMORTAL_MUL) R.CraftPower.CFG.IMMORTAL = Number(process.env.IMMORTAL_MUL);
@@ -332,7 +336,11 @@ function playOne(modeId) {
     const finalBoss = (e, how) => {
       if (!curStats || !e || !e.isBoss) return;
       const fw = GM.mode.finalWave;
-      if (fw > 0 && GM.wave >= fw) curStats.finalBoss = how;
+      if (fw > 0 && GM.wave >= fw) {
+        curStats.finalBoss = how;
+        // 넣은 피해 / 최대 체력 — 보스 체력을 낮췄다면 잡았을지 어림하는 데 쓴다(넣은 피해 ≥ 새 체력이면 잡음)
+        curStats.finalBossFrac = how === 'killed' ? 1 : Math.max(0, (e.maxHp - Math.max(0, e.hp)) / e.maxHp);
+      }
     };
     R.bus.on('enemy:died', p => finalBoss(p.enemy, 'killed'));
     R.bus.on('enemy:leaked', e => finalBoss(e, 'leaked'));
@@ -341,7 +349,7 @@ function playOne(modeId) {
       if (p.ok) { curStats.eliteWin++; curStats.eliteGold += p.gold; } else curStats.eliteLose++;
     });
   }
-  const stats = { special60: null, life61: null, life66: null, finalBoss: null, crafts: 0, spells: 0, summons: 0, shopBuys: 0, elites: 0, eliteWin: 0, eliteLose: 0, eliteGold: 0, sells: 0, slots: 0, upgrades: 0, deploys: 0,
+  const stats = { special60: null, life61: null, life66: null, finalBoss: null, finalBossFrac: null, crafts: 0, spells: 0, summons: 0, shopBuys: 0, elites: 0, eliteWin: 0, eliteLose: 0, eliteGold: 0, sells: 0, slots: 0, upgrades: 0, deploys: 0,
                   expands: 0, shardBuys: 0, byTier: {}, goldSum: 0, goldN: 0 };
   curStats = stats;
   WM.begin();
@@ -396,7 +404,7 @@ for (let i = 0; i < RUNS; i++) {
   const r = playOne(MODE);
   results.push(r);
   if (process.env.WALL_LOG) require('fs').appendFileSync(process.env.WALL_LOG,
-    JSON.stringify({ round: r.round, win: r.win, special60: r.special60, trace: r.trace || [] }) + '\n');
+    JSON.stringify({ round: r.round, win: r.win, special60: r.special60, finalBoss: r.finalBoss, finalBossFrac: r.finalBossFrac, trace: r.trace || [] }) + '\n');
   if (VERBOSE) {
     console.log(
       String(i + 1).padStart(2) +

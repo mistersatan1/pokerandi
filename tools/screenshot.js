@@ -46,6 +46,12 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
   });
   await page.waitForTimeout(1500);
   await page.screenshot({ path: require('path').join(__dirname, '..', 'dist', '01_goldshop.png') });
+  console.log('goldshop fade (위)', await page.evaluate(() => document.querySelector('#goldShopOverlay .gshop__body').classList.contains('is-more')));
+  // ①-2 골드 상점 끝까지 내림 — 아래 흐림이 사라져야 한다
+  await page.evaluate(() => { const b = document.querySelector('#goldShopOverlay .gshop__body'); b.scrollTop = b.scrollHeight; });
+  await page.waitForTimeout(300);
+  console.log('goldshop fade (끝)', await page.evaluate(() => document.querySelector('#goldShopOverlay .gshop__body').classList.contains('is-more')));
+  await page.screenshot({ path: require('path').join(__dirname, '..', 'dist', '01b_goldshop_bottom.png') });
 
   // ② 61라운드 벽 — 불멸 2마리를 갖춘 보드
   await page.evaluate(() => window.RPD.GoldShopUI.hide());

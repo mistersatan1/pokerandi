@@ -40,6 +40,14 @@
     el.types.innerHTML = G.types().map(function (t) {
       return card('type', t, RPD.Types[t].label, RPD.Types[t].color);
     }).join('');
+    UI.updateFade();
+  };
+
+  /* 아래로 더 내릴 게 남았는지 — 남았을 때만 끝을 흐린다 */
+  UI.updateFade = function () {
+    var b = el.body;
+    if (!b || !b.classList) return;
+    b.classList.toggle('is-more', b.scrollTop + b.clientHeight < b.scrollHeight - 2);
   };
 
   UI.show = function () { if (!el.overlay) return; el.overlay.hidden = false; UI.render(); };
@@ -59,6 +67,9 @@
     el.tiers = $('goldShopTiers'); el.types = $('goldShopTypes');
     el.btn = $('btnGoldShop'); el.close = $('btnGoldShopClose');
     if (!el.overlay) return;
+    el.body = el.overlay.querySelector ? el.overlay.querySelector('.gshop__body') : null;
+    if (el.body && el.body.addEventListener) el.body.addEventListener('scroll', UI.updateFade);
+    if (global.addEventListener) global.addEventListener('resize', UI.updateFade);
     if (el.btn) el.btn.addEventListener('click', UI.toggle);
     if (el.close) el.close.addEventListener('click', UI.hide);
     el.overlay.addEventListener('click', function (e) { if (e.target === el.overlay) UI.hide(); else onClick(e); });

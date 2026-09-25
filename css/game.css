@@ -520,6 +520,9 @@ body:not([data-state="READY"]):not([data-state="IDLE"]) .startpanel { display: n
 .gshop__gold::before { content: '◎ '; }
 .gshop__hint { flex: 1; color: var(--muted); font-size: 11px; }
 .gshop__body { overflow-y: auto; padding-top: 8px; display: grid; gap: 12px; }
+/* 아래에 칸이 더 남았으면 끝을 흐리게 — 스크롤바가 얇아 잘린 줄 모르고 지나치지 않게 */
+.gshop__body.is-more { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent); }
 .gshop__title { margin: 0 0 6px; font-size: 13px; font-weight: 900; }
 .gshop__title small { margin-left: 6px; color: var(--muted); font-weight: 600; font-size: 11px; }
 .gshop__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; }

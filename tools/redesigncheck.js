@@ -672,7 +672,7 @@ section('70라운드 후반 곡선');
     let e = d.attack * (1 + c) * (d.attackSpeed || 1);
     if (d.attackType === 'SPLASH') e *= 1.6; else if (d.attackType === 'PIERCE') e *= Math.min(d.pierce || 1, 2.2);
     else if (d.attackType === 'CHAIN') e *= 1 + (d.chain || 0) * 0.45;
-    return e * CP.mulOf(d) * RPD.RoleTuning.attack(d.role) * RPD.RoleTuning.attackSpeed(d.role); };
+    return e * CP.mulOf(d) * RPD.RoleTuning.attack(d.role) * RPD.RoleTuning.speedOf(d); };
   RPD.SpellData.list.filter(sp => sp.kind !== 'hidden').forEach(sp => {
     const want = sp.kind === 'immortal' ? CP.CFG.IMMORTAL : CP.CFG.TRANSCEND;
     const mat = sp.materials.reduce((a, m) => a + bp(PD.get(m)), 0);
@@ -696,6 +696,18 @@ section('역할 보정 · 버퍼');
   check('단일은 피해·공격속도가 둘 다 올랐다', us.attack > rawAtk(sg) && RT.attackSpeed('SINGLE_DPS') > 1);
   const ub = mk(bk.id);
   check('보스킬러는 피해·공격속도가 둘 다 올랐다', ub.attack > rawAtk(bk) && RT.attackSpeed('BOSS_KILLER') > 1);
+
+  // 공격 방식별 공격속도 (세션 36) — 한 번에 때리는 적이 적을수록 빠르다
+  const S = RT.byAttackType;
+  check('공격속도: 단일 > 관통 > 광역 > 연쇄', S.SINGLE > S.PIERCE && S.PIERCE > S.SPLASH && S.SPLASH > S.CHAIN,
+    `${S.SINGLE} · ${S.PIERCE} · ${S.SPLASH} · ${S.CHAIN}`);
+  const plain = d => d.attackSpeed * RT.attackSpeed(d.role) * (d.types.indexOf('FLYING') >= 0 ? RPD.TypeParams.attackSpeedMul : 1);
+  [sg, ch, PD.list.find(d => d.attackType === 'SPLASH' && !d.form)].forEach(d => {
+    fresh(1); const u = mk(d.id);
+    const want = plain(d) * RT.attackTypeSpeed(d.attackType) * RPD.SynergyManager.bonus.attackSpeedMul;
+    check(`${d.name}(${d.attackType || 'SINGLE'}) 실효 공격속도에 공격 방식 보정이 실린다`, Math.abs(u.attackSpeed / want - 1) < 1e-6,
+      `${u.attackSpeed.toFixed(3)} / ${want.toFixed(3)}`);
+  });
 
   // 버퍼 — 이웃에게 새 축이 붙는다
   const nbr = () => { const a = F.slots[0]; return F.slots.find(s => s !== a && s.unlocked && UM.isNeighbor(a, s)); };

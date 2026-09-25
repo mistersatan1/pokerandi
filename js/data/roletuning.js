@@ -9,6 +9,9 @@
  *   버퍼          — 주변 공격력 오라를 키운다(버프 종류는 js/data/auras.js)
  *
  * attack 은 기본 공격과 스킬 모두에 실린다(스킬 피해가 실효 공격력을 쓰므로).
+ *
+ * 공격 방식별 공격속도 (세션 36) — 한 번에 때리는 적이 적을수록 빠르게 친다.
+ *   단일 > 관통 > 광역 > 연쇄. 역할 보정과 곱해진다(단일 딜러 · 단일 공격이면 둘 다 받는다).
  */
 (function (global) {
   'use strict';
@@ -20,10 +23,15 @@
     BOSS_KILLER: { attack: 1.35, attackSpeed: 1.2 },
     BUFFER:      { aura: 1.4 }
   };
+  var BY_ATTACK_TYPE = { SINGLE: 1.15, PIERCE: 1.0, SPLASH: 0.9, CHAIN: 0.85 };
   RPD.RoleTuning = {
     table: T,
+    byAttackType: BY_ATTACK_TYPE,
     attack: function (role) { return (T[role] && T[role].attack) || 1; },
     attackSpeed: function (role) { return (T[role] && T[role].attackSpeed) || 1; },
+    attackTypeSpeed: function (type) { return BY_ATTACK_TYPE[type || 'SINGLE'] || 1; },
+    /* 종 하나의 공격속도 보정 전부 — 역할 × 공격 방식. 실효 스탯 · 조합 보정 · 검사가 모두 이것을 쓴다 */
+    speedOf: function (def) { return this.attackSpeed(def.role) * this.attackTypeSpeed(def.attackType); },
     aura: function (role) { return (T[role] && T[role].aura) || 1; }
   };
 })(typeof window !== 'undefined' ? window : globalThis);

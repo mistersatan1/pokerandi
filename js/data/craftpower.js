@@ -116,7 +116,7 @@
           /* 역할 보정(roletuning.js)까지 넣은 실효 세기로 비교한다. 안 그러면 재료(전설 단일·보스킬러 ↑)와
            * 결과(썬더 연쇄·파이어 광역 ↓)가 반대로 보정돼 "1.6배"가 실제론 1.6배가 아니게 된다. */
           var RT = RPD.RoleTuning;
-          var roleF = function (d) { return RT ? RT.attack(d.role) * RT.attackSpeed(d.role) : 1; };
+          var roleF = function (d) { return RT ? RT.attack(d.role) * RT.speedOf(d) : 1; };
           var mat = sp.materials.reduce(function (a, m) { var d = PD.get(m); return a + basePower(d) * (self.mul[m] || 1) * roleF(d); }, 0);
           self.mul[res.id] = over * mat / (basePower(res) * roleF(res));
         });

@@ -62,13 +62,21 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     ['moltres', 'zapdos'].forEach((id, k) => { F.remove(weak[k].index); F.place(weak[k].index, R.UnitManager.create(id)); });
     R.UnitManager.recomputeAll(); R.bus.emit('field:changed', {});
     const idx = weak[1].index;
-    if (R.FieldManager.select) R.FieldManager.select(idx);
-    R.bus.emit('field:select', { index: idx });
+    R.FieldManager.select(idx);   // slot 을 같이 실어 보내야 정보 카드가 뜬다 (index 만 보내면 카드가 닫힌다)
     return { wave: R.GameManager.wave, hp61: Math.round(R.WaveData.growthTo(61) / R.WaveData.growthTo(60) * 100) / 100 };
   });
   console.log(info);
   await page.waitForTimeout(4000);
   await page.screenshot({ path: require('path').join(__dirname, '..', 'dist', '02_wall61.png') });
+
+  // ③ 포켓몬 정보 카드 확대 — 공격속도 줄
+  const card = await page.$('#slotCard');
+  if (card && await card.isVisible()) {
+    const box = await card.boundingBox();
+    await page.screenshot({ path: require('path').join(__dirname, '..', 'dist', '03_unitcard.png'),
+      clip: { x: Math.max(0, box.x - 8), y: Math.max(0, box.y - 8), width: box.width + 16, height: box.height + 16 } });
+    console.log('unitcard', await page.evaluate(() => document.querySelector('#slotCard .sc__stats').innerText.replace(/\n+/g, ' | ')));
+  } else console.log('unitcard 안 보임');
   console.log('errors', errors.slice(0, 5));
   await browser.close();
 })();

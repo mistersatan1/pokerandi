@@ -172,6 +172,7 @@ body:not([data-state="READY"]):not([data-state="IDLE"]) .startpanel { display: n
 .sc__stats dd { margin: 0; font-weight: 800; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sc__stats dd small { color: var(--muted); font-weight: 600; font-size: 10px; }
 .sc__stats .is-key dd { color: var(--gold); }
+.sc__stats .is-wide { grid-column: 1 / -1; }
 .sc__foot { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 8px; }
 .sc__dmg { color: var(--faint); font-size: 11px; white-space: nowrap; }
 

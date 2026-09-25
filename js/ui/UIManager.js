@@ -924,6 +924,14 @@
     return '<p class="sc__buffed">' + names + ' 받는 버프 · ' + parts.join(' · ') + '</p>';
   }
 
+  /* 공격속도 — 초당 공격 횟수. 칸이 좁아 숫자와 단위만 넣고, 기본값 대비 변화는 마우스를 올리면 보인다. */
+  function aspdHtml(u) {
+    var base = u.def && u.def.attackSpeed;
+    var diff = base ? Math.round((u.attackSpeed / base - 1) * 100) : 0;
+    return '<span title="기본 ' + (base || 0).toFixed(2) + '회/초' + (diff ? ' · 버프·보정 ' + (diff > 0 ? '+' : '') + diff + '%' : '') + '">' +
+      u.attackSpeed.toFixed(2) + '<small>/초</small></span>';
+  }
+
   function unitCardHtml(slot, u) {
     var UI = RPD.UI;
     var tier = RPD.Tiers[u.tier] || RPD.Tiers.T1;
@@ -942,16 +950,17 @@
 
     var stats = [
       ['DPS', U.formatNumber(Math.round(u.dps)), true],
-      ['공격', U.formatNumber(Math.round(u.attack)) + ' <small>×' + u.attackSpeed.toFixed(2) +
-        (RPD.CraftPower && RPD.CraftPower.labelOf(u.def) ? ' · ' + RPD.CraftPower.labelOf(u.def) : '') + '</small>'],
+      ['공격', U.formatNumber(Math.round(u.attack)) +
+        (RPD.CraftPower && RPD.CraftPower.labelOf(u.def) ? ' <small>' + RPD.CraftPower.labelOf(u.def) + '</small>' : '')],
+      ['공격속도', aspdHtml(u)],
       ['사거리', (u.range >= RPD.Range.GLOBAL ? '전체' : u.range)],
       ['방식', attackNote],
       ['대상', TARGET_LABEL[u.targeting] || u.targeting],
       ['사거리 강화', u.def.range >= RPD.Range.GLOBAL ? '<small>전체 사거리라 필요 없음</small>'
         : '+' + u.level + ' <small>/ ' + RPD.Config.upgradeMaxLevel + ' · 사거리 +' +
-          Math.round(u.level * RPD.Config.upgradeRangeStep * 100) + '%' + covNote(u) + '</small>']
+          Math.round(u.level * RPD.Config.upgradeRangeStep * 100) + '%' + covNote(u) + '</small>', false, true]
     ];
-    if (u.auraBonus > 0) stats[4] = ['버프', '+' + Math.round(u.auraBonus * 100) + '%'];
+    if (u.auraBonus > 0) stats[5] = ['버프', '+' + Math.round(u.auraBonus * 100) + '%'];
 
     var html =
       '<div class="sc__unit" style="--tier:' + tier.color + '">' +
@@ -964,7 +973,8 @@
       '</div>' +
       '<dl class="sc__stats">' +
         stats.map(function (r) {
-          return '<div' + (r[2] ? ' class="is-key"' : '') + '><dt>' + r[0] + '</dt><dd>' + r[1] + '</dd></div>';
+          var cls = (r[2] ? 'is-key' : '') + (r[3] ? ' is-wide' : '');
+          return '<div' + (cls ? ' class="' + cls.trim() + '"' : '') + '><dt>' + r[0] + '</dt><dd>' + r[1] + '</dd></div>';
         }).join('') +
       '</dl>' +
       UI.trait(def.id, 'trait--card') +

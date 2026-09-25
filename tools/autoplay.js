@@ -286,6 +286,10 @@ function playOne(modeId) {
       const all = F.getUnits().concat(R.StorageManager.units);
       const special = all.filter(u => u.def.tier === 'T6' || u.def.tier === 'T7').length;
       if (p.wave === 60) curStats.special60 = special;
+      /* 벽 넘김 = 61R 시작 ~ 66R 시작 사이 라이프를 지켰나. 라운드가 겹쳐 들어와 61R 적이 새는 건 62~64 에 드러나고,
+       * 라이프 60 이 닳는 데 몇 라운드가 걸려 "65 도달"은 벽을 못 넘은 판도 셌다(세션 38). */
+      if (p.wave === 61) curStats.life61 = GM.life;
+      if (p.wave === 66) curStats.life66 = GM.life;
       /* WALL_LOG=파일 — 58라운드부터 라운드 시작 시점의 라이프 · 필드 DPS 를 판마다 남긴다(벽을 어떻게 넘는지 보기) */
       if (process.env.WALL_LOG && p.wave >= 58) {
         (curStats.trace = curStats.trace || []).push({ w: p.wave, life: GM.life,
@@ -313,12 +317,20 @@ function playOne(modeId) {
         R.UnitManager.recomputeAll();
       }
     });
+    /* 마지막 라운드 보스를 잡았나 · 놓쳤나 — 지금 규칙은 보스가 걸어 나가도 라이프가 남으면 클리어다 */
+    const finalBoss = (e, how) => {
+      if (!curStats || !e || !e.isBoss) return;
+      const fw = GM.mode.finalWave;
+      if (fw > 0 && GM.wave >= fw) curStats.finalBoss = how;
+    };
+    R.bus.on('enemy:died', p => finalBoss(p.enemy, 'killed'));
+    R.bus.on('enemy:leaked', e => finalBoss(e, 'leaked'));
     R.bus.on('elite:result', p => {
       if (!curStats) return;
       if (p.ok) { curStats.eliteWin++; curStats.eliteGold += p.gold; } else curStats.eliteLose++;
     });
   }
-  const stats = { special60: null, crafts: 0, spells: 0, summons: 0, shopBuys: 0, elites: 0, eliteWin: 0, eliteLose: 0, eliteGold: 0, sells: 0, slots: 0, upgrades: 0, deploys: 0,
+  const stats = { special60: null, life61: null, life66: null, finalBoss: null, crafts: 0, spells: 0, summons: 0, shopBuys: 0, elites: 0, eliteWin: 0, eliteLose: 0, eliteGold: 0, sells: 0, slots: 0, upgrades: 0, deploys: 0,
                   expands: 0, shardBuys: 0, byTier: {}, goldSum: 0, goldN: 0 };
   curStats = stats;
   WM.begin();
@@ -405,10 +417,14 @@ console.log(`  판당 소환 ${(results.reduce((a, r) => a + r.summons, 0) / RUN
   // 60라운드 시점 불멸·초월 보유 여부로 나눠 본다 — "갖춰야 60을 넘는다"의 측정
   const at60 = results.filter(r => r.special60 != null);
   const has = at60.filter(r => r.special60 > 0), none = at60.filter(r => r.special60 === 0);
-  // 61R 에서 죽어도 "61 도달"이라 벽을 넘은 게 아니다 — 65 이상 간 판만 넘은 것으로 센다
-  const past = xs => xs.filter(r => r.round >= 65 || r.win).length;
+  // 벽 넘김 = 61~65 동안 라이프를 지킨 판(61R 시작 → 66R 시작 손실 WALL_HOLD 이하). 80판에서 허용 0 · 5 · 10 모두 같은 판을 골랐다.
+  const WALL_HOLD = 5;
+  const past = xs => xs.filter(r => r.life66 != null && r.life61 - r.life66 <= WALL_HOLD).length;
   const clr = xs => xs.length ? Math.round(xs.filter(r => r.win).length / xs.length * 100) + '%' : '-';
-  console.log(`  60R 도달 ${at60.length}판 → 벽 넘김(65+): 불멸·초월 있음 ${past(has)}/${has.length}(클리어 ${clr(has)})` +
+  const wins = results.filter(r => r.win);
+  if (wins.length) console.log(`  클리어 ${wins.length}판 중 마지막 보스: 잡음 ${wins.filter(r => r.finalBoss === 'killed').length}` +
+    ` · 놓침 ${wins.filter(r => r.finalBoss === 'leaked').length}`);
+  console.log(`  60R 도달 ${at60.length}판 → 벽 넘김(61~65 라이프 지킴): 불멸·초월 있음 ${past(has)}/${has.length}(클리어 ${clr(has)})` +
     ` · 없음 ${past(none)}/${none.length}(클리어 ${clr(none)})`);
 }
 {

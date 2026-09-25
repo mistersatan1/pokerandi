@@ -1,0 +1,19 @@
+{
+  "name": "포켓몬 랜덤 디펜스",
+  "short_name": "포랜디",
+  "description": "운으로 뽑지만, 조합식과 위치로 운을 뒤집는 랜덤 디펜스.",
+  "lang": "ko",
+  "id": "./",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "any",
+  "background_color": "#07122b",
+  "theme_color": "#07122b",
+  "icons": [
+    { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

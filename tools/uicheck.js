@@ -1730,6 +1730,134 @@ console.log('\n모바일 터치 누름 영역');
   check('마우스(hitTest)는 그대로 정확하다 — 칸 밖 1px 은 칸이 아니다', F.hitTest(outside.x + outside.size / 2 + 1, outside.y) !== 0);
 }
 
-console.log(`\n────────────────────────────`);
-console.log(failures === 0 ? 'UI·연출 이상 없음' : `UI·연출 문제 ${failures}건`);
-process.exit(failures === 0 ? 0 : 1);
+/* ---------- 모바일 ③ — 홈 화면 앱 (세션 53) ---------- */
+console.log('\n홈 화면 앱 — 매니페스트 · 아이콘 · 오프라인 목록');
+const pngSize = f => { const b = fs.readFileSync(path.join(ROOT, f)); return b.slice(1, 4).toString() === 'PNG' ? `${b.readUInt32BE(16)}x${b.readUInt32BE(20)}` : null; };
+{
+  const INDEX = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  let man = null;
+  run('manifest.webmanifest 이 JSON 으로 읽힌다', () => { man = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.webmanifest'), 'utf8')); });
+  man = man || {};
+  check('매니페스트: 이름 · 짧은 이름 · 시작 주소 · 범위(폴더째 옮겨도 되게 상대 주소) · 전체 화면',
+    man.name && man.short_name && man.start_url === './index.html' && man.scope === './' && man.display === 'fullscreen',
+    JSON.stringify({ start: man.start_url, scope: man.scope, display: man.display }));
+  const icons = man.icons || [];
+  const iconBad = icons.filter(i => !fs.existsSync(path.join(ROOT, i.src)) || pngSize(i.src) !== i.sizes).map(i => i.src + ':' + (fs.existsSync(path.join(ROOT, i.src)) ? pngSize(i.src) : '없음'));
+  check('매니페스트 아이콘 파일이 전부 있고 적힌 크기와 같다', icons.length >= 3 && iconBad.length === 0, iconBad.join(' · '));
+  check('설치에 필요한 아이콘: 192 · 512 · 가려도 되는(maskable) 512',
+    icons.some(i => i.sizes === '192x192') && icons.some(i => i.sizes === '512x512' && i.purpose === 'any') &&
+    icons.some(i => i.sizes === '512x512' && i.purpose === 'maskable'));
+  const headLinks = [...INDEX.matchAll(/<link rel="(manifest|icon|apple-touch-icon)"[^>]*href="([^"]+)"/g)].map(m => ({ rel: m[1], href: m[2] }));
+  check('index.html 이 매니페스트 · 탭 아이콘 · 아이폰 아이콘을 걸고 파일이 있다',
+    ['manifest', 'icon', 'apple-touch-icon'].every(r => headLinks.some(l => l.rel === r && fs.existsSync(path.join(ROOT, l.href)))) &&
+    pngSize((headLinks.find(l => l.rel === 'apple-touch-icon') || {}).href || 'index.html') === '180x180',
+    JSON.stringify(headLinks));
+  check('화면 끝까지 쓰기(viewport-fit=cover) + 노치 자리 비우기(safe-area)',
+    /viewport-fit=cover/.test(INDEX) && /safe-area-inset-left/.test(fs.readFileSync(path.join(ROOT, 'css/mobile.css'), 'utf8')));
+
+  const P = RPD.Pwa;
+  const SW = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
+  check('페이지(Pwa.js)와 서비스 워커(sw.js)가 같은 저장소 이름을 쓴다', (SW.match(/var CACHE = '([^']+)'/) || [])[1] === P.CACHE);
+  check('더블클릭(file://) · 테스트판 한 파일에서는 서비스 워커를 쓰지 않는다', (() => {
+    const was = { loc: sandbox.location, nav: sandbox.navigator, caches: sandbox.caches, inl: sandbox.RPD_INLINE };
+    const nav = { serviceWorker: {} };
+    sandbox.navigator = nav; sandbox.caches = {};
+    sandbox.location = { protocol: 'file:' }; const file = P.supported();
+    sandbox.location = { protocol: 'https:' }; const https = P.supported();
+    sandbox.RPD_INLINE = {}; const inline = P.supported();
+    Object.assign(sandbox, { location: was.loc, navigator: was.nav, caches: was.caches, RPD_INLINE: was.inl });
+    return !file && https && !inline;
+  })());
+
+  // 저장 목록 — index.html 을 흉내 낸 문서로
+  const fakeDoc = { querySelectorAll: () => [...INDEX.matchAll(/<(script) src="([^"]+)"|<link rel="([^"]+)"[^>]*href="([^"]+)"/g)].map(m => ({
+    getAttribute: a => (a === 'src' ? (m[1] ? m[2] : null) : (m[1] ? null : m[4])) })) };
+  const list = P.files(fakeDoc);
+  const want = [
+    ...[...INDEX.matchAll(/<script src="([^"]+)"/g)].map(m => m[1]),
+    ...[...INDEX.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map(m => m[1]),
+    'manifest.webmanifest', './', 'index.html', ...icons.map(i => i.src),
+    ...RPD.PokemonData.all().map(d => d.sprite).filter(f => f && fs.existsSync(path.join(ROOT, f))),
+    ...RPD.EnemySkins.allFiles()
+  ];
+  const lack = [...new Set(want)].filter(f => !list.includes(f));
+  check(`오프라인 목록(${list.length}개)에 게임 파일 · 매니페스트 · 아이콘 · 포켓몬 그림 · 적 그림이 전부 있다`, lack.length === 0, lack.slice(0, 6).join(' · '));
+  const onDisk = list.filter(f => f === './' || fs.existsSync(path.join(ROOT, f)));
+  const gone = list.filter(f => !onDisk.includes(f));
+  check('목록에서 파일이 없는 것은 원래 그림이 없는 기본 적 그림뿐(대체 그림으로 그린다)', gone.every(f => /^assets\/enemies\/[a-z_]+\.png$/.test(f)), gone.slice(0, 5).join(' · '));
+}
+
+/* sw.js 를 가짜 브라우저(저장소 · 인터넷)에서 돌려 "어디서 주는지"를 본다 */
+async function swChecks() {
+  console.log('\n홈 화면 앱 — 서비스 워커(오프라인)');
+  const ORIGIN = 'https://game.example/porandi/';
+  const stores = new Map();
+  const key = (u, ignoreSearch) => { const x = new URL(typeof u === 'string' ? u : u.url, ORIGIN); if (ignoreSearch) x.search = ''; return x.href; };
+  const openStore = name => {
+    if (!stores.has(name)) stores.set(name, new Map());
+    const m = stores.get(name);
+    return {
+      match: async (u, o) => { const k = key(u, o && o.ignoreSearch); for (const [kk, v] of m) if ((o && o.ignoreSearch ? key(kk, true) : kk) === k) return v.clone(); return undefined; },
+      put: async (u, res) => { m.set(key(u), res); }
+    };
+  };
+  const net = { online: true, hang: false, body: 'net', calls: 0 };
+  const handlers = {};
+  const sw = {
+    self: null, URL, Response, Promise, setTimeout, clearTimeout, console,
+    caches: {
+      open: async n => openStore(n), keys: async () => [...stores.keys()],
+      delete: async n => stores.delete(n)
+    },
+    fetch: req => { net.calls += 1; if (net.hang) return new Promise(() => {}); return net.online ? Promise.resolve(new Response(net.body + ':' + (req.url || req), { status: 200 })) : Promise.reject(new TypeError('offline')); }
+  };
+  sw.self = { location: new URL('sw.js', ORIGIN), addEventListener: (t, f) => { handlers[t] = f; }, skipWaiting: () => {}, clients: { claim: async () => {} } };
+  vm.createContext(sw);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8'), sw, { filename: 'sw.js' });
+  sw.NETWORK_TIMEOUT_MS = 60;   // 검사는 4초를 기다리지 않는다
+
+  const ask = async (url, opt) => {
+    const req = Object.assign({ url: new URL(url, ORIGIN).href, method: 'GET', mode: 'cors', destination: '' }, opt);
+    let p = null; const bg = [];
+    handlers.fetch({ request: req, respondWith: x => { p = x; }, waitUntil: x => bg.push(x) });
+    if (!p) return { handled: false };
+    let res = null, err = null;
+    try { res = await p; } catch (e) { err = e; }
+    await Promise.all(bg).catch(() => {});
+    return { handled: true, text: res ? await res.text() : null, err };
+  };
+  const cached = async url => { const r = await openStore('porandi-v1').match(new URL(url, ORIGIN).href); return r ? r.text() : null; };
+
+  const r1 = await ask('js/main.js');
+  check('인터넷이 되면 코드는 인터넷에서 받고 저장소도 새것으로', r1.text === 'net:' + ORIGIN + 'js/main.js' && await cached('js/main.js') === r1.text);
+  net.body = 'net2';
+  const r2 = await ask('js/main.js');
+  check('코드가 바뀌면 다음 열 때 바로 새 판(저장소 것을 먼저 주지 않는다)', r2.text.startsWith('net2:'));
+  net.online = false;
+  const r3 = await ask('js/main.js');
+  check('오프라인이면 저장해 둔 코드', r3.text === 'net2:' + ORIGIN + 'js/main.js');
+  net.online = true; await ask('index.html', { mode: 'navigate' }); net.online = false;
+  const r4 = await ask('?from=homescreen', { mode: 'navigate' });
+  check('오프라인에서 주소를 조금 다르게 열어도(?…) 게임 화면', r4.text === 'net2:' + ORIGIN + 'index.html', r4.text || String(r4.err));
+  const r5 = await ask('js/never.js');
+  check('오프라인 + 저장 안 된 파일은 실패로(가짜 응답을 만들지 않는다)', !!r5.err);
+  net.online = true; net.body = 'img1'; await ask('assets/pokemon/mew.png', { destination: 'image' });
+  net.body = 'img2'; const calls = net.calls;
+  const r6 = await ask('assets/pokemon/mew.png', { destination: 'image' });
+  check('그림은 저장소 것을 먼저(빠르게) · 뒤에서 새것을 받아 저장소만 바꾼다', r6.text.startsWith('img1:') && net.calls === calls + 1 && (await cached('assets/pokemon/mew.png')).startsWith('img2:'));
+  net.hang = true;
+  const t0 = Date.now(); const r7 = await Promise.race([ask('js/main.js'), new Promise(r => setTimeout(() => r({ text: 'TIMEOUT' }), 1500))]);
+  check('인터넷이 응답 없이 늘어지면(약한 신호) 기다리다 저장소 것으로', r7.text && r7.text.startsWith('net2:') && Date.now() - t0 < 1000, r7.text);
+  net.hang = false;
+  check('다른 주소(글꼴 등) · GET 이 아닌 요청은 손대지 않는다',
+    !(await ask('https://fonts.example/a.css')).handled && !(await ask('js/main.js', { method: 'POST' })).handled);
+  stores.set('porandi-v0', new Map()); stores.set('other-app', new Map());
+  let act = null; handlers.activate({ waitUntil: p => { act = p; } }); await act;
+  check('새 서비스 워커가 켜지면 예전 저장소(porandi-*)만 지운다', !stores.has('porandi-v0') && stores.has('other-app') && stores.has('porandi-v1'));
+}
+
+swChecks().catch(e => { failures += 1; console.log('  FAIL  서비스 워커 검사가 멈췄다  → ' + e.message); }).then(() => {
+  console.log(`\n────────────────────────────`);
+  console.log(failures === 0 ? 'UI·연출 이상 없음' : `UI·연출 문제 ${failures}건`);
+  process.exit(failures === 0 ? 0 : 1);
+});

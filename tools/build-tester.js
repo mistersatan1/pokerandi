@@ -46,6 +46,7 @@ function walk(dir) {
 const usedPokemon = new Set(
   [...fs.readFileSync(path.join(ROOT, 'js/data/pokemon.js'), 'utf8').matchAll(/id:'([a-z_]+)'/g)].map(m => m[1]));
 function isUsed(rel) {
+  if (rel.startsWith('assets/icons/')) return false;   // 앱 아이콘은 아래 5) 에서 <link> 에만 넣는다
   const m = rel.match(/^assets\/pokemon\/([a-z_]+)\.png$/);
   return m ? usedPokemon.has(m[1]) : true;
 }
@@ -73,6 +74,12 @@ html = html.replace(/<script src="([^"]+)"><\/script>/g, (_, src) => {
   }
   return `${prefix}<script>/* ${src} */\n${safeScript(js)}\n</script>`;
 });
+
+// 5) 홈 화면 앱(모바일 ③) — 한 파일(file://)은 설치 · 오프라인이 안 된다(브라우저 규칙). 매니페스트는 빼고,
+//    탭 아이콘 · 아이폰 아이콘만 안으로 넣는다. js/core/Pwa.js 는 RPD_INLINE 을 보고 서비스 워커를 등록하지 않는다.
+html = html.replace(/<link rel="manifest"[^>]*>\n?/, '');
+html = html.replace(/(<link rel="(?:icon|apple-touch-icon)"[^>]*href=")([^"]+\.png)(")/g, (_, a, href, b) =>
+  a + 'data:image/png;base64,' + fs.readFileSync(path.join(ROOT, href)).toString('base64') + b);
 
 // 4) 빌드 표시 — 테스터가 어느 판을 받았는지 말할 수 있게
 const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ');

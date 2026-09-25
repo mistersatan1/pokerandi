@@ -348,6 +348,128 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
   }
   report.push({ touch: touchReport });
 
+  /* ---------- 모바일 ③ — 홈 화면 앱(세션 53) ----------
+   * 설치 · 오프라인은 인터넷 주소에서만 되니, 원본 폴더(dist 아님)를 이 자리에서 작은 웹 서버로 띄워 연다(localhost 는 https 와 같게 친다).
+   * 확인: 크롬이 "설치할 수 있다"고 보는가(설치 불가 사유 0) · 서비스 워커 · 오프라인 저장 · 인터넷을 끊고 다시 열어도 켜지고 처음 보는 그림이 나오는가 ·
+   *       ☰ [전체 화면] · [앱 설치] · 노치 화면 여백 · 앱으로 실행 중이면 두 버튼이 숨는가. */
+  const http = require('http'), pathM = require('path'), ROOT = pathM.join(__dirname, '..');
+  const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
+    '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.json': 'application/json' };
+  const server = http.createServer((req, res) => {
+    const rel = decodeURIComponent(req.url.split('?')[0]).replace(/^\/+/, '') || 'index.html';
+    const file = pathM.join(ROOT, rel);
+    if (!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); res.end(); return; }
+    res.writeHead(200, { 'Content-Type': MIME[pathM.extname(file)] || 'application/octet-stream' });
+    fs.createReadStream(file).pipe(res);
+  });
+  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  const APP = `http://127.0.0.1:${server.address().port}/index.html`;
+  const app = { url: APP.replace(/\d+\/index/, 'PORT/index') };
+  // 보통 창(시크릿 아님) — 크롬은 시크릿 창에서는 설치를 막는다
+  const profile = fs.mkdtempSync(pathM.join(require('os').tmpdir(), 'porandi-app-'));
+  const actx = await chromium.launchPersistentContext(profile, { ...devices['Galaxy S24'], defaultBrowserType: undefined, executablePath, args: ['--no-sandbox'] });
+  const ap = await actx.newPage();
+  const aerr = [];
+  ap.on('pageerror', e => aerr.push(e.message));
+  await ap.goto(APP);
+  app.saved = await ap.evaluate(() => Promise.race([window.RPD.Pwa.ready, new Promise(r => setTimeout(r, 30000))]).then(() => {
+    const P = window.RPD.Pwa; return { status: P.status, saved: P.saved, total: P.total, missing: P.missing.length };
+  }));
+  const cdp = await actx.newCDPSession(ap);
+  const inst = await cdp.send('Page.getInstallabilityErrors');
+  app.installErrors = inst.installabilityErrors.map(e => e.errorId);
+  const man = await cdp.send('Page.getAppManifest');
+  app.manifestErrors = (man.errors || []).map(e => e.message);
+  await ap.reload(); await ap.waitForTimeout(1200);
+  app.controlled = await ap.evaluate(() => !!navigator.serviceWorker.controller);
+
+  // ☰ 메뉴 — 새 버튼 둘
+  const prepAppPage = async (pg) => pg.evaluate(() => {
+    const R = window.RPD;
+    if (R.TutorialManager && R.TutorialManager.skip) R.TutorialManager.skip();
+    document.querySelectorAll('.modepick, .result, .help, .book').forEach(o => o.hidden = true);
+    R.Game.resetAll('NORMAL', 'NORMAL'); R.Game.startRun('NORMAL', 'NORMAL');
+    R.GameManager.setWave(41); R.WaveManager.startRound(41);
+    const F = R.FieldManager;
+    // 이 판에서 처음 그리는 포켓몬들 — 오프라인에서 저장소가 없으면 대체 그림(동그라미)로 나온다
+    const team = ['mewtwo', 'moltres', 'zapdos', 'articuno', 'snorlax', 'kabutops', 'omastar', 'porygon', 'ditto', 'eevee'];
+    let i = 0;
+    F.slots.filter(s => s.unlocked).forEach(s => { if (i < team.length) F.place(s.index, R.UnitManager.create(team[i++])); });
+    R.UnitManager.recomputeAll(); R.bus.emit('field:changed', {});
+  });
+  await prepAppPage(ap);
+  await ap.tap('#btnMore'); await ap.waitForTimeout(300);
+  app.menuButtons = await ap.evaluate(() => ['btnFullscreen', 'btnInstall'].map(id => {
+    const b = document.getElementById(id), r = b.getBoundingClientRect();
+    return { id, shown: !b.hidden && r.width > 0, size: [Math.round(r.width), Math.round(r.height)] };
+  }));
+  await ap.screenshot({ path: pathM.join(ROOT, 'dist', 'm_app_menu.png') });
+  // 크롬이 설치 이벤트를 줬으면 [앱 설치]가 설치 창을 띄운다(한 번만 쓸 수 있다) — 그다음 누르면 방법 말풍선
+  // (진짜 설치 창은 자동 검사에서 닫혀 버리고 크롬이 이벤트를 다시 보내니, 창을 띄우는 함수만 세어 본다)
+  app.installEvent = await ap.evaluate(() => {
+    const ev = window.RPD.Pwa.installEvent; window.__prompts = 0;
+    if (ev) ev.prompt = () => { window.__prompts += 1; return Promise.resolve(); };
+    return !!ev;
+  });
+  await ap.tap('#btnInstall'); await ap.waitForTimeout(300);
+  app.installPrompted = await ap.evaluate(() => window.__prompts === 1 && !window.RPD.Pwa.installEvent && !document.querySelector('.tipbubble:not([hidden])'));
+  await ap.tap('#btnMore'); await ap.waitForTimeout(200);
+  await ap.tap('#btnInstall'); await ap.waitForTimeout(300);
+  app.installTip = await ap.evaluate(() => { const b = document.querySelector('.tipbubble'); if (!b || b.hidden) return null;
+    const r = b.getBoundingClientRect(); return { text: b.textContent, inView: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight }; });
+  await ap.screenshot({ path: pathM.join(ROOT, 'dist', 'm_app_install_tip.png') });
+  await ap.tap('#btnMore'); await ap.waitForTimeout(200);
+  await ap.tap('#btnFullscreen'); await ap.waitForTimeout(500);
+  app.fullscreen = await ap.evaluate(() => ({ on: !!document.fullscreenElement, title: document.getElementById('btnFullscreen').title }));
+  if (app.fullscreen.on) await ap.evaluate(() => document.exitFullscreen());
+
+  // 인터넷을 끊고 다시 열기 — 켜지는가 · 처음 보는 포켓몬 그림이 저장소에서 나오는가
+  await actx.setOffline(true);
+  await ap.reload(); await ap.waitForTimeout(1500);
+  await prepAppPage(ap);
+  await ap.waitForTimeout(2600);
+  app.offline = await ap.evaluate(() => {
+    const R = window.RPD, units = R.FieldManager.getUnits();
+    return { booted: !!(R.Game && R.GameManager.state), online: navigator.onLine,
+      styled: getComputedStyle(document.querySelector('.hud')).display !== 'block',
+      sprites: units.filter(u => R.Assets.isReady(u.def.sprite)).length + '/' + units.length };
+  });
+  await ap.screenshot({ path: pathM.join(ROOT, 'dist', 'm_app_offline.png') });
+  await actx.setOffline(false);
+
+  // 앱으로 실행 중(display-mode: fullscreen)이면 [전체 화면] · [앱 설치] 는 필요 없으니 숨는다
+  // (크로미움 흉내 도구가 display-mode 를 못 바꿔서, 페이지의 matchMedia 만 "앱으로 실행 중"이라고 답하게 바꿔 본다)
+  try {
+    await ap.evaluate(() => {
+      const real = window.matchMedia.bind(window);
+      window.matchMedia = q => /display-mode: fullscreen/.test(q) ? { matches: true, media: q } : real(q);
+      window.RPD.bus.emit('pwa:status', window.RPD.Pwa);
+    });
+    app.asApp = await ap.evaluate(() => ({ isApp: window.RPD.Pwa.isApp(), fsHidden: document.getElementById('btnFullscreen').hidden, installHidden: document.getElementById('btnInstall').hidden }));
+  } catch (e) { app.asApp = '흉내 불가: ' + e.message; }
+  app.errors = aerr.slice(0, 3);
+  await actx.close();
+  fs.rmSync(profile, { recursive: true, force: true });
+
+  // 노치 화면 여백 — 아이폰 15 가로에 노치(왼쪽 · 오른쪽 47px · 아래 21px)를 흉내 낸다
+  const nctx = await browser.newContext({ ...devices['iPhone 15 landscape'], defaultBrowserType: undefined });
+  const np = await nctx.newPage();
+  await np.goto(URL); await np.waitForTimeout(1000);
+  const ncdp = await nctx.newCDPSession(np);
+  try {
+    await ncdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { left: 47, right: 47, bottom: 21 } });
+    await prepAppPage(np); await np.waitForTimeout(2600);
+    app.notch = await np.evaluate(() => {
+      const a = document.querySelector('.app'), cs = getComputedStyle(a), c = document.getElementById('gameCanvas').getBoundingClientRect();
+      return { padL: cs.paddingLeft, padR: cs.paddingRight, padB: cs.paddingBottom, fieldLeft: Math.round(c.left), slotCss: +(window.RPD.FieldManager.slots[0].size * window.RPD.Renderer.scale).toFixed(1) };
+    });
+    await np.screenshot({ path: pathM.join(ROOT, 'dist', 'm_app_notch_landscape.png') });
+  } catch (e) { app.notch = '흉내 불가: ' + e.message; }
+  await nctx.close();
+  server.close();
+  console.log('app', JSON.stringify(app));
+  report.push({ app });
+
   require('fs').writeFileSync(require('path').join(__dirname, '..', 'dist', 'mobile_report.json'), JSON.stringify(report, null, 2));
 
   await browser.close();

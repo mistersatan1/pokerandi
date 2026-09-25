@@ -54,6 +54,8 @@
     el.moreBtn = $('btnMore');
     el.hudMore = document.getElementById('hudMore');
     el.mobileTabs = $('mobileTabs');
+    el.fullscreenBtn = $('btnFullscreen');
+    el.installBtn = $('btnInstall');
 
     if (el.dexOpen) {
       el.dexOpen.addEventListener('click', function () {
@@ -258,6 +260,7 @@
       if (e.target.closest('#hudMore .iconbtn') || !e.target.closest('#hudMore')) HudPanels.toggleMore(false);
     });
     bindLongPressTips();
+    bindAppButtons();
 
     // 조합 가능 개수를 [조합식] 탭에도 — 서랍이 닫혀 있어도 보이게
     RPD.bus.on('recipe:changed', function () {
@@ -267,6 +270,47 @@
       badge.hidden = n === 0;
       badge.textContent = n;
     });
+  }
+
+  /* ---------- 홈 화면 앱 버튼 (모바일 ③ · 세션 53) — ☰ 메뉴 [전체 화면] · [앱 설치] ----------
+   * 전체 화면: 브라우저가 못 하면(아이폰 사파리) 숨기고, 전체 화면 앱으로 실행 중이면 필요 없으니 숨긴다.
+   * 앱 설치: 설치한 앱으로 실행 중이면 숨긴다. 안드로이드 크롬이 설치 창을 줄 수 있으면 띄우고, 아니면 방법을 말풍선으로. */
+  function refreshAppButtons() {
+    var P = RPD.Pwa;
+    if (!P) return;
+    var app = P.isApp();
+    if (el.fullscreenBtn) {
+      el.fullscreenBtn.hidden = app || !P.canFullscreen();
+      var on = P.isFullscreen();
+      el.fullscreenBtn.title = on ? '전체 화면 끝내기' : '전체 화면';
+      if (el.fullscreenBtn.setAttribute) el.fullscreenBtn.setAttribute('aria-pressed', String(on));
+    }
+    if (el.installBtn) {
+      el.installBtn.hidden = app;
+      var note = P.status === 'ready' ? ' · 오프라인 준비 끝' : P.status === 'saving' ? ' · 오프라인 준비 중 ' + P.saved + '/' + P.total : '';
+      el.installBtn.title = '홈 화면에 앱으로 설치' + note;
+    }
+  }
+  function bindAppButtons() {
+    if (el.fullscreenBtn) {
+      el.fullscreenBtn.addEventListener('click', function () {
+        if (RPD.Pwa) RPD.Pwa.toggleFullscreen().then(refreshAppButtons);
+      });
+    }
+    if (el.installBtn) {
+      el.installBtn.addEventListener('click', function () {
+        var P = RPD.Pwa;
+        if (!P || P.install()) return;
+        var r = el.installBtn.getBoundingClientRect ? el.installBtn.getBoundingClientRect() : null;
+        var msg = P.installHelp();
+        if (P.status === 'ready') msg += ' (오프라인 준비 끝 — 인터넷 없이도 켜집니다)';
+        HudPanels.showTip(msg, r);
+      });
+    }
+    document.addEventListener('fullscreenchange', refreshAppButtons);
+    document.addEventListener('webkitfullscreenchange', refreshAppButtons);
+    RPD.bus.on('pwa:status', refreshAppButtons);
+    refreshAppButtons();
   }
 
   /* ---------- 길게 누르기 → 설명 말풍선 (모바일 ② · 세션 52) ----------
@@ -282,8 +326,12 @@
     b.hidden = false;
     if (rect && b.style) {
       var vw = global.innerWidth || 800;
-      b.style.left = Math.max(8, Math.min(vw - 8, rect.left + rect.width / 2)) + 'px';
-      b.style.top = Math.max(8, rect.top - 8) + 'px';
+      var half = (b.offsetWidth || 0) / 2 + 8;   // 말풍선이 화면 밖으로 삐져나가지 않게(가운데 기준)
+      b.style.left = Math.max(half, Math.min(vw - half, rect.left + rect.width / 2)) + 'px';
+      // 위에 자리가 없으면(화면 맨 위 HUD · ☰ 메뉴) 아래로
+      var below = rect.top - 8 - (b.offsetHeight || 40) < 4;
+      b.style.top = (below ? rect.top + rect.height + 8 : Math.max(8, rect.top - 8)) + 'px';
+      b.style.transform = below ? 'translate(-50%, 0)' : '';
     }
     clearTimeout(tip.hideAt);
     tip.hideAt = setTimeout(function () { if (tip.bubble) tip.bubble.hidden = true; }, 2600);

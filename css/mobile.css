@@ -7,6 +7,7 @@
 .hud__morebtn, .mtabs { display: none; }
 .hud #btnPause { order: 1; }               /* 순서도 예전 그대로: … 도감 · 일시정지 · 처음부터 */
 .hud #btnRestart { order: 2; }
+.hud__more .iconbtn--mobile { display: none; }   /* 전체 화면 · 앱 설치 — 휴대폰 ☰ 메뉴에만(모바일 ③) */
 
 /* ================= 휴대폰 (모바일 ① 레이아웃 · 세션 51) =================
  * 1100px 미만. 필드가 주인공 — 패널은 탭으로 여닫는 서랍에 넣고, 닫혀 있으면 필드가 화면을 다 쓴다.
@@ -200,3 +201,21 @@
 .tipbubble[hidden] { display: none; }
 .mtab.is-droptarget { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold); color: var(--gold-hi); }
 
+
+/* ================= 홈 화면 앱 (모바일 ③ · 세션 53) =================
+ * index.html 의 viewport-fit=cover 로 화면을 끝까지 쓴다(전체 화면 · 아이폰 앱 모드에서 상태 표시줄 밑까지).
+ * 대신 노치 · 둥근 모서리 · 홈 막대 자리(safe-area)는 비워 둔다 — 가로로 들면 왼쪽 · 오른쪽, 세로면 위 · 아래.
+ * 노치가 없는 화면 · PC 에서는 env() 가 0 이라 예전과 같다. */
+@media (max-width: 1099.98px) {
+  .app {
+    padding: max(var(--gap), env(safe-area-inset-top)) max(var(--gap), env(safe-area-inset-right))
+             max(var(--gap), env(safe-area-inset-bottom)) max(var(--gap), env(safe-area-inset-left));
+  }
+  .board > .book, .board > .help, .board > .dex, .board > .modepick, .board > .result {
+    padding: max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right))
+             max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
+  }
+  .pane--action .toast { top: calc(48px + env(safe-area-inset-top)); }
+  .hud__more .iconbtn--mobile { display: grid; font-size: 20px; }
+  .hud__more .iconbtn--mobile[hidden] { display: none; }
+}

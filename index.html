@@ -2,8 +2,17 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>포켓몬 랜덤 디펜스</title>
+<!-- 홈 화면 앱(모바일 ③) — 인터넷 주소로 열었을 때만 쓰인다. 더블클릭(file://)에서는 브라우저가 무시한다. js/core/Pwa.js · sw.js -->
+<meta name="theme-color" content="#07122b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="포랜디">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/icons/icon-32.png">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
 <link rel="stylesheet" href="css/main.css">
 <link rel="stylesheet" href="css/game.css">
 <link rel="stylesheet" href="css/ui.css">
@@ -86,6 +95,9 @@
     <button type="button" class="iconbtn iconbtn--gshop" id="btnGoldShop" title="골드 상점 (G)" aria-label="골드 상점">골드<br>상점</button>
     <button type="button" class="iconbtn iconbtn--elite" id="btnElite" title="정예 소환 (E)" aria-label="정예 소환">정예<br>소환</button>
     <button type="button" class="iconbtn" id="btnDex" title="도감" aria-label="도감"><span class="ico ico--book"></span></button>
+    <!-- 휴대폰에서만(☰ 메뉴) — PC 는 F11 · 브라우저 설치 버튼이 있다 -->
+    <button type="button" class="iconbtn iconbtn--mobile" id="btnFullscreen" title="전체 화면" aria-label="전체 화면">⛶</button>
+    <button type="button" class="iconbtn iconbtn--mobile" id="btnInstall" title="홈 화면에 앱으로 설치" aria-label="앱 설치">📲</button>
     <button type="button" class="iconbtn iconbtn--ghost" id="btnRestart" title="처음부터" aria-label="처음부터"><span class="ico ico--restart"></span></button>
     </div>
   </header>
@@ -437,6 +449,7 @@
 <script src="js/core/Utils.js"></script>
 <script src="js/core/EventBus.js"></script>
 <script src="js/core/Assets.js"></script>
+<script src="js/core/Pwa.js"></script>
 <script src="js/core/PathFollower.js"></script>
 <script src="js/core/Loop.js"></script>
 <script src="js/core/AudioManager.js"></script>

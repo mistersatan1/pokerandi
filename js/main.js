@@ -63,6 +63,8 @@
     // 1배속 기본은 너무 느리다. 저장된 설정이 없으면 2배속으로 시작한다.
     RPD.Loop.setSpeed(RPD.SaveManager.getSetting('speed', 2));
     RPD.Loop.start();
+    // 홈 화면 앱(모바일 ③) — 인터넷 주소로 열었을 때만 오프라인 저장 · 설치. 게임 화면이 뜬 다음에 돈다
+    if (RPD.Pwa) RPD.Pwa.start();
 
     console.log('[RPD] v' + RPD.VERSION + ' 준비 완료 · 슬롯 ' +
                 RPD.FieldManager.slots.length + '칸 · 경로 ' +

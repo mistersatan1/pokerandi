@@ -298,6 +298,10 @@ function playOne(modeId) {
       const all = F.getUnits().concat(R.StorageManager.units);
       const special = all.filter(u => u.def.tier === 'T6' || u.def.tier === 'T7').length;
       if (p.wave === 60) curStats.special60 = special;
+      /* 켜진 시너지(타입:단계) — 30 · 50 · 60 라운드. WALL_LOG 에 같이 남긴다 */
+      if (p.wave === 30 || p.wave === 50 || p.wave === 60) {
+        (curStats.syn = curStats.syn || {})[p.wave] = R.SynergyManager.active.filter(a => a.tierIndex >= 0).map(a => a.typeId + ':' + (a.tierIndex + 1));
+      }
       /* 공격 대상 선택(세션 42)을 쓰는 플레이어 — 보스 라운드엔 [모두 이렇게 → 보스], 끝나면 종 기본값으로.
        * BOT_TARGET=0 이면 안 쓴다(기능 전과 비교). */
       if (process.env.BOT_TARGET !== '0') {
@@ -359,7 +363,7 @@ function playOne(modeId) {
       if (p.ok) { curStats.eliteWin++; curStats.eliteGold += p.gold; } else curStats.eliteLose++;
     });
   }
-  const stats = { special60: null, life61: null, life66: null, finalBoss: null, finalBossFrac: null, crafts: 0, spells: 0, summons: 0, shopBuys: 0, elites: 0, eliteWin: 0, eliteLose: 0, eliteGold: 0, sells: 0, slots: 0, upgrades: 0, deploys: 0,
+  const stats = { special60: null, life61: null, life66: null, finalBoss: null, finalBossFrac: null, syn: null, crafts: 0, spells: 0, summons: 0, shopBuys: 0, elites: 0, eliteWin: 0, eliteLose: 0, eliteGold: 0, sells: 0, slots: 0, upgrades: 0, deploys: 0,
                   expands: 0, shardBuys: 0, byTier: {}, goldSum: 0, goldN: 0 };
   curStats = stats;
   WM.begin();
@@ -414,7 +418,7 @@ for (let i = 0; i < RUNS; i++) {
   const r = playOne(MODE);
   results.push(r);
   if (process.env.WALL_LOG) require('fs').appendFileSync(process.env.WALL_LOG,
-    JSON.stringify({ round: r.round, win: r.win, special60: r.special60, finalBoss: r.finalBoss, finalBossFrac: r.finalBossFrac, trace: r.trace || [] }) + '\n');
+    JSON.stringify({ round: r.round, win: r.win, special60: r.special60, finalBoss: r.finalBoss, finalBossFrac: r.finalBossFrac, syn: r.syn || {}, trace: r.trace || [] }) + '\n');
   if (VERBOSE) {
     console.log(
       String(i + 1).padStart(2) +

@@ -54,6 +54,8 @@ function boot() {
   // 곡선 실험용 덮어쓰기: LATE=1.07 WALL_STEP=3
   if (process.env.LATE) R.WaveData.lateGrowth = Number(process.env.LATE);
   if (process.env.WALL_STEP) R.WaveData.wallStep = Number(process.env.WALL_STEP);
+  // 보스 러시 보스 체력 실험: BR_BOSS_SHARE=1.3 (BOSS_RUSH.modifiers.bossShareMul 을 덮어쓴다)
+  if (process.env.BR_BOSS_SHARE) R.Modes.BOSS_RUSH.modifiers.bossShareMul = Number(process.env.BR_BOSS_SHARE);
   // 마지막 보스 체력 실험: FINAL_BOSS_HP=0.3 (그 모드의 modifiers.finalBossHpMul 을 덮어쓴다)
   if (process.env.FINAL_BOSS_HP) {
     Object.keys(R.Modes).forEach(k => { R.Modes[k].modifiers = R.Modes[k].modifiers || {}; R.Modes[k].modifiers.finalBossHpMul = Number(process.env.FINAL_BOSS_HP); });

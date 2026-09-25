@@ -231,7 +231,9 @@
        * 못 잡으면 보스 골드도 0 이다(닭과 달걀). 호위가 주던 초반 자금을 시작 골드로 미리 준다:
        * startGoldMul 1.5 → 4 (1200G). 초반 보스 체력만 낮추는 안(bossShareMul 0.6)은 20% 로 효과가 없었다.
        * 보스 골드는 매 라운드 나오므로 bossGoldMul 0.5 로 깎는다. 실측 클리어 70% · 중앙 20. */
-      modifiers: { startGoldMul: 4, goldMul: 2.2, bossShareMul: 0.95, bossGoldMul: 0.5 }
+      /* 세션 47: 공격 대상 선택(보스 우선)이 들어오자 클리어 78% → 98%. 모든 보스를 올리면(bossShareMul ×2.2 → 69%) 죽음이
+       * 5~9 라운드에 몰려 초반 운 싸움이 된다(위 세션 33 과 같은 함정). 마지막 보스만 ×10 — 판 막바지 보드는 20R 보스를 크게 앞선다. */
+      modifiers: { startGoldMul: 4, goldMul: 2.2, bossShareMul: 0.95, bossGoldMul: 0.5, finalBossHpMul: 10 }
     },
     CHALLENGE: {
       id: 'CHALLENGE', label: '챌린지', finalWave: 70, hpMul: 1.0, bossEvery: 10,

@@ -106,6 +106,23 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
   console.log('result', await page.evaluate(() => { const t = document.querySelector('.result__card'); return t ? t.innerText.split('\n').slice(0, 3).join(' | ') : null; }));
   await page.screenshot({ path: require('path').join(__dirname, '..', 'dist', '08_final_boss_lost.png') });
 
+  // ⑦ 보스 러시 20R 마지막 보스 (체력 ×10)
+  const br = await page.evaluate(() => {
+    const R = window.RPD;
+    document.querySelectorAll('.modepick, .result, .help, .book').forEach(o => o.hidden = true);
+    R.Game.resetAll('BOSS_RUSH'); R.Game.startRun('BOSS_RUSH');
+    R.GameManager.setWave(20); R.WaveManager.startRound(20);
+    const F = R.FieldManager;
+    const team = ['machamp', 'nidoking', 'poliwrath', 'kingler', 'mewtwo', 'charizard', 'blastoise', 'dragonite', 'gengar', 'alakazam'];
+    let i = 0;
+    F.slots.filter(s => s.unlocked).forEach(s => { if (i < team.length) F.place(s.index, R.UnitManager.create(team[i++])); });
+    R.UnitManager.setTargetingAll('BOSS'); R.UnitManager.recomputeAll(); R.bus.emit('field:changed', {});
+    return true;
+  });
+  await page.waitForTimeout(3500);
+  console.log('bossrush20', await page.evaluate(() => { const b = window.RPD.EnemyManager.boss; return b ? { name: b.name, maxHp: Math.round(b.maxHp) } : null; }));
+  await page.screenshot({ path: require('path').join(__dirname, '..', 'dist', '09_bossrush_final.png') });
+
   console.log('errors', errors.slice(0, 5));
   await browser.close();
 })();

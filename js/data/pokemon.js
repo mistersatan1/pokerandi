@@ -176,8 +176,8 @@
     P({ id:'aerodactyl', name:'프테라', hidden:true, tier:'T5', types:["ROCK","FLYING"], role:'SINGLE_DPS', attack:4503, attackSpeed:1.0, range:R.LONG, skill:'ancientPower', passive:'legend_aerodactyl', desc:'프테라 — SINGLE_DPS 역할의 T5 유닛.' }),
     P({ id:'snorlax', name:'잠만보', hidden:true, tier:'T5', types:["NORMAL"], role:'CONTROL', attack:3932, attackSpeed:1.0, range:R.LONG, attackType:'SPLASH', splash:118, skill:'bodySlam', passive:'legend_snorlax', desc:'잠만보 — CONTROL 역할의 T5 유닛.' }),
     P({ id:'articuno', name:'프리져', tier:'T6', types:["ICE","FLYING"], role:'SLOW', attack:7858, attackSpeed:1.0, range:R.LONG, slowMul:0.58, slowDuration:3.5, skill:'blizzard', passive:'legend_articuno', desc:'프리져 — SLOW 역할의 T6 유닛.' }),
-    P({ id:'zapdos', name:'썬더', tier:'T6', types:["ELECTRIC","FLYING"], role:'CHAIN_DPS', attack:10065, attackSpeed:1.0, range:R.LONG, attackType:'CHAIN', chain:5, skill:'thunderStorm', passive:'legend_zapdos', desc:'썬더 — CHAIN_DPS 역할의 T6 유닛.' }),
-    P({ id:'moltres', name:'파이어', tier:'T6', types:["FIRE","FLYING"], role:'AOE_DPS', attack:8411, attackSpeed:1.0, range:R.LONG, attackType:'SPLASH', splash:130, skill:'skyFire', passive:'legend_moltres', desc:'파이어 — AOE_DPS 역할의 T6 유닛.' }),
+    P({ id:'zapdos', name:'썬더', tier:'T6', types:["ELECTRIC","FLYING"], role:'CHAIN_DPS', attack:10065, attackSpeed:1.0, range:R.LONG, attackType:'CHAIN', chain:5, skill:'thunderStorm', passive:'legend_zapdos', bossDamage:0.5, desc:'썬더 — CHAIN_DPS 역할의 T6 유닛.' }),
+    P({ id:'moltres', name:'파이어', tier:'T6', types:["FIRE","FLYING"], role:'AOE_DPS', attack:8411, attackSpeed:1.0, range:R.LONG, attackType:'SPLASH', splash:130, skill:'skyFire', passive:'legend_moltres', bossDamage:0.5, desc:'파이어 — AOE_DPS 역할의 T6 유닛.' }),
     P({ id:'mewtwo', name:'뮤츠', tier:'T6', types:["PSYCHIC"], role:'BOSS_KILLER', attack:9628, attackSpeed:1.0, range:R.MID, targeting:'BOSS', critRate:0.3, critDamage:2.1, skill:'psystrike', passive:'legend_mewtwo', desc:'뮤츠 — BOSS_KILLER 역할의 T6 유닛.' }),
 
     /* ---------- 특수 등급 — 채팅 주문으로만 만든다(js/data/spells.js) ---------- */

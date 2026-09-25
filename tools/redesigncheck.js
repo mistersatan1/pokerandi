@@ -713,6 +713,24 @@ section('마지막 보스');
   RPD.bus.off('game:over', onOver);
 }
 
+/* ---------- 광역 불멸 보스 피해 (세션 44) ---------- */
+section('광역 불멸 보스 피해');
+{
+  const EM = RPD.EnemyManager;
+  ['moltres', 'zapdos'].forEach(id => {
+    fresh(70); EM.reset();
+    const u = UM.create(id); F.place(0, u); UM.recomputeAll();
+    const boss = EM.spawn(RPD.WaveData.bossIdFor(70, GM.mode), 70);
+    const mob = EM.spawn('grunt', 70);
+    boss.armor = 0; mob.armor = 0; boss.shield = 0; mob.shield = 0;
+    const toBoss = EM.damage(boss, 1000, { source: u, ignoreArmor: true });
+    const toMob = EM.damage(mob, 1000, { source: u, ignoreArmor: true });
+    check(`${u.name} — 보스에게 주는 피해 +${Math.round(u.def.bossDamage * 100)}%`, u.def.bossDamage > 0 && Math.abs(toBoss / toMob - (1 + u.def.bossDamage)) < 1e-6,
+      `${toBoss.toFixed(0)} / ${toMob.toFixed(0)}`);
+  });
+  EM.reset();
+}
+
 /* ---------- 공격 대상 선택 (세션 42) ---------- */
 section('공격 대상 선택');
 {

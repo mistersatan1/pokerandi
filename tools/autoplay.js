@@ -286,6 +286,11 @@ function playOne(modeId) {
       const all = F.getUnits().concat(R.StorageManager.units);
       const special = all.filter(u => u.def.tier === 'T6' || u.def.tier === 'T7').length;
       if (p.wave === 60) curStats.special60 = special;
+      /* WALL_LOG=파일 — 58라운드부터 라운드 시작 시점의 라이프 · 필드 DPS 를 판마다 남긴다(벽을 어떻게 넘는지 보기) */
+      if (process.env.WALL_LOG && p.wave >= 58) {
+        (curStats.trace = curStats.trace || []).push({ w: p.wave, life: GM.life,
+          dps: Math.round(F.getUnits().reduce((a, u) => a + u.dps, 0)), sp: special });
+      }
       /* GIVE_IMMORTAL=n — 50라운드에 불멸 n마리를 쥐여 준다(가장 약한 필드 개체와 바꾼다).
        * 봇은 불멸(전설 3마리)을 거의 못 만들어서, "갖춘 플레이어"를 따로 흉내 낸다. */
       const give = Number(process.env.GIVE_IMMORTAL || 0);
@@ -367,6 +372,8 @@ const results = [];
 for (let i = 0; i < RUNS; i++) {
   const r = playOne(MODE);
   results.push(r);
+  if (process.env.WALL_LOG) require('fs').appendFileSync(process.env.WALL_LOG,
+    JSON.stringify({ round: r.round, win: r.win, special60: r.special60, trace: r.trace || [] }) + '\n');
   if (VERBOSE) {
     console.log(
       String(i + 1).padStart(2) +

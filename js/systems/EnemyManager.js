@@ -183,7 +183,7 @@
     var ax = opts.source && opts.source.auraExtras;
     var auraPierce = ax && ax.armorPierce ? enemy.armor * ax.armorPierce : 0;
     if (ax && ax.bossDamage && enemy.isBoss) amount *= 1 + ax.bossDamage;
-    // 종 자체의 보스 피해(pokemon.js bossDamage) — 광역 불멸이 단일 보스를 못 잡던 것을 메운다(세션 44)
+    // 종 자체의 보스 피해(pokemon.js bossDamage) — 광역 불멸이 단일 보스를 못 잡던 것을 메운다(세션 44 +50% · 세션 50 +80%)
     var own = opts.source && opts.source.def && opts.source.def.bossDamage;
     if (own && enemy.isBoss) amount *= 1 + own;
     var armor = Math.max(0, enemy.armor - (enemy.effects.armorShred || 0) - (opts.armorPierce || 0) - auraPierce);

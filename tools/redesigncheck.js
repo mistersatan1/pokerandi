@@ -226,7 +226,7 @@ section('두 갈래 경로 · 칸 종류');
 
   const F = RPD.FieldManager; F.init();
   const base = F.slots.filter(s => s.unlocked), ext = F.slots.filter(s => s.expansion);
-  check('칸 수는 그대로: 기본 18 + 확장 8', base.length === 18 && ext.length === 8 && M.baseSlotCount === 18, base.length + '+' + ext.length);
+  check('칸 수: 기본 20(세션 57 명당 +2) + 확장 8', base.length === 20 && ext.length === 8 && M.baseSlotCount === 20, base.length + '+' + ext.length);
 
   // 긴 사거리로 못 덮는 구간 — 기본 칸만으로, 모든 조각(입구 · 위 · 아래 · 합류 뒤)의 모든 점
   const holes = [];
@@ -244,8 +244,8 @@ section('두 갈래 경로 · 칸 종류');
   check('출구 방어 칸: 합류 뒤 한 줄을 사거리 155 로 150px 넘게 덮는 기본 칸이 2칸 이상', exitDef.length >= 2 && exitDef.every(s => s.kind === 'exit'),
     exitDef.map(s => s.index + ':' + parts(s).tail).join(' '));
   const both = base.filter(s => parts(s).upper >= 150 && parts(s).lower >= 150);
-  check('명당: 위 · 아래 길이 다 사거리 155 안(각 150px 넘게)인 기본 칸이 3~4칸(가운데 3 + 갈림길)',
-    both.length >= 3 && both.length <= 4 && both.filter(s => s.kind === 'center').length === 3, both.map(s => s.index + ':' + s.kind).join(' '));
+  check('명당: 위 · 아래 길이 다 사거리 155 안(각 150px 넘게)인 기본 칸이 5~6칸(가운데 5 + 갈림길)',
+    both.length >= 5 && both.length <= 6 && both.filter(s => s.kind === 'center').length === 5, both.map(s => s.index + ':' + s.kind).join(' '));
   const one = base.filter(s => (parts(s).upper >= 150) !== (parts(s).lower >= 150) && Math.min(parts(s).upper, parts(s).lower) === 0);
   check('한쪽 길만 보는 기본 칸이 여러 개(위 · 아래 같은 수)', one.length >= 8 && one.filter(s => s.kind === 'upper').length === one.filter(s => s.kind === 'lower').length,
     one.length + '칸');

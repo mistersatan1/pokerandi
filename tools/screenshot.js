@@ -132,16 +132,18 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     const F = R.FieldManager, put = (i, id) => F.place(i, R.UnitManager.create(id));
     F.slots.forEach(sl => { if (sl.unit) F.remove ? F.remove(sl.index) : (sl.unit = null); });   // 시작 포켓몬을 치우고 종류별로 놓는다
     // 약한 포켓몬으로 — 적이 두 길에 살아서 보이게
-    put(0, 'charmander'); put(1, 'pikachu'); put(2, 'squirtle'); put(3, 'bulbasaur');   // 명당 3 + 갈림길
-    put(4, 'rattata'); put(5, 'pidgey'); put(8, 'caterpie'); put(9, 'weedle');         // 주머니(위 · 아래)
-    put(16, 'geodude'); put(17, 'oddish');                                              // 출구 방어
+    const of = k => F.slots.filter(s => s.kind === k && s.unlocked).map(s => s.index);   // 칸 번호가 아니라 종류로(번호는 칸이 늘면 밀린다)
+    const [c0, c1, c2] = of('center'), fork = of('fork')[0], up = of('upper'), lo = of('lower'), ex = of('exit');
+    put(c0, 'charmander'); put(c1, 'pikachu'); put(c2, 'squirtle'); put(fork, 'bulbasaur');   // 명당 + 갈림길
+    put(up[0], 'rattata'); put(lo[0], 'pidgey'); put(up[1], 'caterpie'); put(lo[1], 'weedle');   // 주머니(위 · 아래)
+    put(ex[0], 'geodude'); put(ex[1], 'oddish');                                                 // 출구 방어
     R.UnitManager.recomputeAll(); R.bus.emit('field:changed', {});
     R.GameManager.life = 999;
   });
   await page.waitForTimeout(9000);
   console.log('routes', await page.evaluate(() => { const E = window.RPD.EnemyManager.enemies; return { top: E.filter(e => e.route === 0).length, bottom: E.filter(e => e.route === 1).length }; }));
   await page.screenshot({ path: require('path').join(__dirname, '..', 'dist', '10_twin_routes.png') });
-  await page.evaluate(() => { window.RPD.Loop.setPaused(true); window.RPD.FieldManager.select(1); window.RPD.bus.emit('field:changed', {}); });
+  await page.evaluate(() => { window.RPD.Loop.setPaused(true); const F = window.RPD.FieldManager; F.select(F.slots.filter(s => s.kind === 'center')[1].index); window.RPD.bus.emit('field:changed', {}); });
   await page.waitForTimeout(400);
   console.log('centercard', await page.evaluate(() => { const c = document.querySelector('#slotCard'); return c ? c.innerText.split('\n').slice(0, 6).join(' | ') : null; }));
   await page.screenshot({ path: require('path').join(__dirname, '..', 'dist', '10b_center_slot.png') });

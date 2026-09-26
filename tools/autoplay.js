@@ -54,6 +54,8 @@ function boot() {
   // 곡선 실험용 덮어쓰기: LATE=1.07 WALL_STEP=3
   if (process.env.LATE) R.WaveData.lateGrowth = Number(process.env.LATE);
   if (process.env.WALL_STEP) R.WaveData.wallStep = Number(process.env.WALL_STEP);
+  // 맵 보정 실험: MAP_HP=0.85 (모든 적 체력 배율 WaveData.mapHpMul)
+  if (process.env.MAP_HP) R.WaveData.mapHpMul = Number(process.env.MAP_HP);
   // 비행 시너지 실험: FLY_SYN=1.08,1.16,1.26 (단계별 공격속도) · FLY_SELF=1 (팀 전체가 아니라 비행 포켓몬에게만)
   if (process.env.FLY_SYN || process.env.FLY_SELF) {
     const vals = process.env.FLY_SYN ? process.env.FLY_SYN.split(',').map(Number) : null;

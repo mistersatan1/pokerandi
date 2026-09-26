@@ -111,8 +111,13 @@
   .pane--recipes .pane__head { flex-wrap: wrap; row-gap: 4px; padding: 6px 8px; }
   .pane--recipes .pane__head .tabs { order: 5; flex: 1 1 100%; overflow-x: auto; }
   .pane--recipes .craftbtn { margin-left: auto; }
-  .tierfilter { flex-wrap: nowrap; overflow-x: auto; }
+  /* 등급 칩은 감싼다 — 가로 스크롤이면 맨 끝 [🔒 히든] 칩이 화면 밖으로 밀려 안 보였다(세션 58) */
+  .tierfilter { flex-wrap: wrap; overflow-x: visible; row-gap: 4px; }
   .tierfilter > * { flex: none; white-space: nowrap; }
+  /* 히든 줄 — 주문 문구 · 진행이 오른쪽에 버티면 결과 칸이 몇 px 만 남아 "???" · 이름이 한 글자씩 쪼개졌다. 아래 한 줄로 */
+  .rrow--spell { grid-template-columns: auto 14px minmax(0, 1fr); row-gap: 2px; }
+  .rrow--spell .rrow__state { grid-column: 1 / -1; justify-self: stretch; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .rrow--spell .rspell { max-width: none; }
 
   /* 서랍 속 패널은 자기 안에서 스크롤 */
   .pane--recipes .recipes__list, .pane--owned .owned__grid, .synergy__list, .dexmini__list { overflow: auto; }

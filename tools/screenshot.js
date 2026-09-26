@@ -149,6 +149,29 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
   await page.screenshot({ path: require('path').join(__dirname, '..', 'dist', '10b_center_slot.png') });
   await page.evaluate(() => { window.RPD.FieldManager.select(-1); window.RPD.Loop.setPaused(false); });
 
+
+  // ⑪ 필드 조합식 [🔒 히든] 칩 — 미발견 히든도 그림자 + ??? 로(세션 58). 피카츄만 발견, 이브이 재료는 다 모음(완성 가능 · 미발견)
+  const hiddenPrep = () => {
+    const R = window.RPD;
+    document.querySelectorAll('.modepick, .result, .help, .book').forEach(o => o.hidden = true);
+    R.Game.resetAll('NORMAL', 'NORMAL'); R.Game.startRun('NORMAL', 'NORMAL');
+    R.GameManager.setWave(18); R.WaveManager.startRound(18);
+    R.SaveManager.data.spells = {};
+    R.SaveManager.recordSpell(R.SpellData.forResult('pikachu').id);
+    R.StorageManager.reset();
+    R.SpellData.forResult('eevee').materials.forEach(id => R.StorageManager.add(R.UnitManager.create(id)));
+    R.Loop.setPaused(true);
+    R.bus.emit('field:changed', {});
+    const chip = document.querySelector('#tierFilter [data-tier="HIDDEN"]');
+    if (chip) chip.click();
+    const list = document.getElementById('recipeList');
+    return { chip: chip ? chip.innerText.replace(/\s+/g, ' ') : null, rows: list.querySelectorAll('.rrow--spell').length, secret: list.querySelectorAll('.rrow--secret').length,
+      firstReady: !!(list.querySelector('.rrow--spell') && list.querySelector('.rrow--spell').classList.contains('is-ready')) };
+  };
+  console.log('hiddenchip pc', JSON.stringify(await page.evaluate(hiddenPrep)));
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: require('path').join(__dirname, '..', 'dist', '11_hidden_chip_pc.png') });
+  await page.evaluate(() => { const c = document.querySelector('#tierFilter [data-tier="ALL"]'); if (c) c.click(); window.RPD.Loop.setPaused(false); });
   console.log('errors', errors.slice(0, 5));
 
   /* ---------- 모바일 ① — 휴대폰 흉내(갤럭시 S24 · 아이폰 15, 세로 · 가로) ----------
@@ -376,6 +399,19 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     await tctx.close();
   }
   report.push({ touch: touchReport });
+
+  // ⑪ 휴대폰 — [조합식] 서랍을 열고 [🔒 히든] 칩(세로 · 가로)
+  for (const dev of ['Galaxy S24', 'Galaxy S24 landscape']) {
+    const hctx = await browser.newContext({ ...devices[dev], defaultBrowserType: undefined });
+    const hp = await hctx.newPage();
+    await hp.goto(URL); await hp.waitForTimeout(1000);
+    const info = await hp.evaluate(hiddenPrep);
+    await hp.evaluate(() => { window.RPD.HudPanels.setDrawer('recipes'); const c = document.querySelector('#tierFilter [data-tier="HIDDEN"]'); if (c && !c.classList.contains('is-on')) c.click(); });
+    await hp.waitForTimeout(500);
+    console.log('hiddenchip', dev, JSON.stringify(info));
+    await hp.screenshot({ path: require('path').join(__dirname, '..', 'dist', 'm_hidden_chip_' + dev.replace(/ /g, '_') + '.png') });
+    await hctx.close();
+  }
 
   /* ---------- 모바일 ③ — 홈 화면 앱(세션 53) ----------
    * 설치 · 오프라인은 인터넷 주소에서만 되니, 원본 폴더(dist 아님)를 이 자리에서 작은 웹 서버로 띄워 연다(localhost 는 https 와 같게 친다).

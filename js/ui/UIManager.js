@@ -221,9 +221,9 @@
         var poke = pic && (pic.dataset.def ? pic : pic.closest('.rres'));
         if (poke && poke.dataset.def) { openRecipePop(poke.dataset.def, []); return; }
         var row = e.target.closest('.rrow');
-        if (row && row.dataset.spell) {
-          var sp = RPD.SpellData.get(row.dataset.spell);
-          // 이미 발견한 주문이라 여기 떠 있다 — 문구를 다시 안 쳐도 바로 조합한다(일반 조합식과 같은 손맛)
+        if (row && (row.dataset.spell || row.dataset.spellN != null)) {
+          var sp = row.dataset.spell ? RPD.SpellData.get(row.dataset.spell) : RPD.SpellData.list[+row.dataset.spellN];
+          // 문구를 다시 안 쳐도 바로 조합한다(일반 조합식과 같은 손맛). 미발견 줄도 같다 — 첫 발견 연출은 SpellManager 의 spell:cast(firstTime)
           if (row.classList.contains('is-ready')) { row.classList.add('is-crafting'); RPD.SpellManager.cast(sp.phrase); }
           else { row.classList.remove('is-nope'); void row.offsetWidth; row.classList.add('is-nope'); }
           return;
@@ -1459,13 +1459,15 @@
    * 조합식 목록에 주문(히든·불멸·초월)도 함께 늘어놓는다. 재료·문구는 다 보이고,
    * 아직 만들어 본 적 없는 결과만 그림자 + ??? 로 가린다. 줄을 누르면 채팅에 문구가 채워진다
    * (Enter 는 직접 — 외치는 손맛은 남긴다). 조합 버튼·배지는 조합식만 센다. */
-  function spellViews(counts) {
+  function knows(sp) { return !!(RPD.SaveManager.knowsSpell && RPD.SaveManager.knowsSpell(sp.id)); }
+  function spellViews(counts, withUnknown) {
     if (!RPD.SpellData || !RPD.SpellManager) return [];
     /* 필드 조합식에는 "히든"만 올린다 — 불멸·초월은 조합 사전에서만 본다(재료가 전설급이라
      * 판 하나에 몇 번 안 쓰고, 여기 섞이면 진짜 조합식 줄이 파묻힌다).
-     * 그리고 **발견한 것만** 줄로 뜬다 — 못 찾은 히든은 조합 사전에만 있고, 여기엔 아예 없다. */
+     * [전체] · 등급 칩에는 **발견한 것만**. [히든] 칩(withUnknown)에서는 미발견까지 전부 — 조합 사전과 같은 모양으로
+     * 재료 · 주문 문구는 보이고 결과만 그림자 + ???(세션 58 — 휴대폰에선 조합 사전으로 히든을 찾기 힘들어서). */
     return RPD.SpellData.list.filter(function (sp) {
-      return sp.kind === 'hidden' && RPD.SaveManager.knowsSpell && RPD.SaveManager.knowsSpell(sp.id);
+      return sp.kind === 'hidden' && (withUnknown || knows(sp));
     }).map(function (sp) {
       var def = RPD.PokemonData.get(sp.result);
       var used = {}, missing = 0;
@@ -1476,9 +1478,11 @@
         return { id: m, name: RPD.PokemonData.get(m).name, owned: owned };
       });
       var ok = RPD.SpellManager.check(sp).ok;
+      var known = knows(sp);
       return {
         spell: sp, key: 'spell:' + sp.id, resultId: sp.result, resultTier: def.tier, isHidden: true,
-        resultName: def.name, known: true, discovered: true,
+        // 미발견이면 이름을 들고 다니지도 않는다 — 정렬 · 빈 칸 문구 · 캐시 서명 어디로도 새지 않게
+        resultName: known ? def.name : '???', known: known, discovered: known,
         materials: mats, missingCount: ok ? 0 : Math.max(1, missing), ready: ok
       };
     });
@@ -1929,16 +1933,15 @@
     RPD.RecipeManager.view.forEach(function (v) {
       counts[v.resultTier] = (counts[v.resultTier] || 0) + 1;
     });
-    var hiddenCount = RPD.SpellData ? RPD.SpellData.list.filter(function (sp) {
-      return sp.kind === 'hidden' && RPD.SaveManager.knowsSpell && RPD.SaveManager.knowsSpell(sp.id);
-    }).length : 0;
+    var hiddenAll = RPD.SpellData ? RPD.SpellData.list.filter(function (sp) { return sp.kind === 'hidden'; }) : [];
+    var hiddenCount = hiddenAll.filter(knows).length + '/' + hiddenAll.length;   // 발견 수 / 전체 수
     var chips = ['ALL'].concat(RPD.TIER_ORDER.slice(1)).concat(['HIDDEN']).map(function (id) {
       if (id === 'ALL') {
         return '<button type="button" class="tchip' + (recipeTier === 'ALL' ? ' is-on' : '') +
           '" data-tier="ALL">전체</button>';
       }
       if (id === 'HIDDEN') {
-        // 히든은 안흔함/희귀함 등으로 쪼개지 않는다 — 발견한 히든을 전부 여기 한 칸에 모은다
+        // 히든은 안흔함/희귀함 등으로 쪼개지 않는다 — 히든을 전부(미발견은 그림자로) 여기 한 칸에 모은다
         return '<button type="button" class="tchip tchip--hidden' + (recipeTier === 'HIDDEN' ? ' is-on' : '') +
           '" data-tier="HIDDEN" style="--tier:#2ee6c6">🔒 히든<b>' + hiddenCount + '</b></button>';
       }
@@ -1991,7 +1994,7 @@
 
     var ownedNow = {};
     RPD.StorageManager.allUnits().forEach(function (u) { ownedNow[u.defId] = (ownedNow[u.defId] || 0) + 1; });
-    var all = list.concat(spellViews(ownedNow));
+    var all = list.concat(spellViews(ownedNow, recipeTier === 'HIDDEN'));
 
     var shown;
     if (recipeFilter === 'ready') shown = all.filter(function (v) { return v.ready; });
@@ -2014,6 +2017,12 @@
     /* 등급 순으로 묶는다(전설 → 흔함). 같은 등급 안에서는 완성 가능한 것이 위로.
      * 예전에는 완성 가능 순으로만 섞여 있어 "전설 조합식만 보고 싶다"가 안 됐다. */
     shown = shown.slice().sort(function (a, b) {
+      // [히든] 칩: 완성 가능 → 발견한 것 → 미발견(미발견끼리는 이름이 아니라 모자란 재료 수 · 주문 순 — 이름 순이면 정답이 샌다)
+      if (recipeTier === 'HIDDEN') {
+        if (a.ready !== b.ready) return a.ready ? -1 : 1;
+        if (a.discovered !== b.discovered) return a.discovered ? -1 : 1;
+        if (!a.discovered) return (a.missingCount - b.missingCount) || (RPD.SpellData.list.indexOf(a.spell) - RPD.SpellData.list.indexOf(b.spell));
+      }
       var at = RPD.tierRank(a.resultTier), bt = RPD.tierRank(b.resultTier);
       if (at !== bt) return bt - at;
       if (a.ready !== b.ready) return a.ready ? -1 : 1;
@@ -2041,7 +2050,7 @@
     if (!shown.length) {
       el.recipeList.innerHTML = '<p class="empty">' +
         (recipeSpecies ? '이 개체가 재료로 들어가는 조합식이 없습니다.'
-          : recipeTier === 'HIDDEN' ? '아직 발견한 히든이 없습니다. 채팅(Enter)으로 주문을 외쳐 보세요.'
+          : recipeTier === 'HIDDEN' ? '조건에 맞는 히든이 없습니다.'
           : recipeTier !== 'ALL' ? RPD.Tiers[recipeTier].label + ' 조합식이 여기에 없습니다.'
           : recipeFilter === 'ready' ? '지금 완성할 수 있는 조합식이 없습니다. 미완성 탭에서 부족한 재료를 확인하세요.'
           : '아직 공개된 조합식이 없습니다.') + '</p>';
@@ -2094,7 +2103,7 @@
     }).join('');
   }
 
-  /* 필드 조합식의 히든 줄 — 여기 뜨는 건 전부 이미 발견한 것이다(spellViews 가 미발견을 거른다).
+  /* 필드 조합식의 히든 줄 — [전체] · 등급 칩에는 발견한 것만, [히든] 칩에는 미발견도(결과만 그림자 + ???).
    * 그래도 재료 쪽에 "다른" 미발견 히든이 끼어 있을 수 있어(예: 상위 히든이 하위 히든을 재료로 쓸 때)
    * 그 재료만은 여전히 그림자로 가린다. */
   function spellRowHtml(v, counts) {
@@ -2112,11 +2121,19 @@
         '<span class="rmat__n">' + Math.min(c, 99) + '<small>/' + g.need + '</small></span>' +
         '<span class="rmat__name">' + (secret ? '???' : g.name) + '</span></span>';
     }).join('<span class="rplus">+</span>');
-    var result = '<span class="rres" data-def="' + v.resultId + '" title="누르면 조합식">' + UI.sprite(def, 'spr--res') +
-        '<span class="rres__name">' + def.name + '</span>';
-    var kind = '🔒 히든';
-    return '<button type="button" class="rrow rrow--spell' + (v.ready ? ' is-ready' : '') +
-      '" data-spell="' + sp.id + '" style="--tier:' + tierInfo.color + '">' +
+    /* 미발견 결과 — 조합 사전과 같은 그림자 + ???. 결과 칸에 data-def 를 안 달아 눌러도 조합식 창이 안 열린다
+     * (창 제목이 곧 이름이다). 그림자 그림의 data-def 도 뗀다 — 이름 · id 가 HTML 에 남지 않게. */
+    var result = v.discovered
+      ? '<span class="rres" data-def="' + v.resultId + '" title="누르면 조합식">' + UI.sprite(def, 'spr--res') +
+        '<span class="rres__name">' + def.name + '</span>'
+      : '<span class="rres rres--secret" title="아직 모르는 히든 — 재료를 모아 주문을 외치면 무엇인지 알게 된다">' +
+        UI.shadow(def, 'spr--res').replace(/ data-def="[^"]*"/g, '') +
+        '<span class="rres__name is-secret">???</span>';
+    var kind = v.discovered ? '🔒 히든' : '❔ 미발견';
+    return '<button type="button" class="rrow rrow--spell' + (v.discovered ? '' : ' rrow--secret') + (v.ready ? ' is-ready' : '') +
+      // 미발견 줄은 주문 id(= 포켓몬 id)를 안 달고 주문 목록 순번으로 — id 가 곧 정답이다
+      '" ' + (v.discovered ? 'data-spell="' + sp.id + '"' : 'data-spell-n="' + RPD.SpellData.list.indexOf(sp) + '"') +
+      ' style="--tier:' + tierInfo.color + '">' +
       '<span class="rrow__mats">' + mats + '</span>' +
       '<span class="rrow__arrow" aria-hidden="true"></span>' +
       result + '<span class="rres__tier">' + tierInfo.label + '</span>' +

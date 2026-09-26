@@ -1,9 +1,9 @@
 /* AudioManager.js — 배경음과 효과음.
  *
- * 음원 파일을 쓰지 않는다. 스프라이트를 코드로 그리는 SpriteFactory 와 같은 이유다:
+ * 효과음과 기본 배경음은 WebAudio 로 그때그때 합성한다. 스프라이트를 코드로 그리는 SpriteFactory 와 같은 이유다:
  * index.html 을 더블클릭해서 여는 게임이라 파일이 하나라도 없으면 그 자리에서 깨진다.
- * WebAudio 로 그때그때 합성하면 받을 것도, 깨질 것도 없다.
- * (assets/audio/ 에 파일을 두고 싶어지면 playFile() 자리만 채우면 된다.)
+ * 배경음은 곡 파일을 넣을 수 있다(세션 55) — js/data/music.js 에 장면별로 적고 assets/music/ 에 두면 그 파일을 반복 재생하고,
+ * 없거나 못 불러오면 이 파일의 합성 음악. 파일 재생 자체는 MusicFiles.js. 곡이 바뀔 때 파일이 끼면 1초 겹쳐 넘어간다(syncMusic).
  *
  * 지켜야 하는 것
  *   - 브라우저는 사용자가 한 번 누르기 전에는 소리를 못 낸다. 첫 입력에서 시작한다.
@@ -22,11 +22,15 @@
     muted: false,
     musicVolume: 0.35,
     sfxVolume: 0.6,
-    track: null,          // 'calm' | 'battle' | 'boss'
+    track: null,          // 'calm' | 'battle' | 'boss' | 'hidden' | 'immortal' | 'transcend'
+    source: null,         // 지금 울리는 배경음: 'file'(곡 파일) · 'synth'(합성) · null(안 울림)
+    fileTrack: null,      // source 가 'file' 이면 그 곡
     voices: 0
   };
 
   var master = null, musicGain = null, sfxGain = null;
+  var synthGain = null;   // 합성 배경음만 지나는 마디 — 파일 곡과 겹쳐 넘어갈 때 이것만 줄였다 키운다
+  var synthStopTimer = null;
   var lastPlayed = {};
   var MAX_VOICES = 14;
 
@@ -120,10 +124,16 @@
       var unlock = function () { self.start(); };
       document.addEventListener('pointerdown', unlock, { once: true });
       document.addEventListener('keydown', unlock, { once: true });
-      document.addEventListener('visibilitychange', function () {
-        if (document.hidden) stopSequencer();
-        else if (self.ready && !self.muted) startSequencer();
-      });
+      document.addEventListener('visibilitychange', function () { syncMusic(0); });
+    }
+
+    // 곡 파일 — 있으면 그 장면은 파일로. 파일이 늦게 도착하면(불러오기 끝) 그때 합성에서 겹쳐 넘어간다
+    var F = RPD.MusicFiles;
+    if (F) {
+      F.base = function () { return self.muted ? 0 : self.musicVolume; };
+      F.init();
+      F.bindGestures();
+      RPD.bus.on('music:file', function (e) { if (e && e.name === self.track) syncMusic(F.crossfade()); });
     }
 
     bindEvents(this);
@@ -151,6 +161,12 @@
     musicGain.gain.value = this.musicVolume;
     musicGain.connect(master);
 
+    synthGain = this.ctx.createGain();
+    synthGain.gain.value = 1;
+    synthGain.connect(musicGain);
+    // 인터넷 주소면 곡 파일도 같은 배경음 음량 · 음소거 마디를 지나게(file:// 은 요소 음량으로 — MusicFiles 설명)
+    if (RPD.MusicFiles) RPD.MusicFiles.attach(this.ctx, musicGain);
+
     sfxGain = this.ctx.createGain();
     sfxGain.gain.value = this.sfxVolume;
     sfxGain.connect(master);
@@ -161,9 +177,9 @@
     /* 소리가 깨어나기 전에도 게임은 돌아간다 — 그동안 이벤트가 track 을 이미 정해 뒀을 수 있다.
      * 그 경우 setTrack 은 "같은 곡"이라며 아무것도 하지 않으므로, 여기서 직접 시작한다.
      * (이걸 빠뜨려서 첫 판 배경음이 통째로 안 나왔다) */
-    this.track = trackForNow();
+    if (!this.scene) this.track = trackForNow();
     seq.step = 0;
-    if (!this.muted && this.musicVolume > 0) startSequencer();
+    syncMusic(0);
     RPD.bus.emit('audio:ready', {});
     return true;
   };
@@ -172,8 +188,8 @@
     this.muted = !!muted;
     RPD.SaveManager.setSetting('audioMuted', this.muted);
     if (master) master.gain.value = this.muted ? 0 : 1;
-    if (this.muted) stopSequencer();
-    else if (this.ready) startSequencer();
+    if (RPD.MusicFiles) RPD.MusicFiles.applyAll();
+    syncMusic(0);
     RPD.bus.emit('audio:changed', this.state());
   };
 
@@ -181,8 +197,8 @@
     this.musicVolume = num(v, this.musicVolume);
     RPD.SaveManager.setSetting('musicVolume', this.musicVolume);
     if (musicGain) musicGain.gain.value = this.musicVolume;
-    if (this.musicVolume === 0) stopSequencer();
-    else if (this.ready && !this.muted) startSequencer();
+    if (RPD.MusicFiles) RPD.MusicFiles.applyAll();
+    syncMusic(0);
     RPD.bus.emit('audio:changed', this.state());
   };
 
@@ -197,7 +213,7 @@
     return {
       ready: this.ready, muted: this.muted,
       music: this.musicVolume, sfx: this.sfxVolume,
-      track: this.track, voices: this.voices
+      track: this.track, source: this.source, voices: this.voices
     };
   };
 
@@ -294,9 +310,62 @@
     this.track = name;
     seq.step = 0;
     seq.nextTime = this.ready ? this.ctx.currentTime + 0.05 : 0;
-    if (this.ready && !this.muted && this.musicVolume > 0) startSequencer();
+    syncMusic(RPD.MusicFiles ? RPD.MusicFiles.crossfade() : 0);
     RPD.bus.emit('audio:track', { track: name });
   };
+
+  /* 배경음을 "지금 울려야 하는 모습"으로 맞춘다 — 곡이 바뀌거나 · 음소거 · 음량 · 탭 가림 · 일시정지 · 파일 도착 때 전부 여기로.
+   * 울려야 하면: 지금 곡의 파일이 있으면 파일, 없으면 합성. 파일이 끼는 전환은 fade 초 동안 겹친다(합성↔합성은 예전처럼 바로). */
+  function wantMusic() {
+    var hidden = typeof document !== 'undefined' && document.hidden;
+    var paused = RPD.Loop && RPD.Loop.paused && !A.scene;   // 주문 연출 중에는 게임만 멈추고 음악은 계속
+    return A.ready && !A.muted && A.musicVolume > 0 && !hidden && !paused;
+  }
+
+  function syncMusic(fade) {
+    var F = RPD.MusicFiles;
+    if (!wantMusic()) {
+      stopSequencer();
+      if (F) F.pauseAll();
+      A.source = null;                                  // fileTrack 은 남긴다 — 다시 틀 때 그 곡이면 이어서
+      return;
+    }
+    if (F && F.has(A.track)) {
+      if (A.source === 'file' && A.fileTrack === A.track && F.isPlaying(A.track)) return;
+      var restart = A.fileTrack !== A.track;            // 다른 곡에서 넘어오면 처음부터, 멈췄다 이어 틀면 그 자리부터
+      var from = A.source;
+      F.fadeOutExcept(A.track, fade);
+      if (from === 'synth') fadeSynthOut(fade);
+      F.play(A.track, from ? fade : 0, restart);
+      A.source = 'file'; A.fileTrack = A.track;
+      return;
+    }
+    if (F) F.fadeOutExcept(null, fade);
+    var fromFile = A.source === 'file';
+    A.source = 'synth'; A.fileTrack = null;
+    fadeSynthIn(fromFile ? fade : 0);
+  }
+
+  function fadeSynthOut(sec) {
+    if (!synthGain) { stopSequencer(); return; }
+    var t = A.ctx.currentTime;
+    synthGain.gain.cancelScheduledValues(t);
+    synthGain.gain.setValueAtTime(synthGain.gain.value, t);
+    synthGain.gain.linearRampToValueAtTime(0, t + Math.max(0.01, sec));
+    if (synthStopTimer) global.clearTimeout(synthStopTimer);
+    synthStopTimer = global.setTimeout(function () { synthStopTimer = null; if (A.source !== 'synth') stopSequencer(); }, sec * 1000 + 50);
+  }
+
+  function fadeSynthIn(sec) {
+    if (synthStopTimer) { global.clearTimeout(synthStopTimer); synthStopTimer = null; }
+    if (synthGain) {
+      var t = A.ctx.currentTime;
+      synthGain.gain.cancelScheduledValues(t);
+      if (sec > 0) { synthGain.gain.setValueAtTime(0, t); synthGain.gain.linearRampToValueAtTime(1, t + sec); }
+      else synthGain.gain.setValueAtTime(1, t);
+    }
+    startSequencer();
+  }
 
   function trackForNow() {
     var GM = RPD.GameManager;
@@ -351,7 +420,7 @@
     g.gain.exponentialRampToValueAtTime(gain, start + 0.02);
     g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
     osc.connect(g);
-    g.connect(musicGain);
+    g.connect(synthGain || musicGain);
     osc.start(start);
     osc.stop(start + dur + 0.02);
   }
@@ -409,10 +478,9 @@
       self.setTrack('calm');
     });
 
-    bus.on('loop:paused', function (paused) {
+    bus.on('loop:paused', function () {
       if (A.scene) return;                 // 주문 연출 중에는 게임만 멈추고 음악은 계속
-      if (paused) stopSequencer();
-      else if (self.ready && !self.muted && self.musicVolume > 0) startSequencer();
+      syncMusic(0);
     });
   }
 
@@ -423,17 +491,22 @@
   A.playScene = function (track) {
     this.scene = true;
     this.setTrack(track);
-    if (this.ready && !this.muted && this.musicVolume > 0) startSequencer();
+    syncMusic(0);                          // 같은 곡이면 setTrack 이 아무것도 안 한다 — 멈춰 있었으면 여기서 튼다
   };
   A.restoreTrack = function () {
     this.scene = false;
     this.setTrack(trackForNow());
-    if (RPD.Loop && RPD.Loop.paused) stopSequencer();
+    syncMusic(0);                          // 게임이 멈춰 있으면 여기서 멈춘다
   };
 
   /* 검사용 — 배경음 스케줄러가 실제로 돌고 있는지 밖에서 볼 수 있어야 한다 */
-  A.musicRunning = function () { return !!seq.timer; };
-  A.debug = function () { return { timer: !!seq.timer, step: seq.step, next: seq.nextTime, track: A.track }; };
+  A.musicRunning = function () { return !!seq.timer || (A.source === 'file' && !!RPD.MusicFiles && RPD.MusicFiles.isPlaying(A.fileTrack)); };
+  A.debug = function () {
+    return { timer: !!seq.timer, step: seq.step, next: seq.nextTime, track: A.track, source: A.source, fileTrack: A.fileTrack,
+      synthGain: synthGain ? synthGain.gain.value : null,
+      files: RPD.MusicFiles ? RPD.MusicFiles.playingNames() : [] };
+  };
+  A._sync = function (fade) { syncMusic(fade || 0); };   // 검사용
 
   RPD.AudioManager = A;
 })(typeof window !== 'undefined' ? window : globalThis);

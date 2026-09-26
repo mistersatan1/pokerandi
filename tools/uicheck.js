@@ -637,7 +637,7 @@ console.log('\n소리');
 
 const AUDIO = fs.readFileSync(path.join(ROOT, 'js/core/AudioManager.js'), 'utf8');
 
-run('음원 파일 없이 합성으로 소리를 만든다', () => {
+run('효과음 · 기본 배경음은 합성(AudioManager 안에 음원 경로 없음 — 곡 파일 경로는 js/data/music.js 에만)', () => {
   if (!RPD.AudioManager) throw new Error('AudioManager 가 없다');
   if (/[\w/]+\.(mp3|ogg|wav|m4a)\b/.test(AUDIO)) throw new Error('없는 음원 파일을 참조한다');
   if (AUDIO.indexOf('createOscillator') < 0) throw new Error('합성 코드가 없다');
@@ -1907,7 +1907,137 @@ async function swChecks() {
   check('새 서비스 워커가 켜지면 예전 저장소(porandi-*)만 지운다', !stores.has('porandi-v0') && stores.has('other-app') && stores.has('porandi-v1'));
 }
 
-swChecks().catch(e => { failures += 1; console.log('  FAIL  서비스 워커 검사가 멈췄다  → ' + e.message); }).then(() => {
+/* ---------- 배경음악 파일 (세션 55) ----------
+ * 가짜 <audio>(있는 파일이면 loadedmetadata, 없으면 error) · 가짜 AudioContext 로 AudioManager + MusicFiles 를 새 판에서 돌린다. */
+async function musicChecks() {
+  console.log('\n배경음악 파일 — 있을 때 · 없을 때');
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const make = ({ present, protocol = 'file:', inline = false, blockPlay = false, fade = 0.2, volumes = {} }) => {
+    const docL = {};
+    const env = { present: new Set(present), block: blockPlay, els: [] };
+    function FakeAudio() {
+      this.paused = true; this.volume = 1; this.muted = false; this.loop = false; this.preload = ''; this.currentTime = 0; this._l = {}; this._src = '';
+      env.els.push(this);
+    }
+    FakeAudio.prototype.addEventListener = function (t, f) { (this._l[t] = this._l[t] || []).push(f); };
+    Object.defineProperty(FakeAudio.prototype, 'src', { get() { return this._src; }, set(v) {
+      this._src = v; const el = this; setTimeout(() => (el._l[env.present.has(v) ? 'loadedmetadata' : 'error'] || []).forEach(f => f()), 5); } });
+    FakeAudio.prototype.play = function () { if (env.block) return Promise.reject(new Error('NotAllowedError')); this.paused = false; this.currentTime += 0.5; return Promise.resolve(); };
+    FakeAudio.prototype.pause = function () { this.paused = true; };
+    const gainNode = () => ({ gain: { value: 1, setValueAtTime(v) { this.value = v; }, linearRampToValueAtTime(v) { this.value = v; },
+      exponentialRampToValueAtTime() {}, cancelScheduledValues() {} }, connect() {} });
+    function FakeCtx() { this.currentTime = 0; this.destination = {}; this.sources = 0; }
+    FakeCtx.prototype.createGain = gainNode;
+    FakeCtx.prototype.createOscillator = () => ({ type: '', frequency: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {}, start() {}, stop() {} });
+    FakeCtx.prototype.createMediaElementSource = function () { this.sources += 1; return { connect() {} }; };
+    FakeCtx.prototype.resume = () => {};
+    const settings = {};
+    const sb = { console, setTimeout, clearTimeout, setInterval, clearInterval, Date, Math, Promise, Audio: FakeAudio, AudioContext: FakeCtx,
+      location: { protocol }, document: { hidden: false, addEventListener: (t, f) => { (docL[t] = docL[t] || []).push(f); } } };
+    if (inline) sb.RPD_INLINE = {};
+    sb.window = sb; sb.globalThis = sb;
+    vm.createContext(sb);
+    for (const f of ['js/core/RPD.js', 'js/core/Utils.js', 'js/core/EventBus.js', 'js/data/music.js', 'js/core/MusicFiles.js', 'js/core/AudioManager.js'])
+      vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), sb, { filename: f });
+    const R = sb.RPD;
+    R.MusicData.crossfade = fade;
+    Object.keys(volumes).forEach(k => { R.MusicData.tracks[k].volume = volumes[k]; });
+    R.SaveManager = { getSetting: (k, d) => (k in settings ? settings[k] : d), setSetting: (k, v) => { settings[k] = v; } };
+    R.GameManager = { isPlayable: () => false };
+    R.Loop = { paused: false };
+    R.AudioManager.init();
+    const gesture = () => { ['pointerdown'].forEach(t => (docL[t] || []).slice().forEach(f => f({}))); };
+    const el = name => env.els.find(e => e.src === R.MusicData.tracks[name].file);
+    return { R, A: R.AudioManager, F: R.MusicFiles, env, gesture, el };
+  };
+  const ALL = ['calm', 'battle', 'boss', 'hidden', 'immortal', 'transcend'];
+
+  // 1) 파일 있음
+  {
+    const t = make({ present: ['assets/music/calm.mp3', 'assets/music/battle.mp3'] });
+    await wait(30);
+    check('music.js 에 장면 여섯 개(calm · battle · boss · hidden · immortal · transcend) · 곡별 음량', ALL.every(k => t.R.MusicData.tracks[k] && t.R.MusicData.tracks[k].file === 'assets/music/' + k + '.mp3' && t.R.MusicData.tracks[k].volume != null));
+    check('있는 파일은 ok · 없는 파일은 failed 로 가린다(불러오기 전엔 머리만 — preload metadata)',
+      t.F.status('calm') === 'ok' && t.F.status('battle') === 'ok' && t.F.status('boss') === 'failed' && t.el('boss').preload === 'metadata');
+    check('첫 누르기 전에는 아무것도 안 튼다(휴대폰 제한)', !t.A.ready && t.env.els.every(e => e.paused));
+    t.gesture(); await wait(10);
+    check('첫 누르기 후: 평시(calm) 파일을 반복 재생 · 합성은 안 돈다', t.A.source === 'file' && !t.el('calm').paused && t.el('calm').loop && !t.A.debug().timer, JSON.stringify(t.A.debug()));
+    check('파일 음량 = 배경음 음량 × 곡 음량 × 페이드(file:// 은 요소 음량으로)', Math.abs(t.el('calm').volume - 0.35) < 1e-6, String(t.el('calm').volume));
+    t.A.setTrack('battle');
+    await wait(90);
+    const mid = { calm: t.el('calm').volume, battle: t.el('battle').volume, calmOn: !t.el('calm').paused, battleOn: !t.el('battle').paused };
+    await wait(250);
+    check('곡이 바뀌면 겹쳐 넘어간다: 중간엔 둘 다 울리고(하나는 줄고 하나는 커짐) 끝나면 새 곡만',
+      mid.calmOn && mid.battleOn && mid.calm > 0.01 && mid.calm < 0.34 && mid.battle > 0.01 && mid.battle < 0.34 && t.el('calm').paused && !t.el('battle').paused && Math.abs(t.el('battle').volume - 0.35) < 1e-6,
+      JSON.stringify(mid));
+    t.A.setMusicVolume(0.8);
+    check('배경음 음량을 바꾸면 파일 음악에도 바로', Math.abs(t.el('battle').volume - 0.8) < 1e-6, String(t.el('battle').volume));
+    t.A.setMuted(true);
+    check('음소거면 파일도 멈춘다(음량 0)', t.el('battle').paused && t.el('battle').volume === 0 && !t.A.musicRunning());
+    t.A.setMuted(false);
+    check('음소거를 풀면 다시 울린다', !t.el('battle').paused && t.A.musicRunning());
+    const pos = t.el('battle').currentTime;
+    t.R.Loop.paused = true; t.R.bus.emit('loop:paused', true);
+    const pausedNow = t.el('battle').paused;
+    t.R.Loop.paused = false; t.R.bus.emit('loop:paused', false);
+    check('일시정지면 멈추고, 풀면 그 자리부터 이어서(처음부터 다시가 아니다)', pausedNow && !t.el('battle').paused && t.el('battle').currentTime > pos, pos + ' → ' + t.el('battle').currentTime);
+    t.A.setTrack('boss'); await wait(350);
+    check('파일이 없는 장면(boss)은 합성 음악으로 겹쳐 넘어간다', t.A.source === 'synth' && t.A.debug().timer && t.el('battle').paused, JSON.stringify(t.A.debug()));
+    t.A.playScene('battle'); await wait(350);
+    check('합성 → 파일도 겹쳐 넘어가고, 넘어간 뒤 합성은 멈춘다', t.A.source === 'file' && !t.A.debug().timer && !t.el('battle').paused, JSON.stringify(t.A.debug()));
+  }
+  // 2) 파일 없음(폴더째 없음)
+  {
+    const t = make({ present: [] });
+    await wait(30);
+    t.gesture(); await wait(10);
+    check('파일이 하나도 없으면 예전과 같은 합성 음악', t.A.source === 'synth' && t.A.debug().timer && t.env.els.every(e => e.paused) && ALL.every(k => t.F.status(k) === 'failed'));
+    t.A.setTrack('battle'); t.A.setTrack('boss');
+    check('없는 파일 사이를 오가도 합성 그대로(파일을 틀려고 하지 않는다)', t.A.source === 'synth' && t.env.els.every(e => e.paused));
+  }
+  // 3) 파일이 늦게 도착 — 합성으로 시작했다가 도착하면 파일로
+  {
+    const t = make({ present: ['assets/music/calm.mp3'] });
+    t.gesture();                       // 불러오기 전에 눌렀다
+    check('불러오는 중에 누르면 우선 합성으로', t.A.source === 'synth');
+    await wait(300);
+    check('파일이 도착하면 합성에서 파일로 겹쳐 넘어간다', t.A.source === 'file' && !t.el('calm').paused && !t.A.debug().timer, JSON.stringify(t.A.debug()));
+  }
+  // 4) 곡별 음량
+  {
+    const t = make({ present: ['assets/music/calm.mp3'], volumes: { calm: 0.5 } });
+    await wait(30); t.gesture(); await wait(10);
+    check('곡별 음량(calm 0.5) × 배경음 음량(0.35)', Math.abs(t.el('calm').volume - 0.175) < 1e-6, String(t.el('calm').volume));
+  }
+  // 5) 인터넷 주소 — WebAudio 에 연결(아이폰은 요소 volume 을 무시)
+  {
+    const t = make({ present: ['assets/music/calm.mp3'], protocol: 'https:' });
+    await wait(30); t.gesture(); await wait(10);
+    const e = t.F.entries.calm;
+    check('인터넷 주소에서는 요소를 WebAudio 에 연결해 합성과 같은 음량 · 음소거 마디를 지난다', !!e.gain && e.gain.gain.value === 1 && t.el('calm').volume === 1 && !t.el('calm').paused);
+  }
+  // 6) 테스트판(한 파일)
+  {
+    const t = make({ present: ['assets/music/calm.mp3'], inline: true });
+    await wait(30); t.gesture(); await wait(10);
+    check('한 파일짜리 테스트판(RPD_INLINE)은 파일을 찾지도 않고 합성 음악', t.env.els.length === 0 && t.A.source === 'synth');
+  }
+  // 7) 휴대폰: 누르기 밖에서 틀면 막힌다 → 다음 누르기에서 다시
+  {
+    const t = make({ present: ['assets/music/calm.mp3', 'assets/music/battle.mp3'], blockPlay: true });
+    await wait(30); t.gesture(); await wait(10);
+    const blocked = t.el('calm').paused;
+    t.env.block = false; t.gesture(); await wait(10);
+    check('틀기가 막히면(휴대폰 · 누르기 밖) 다음 누르기에서 다시 튼다', blocked && !t.el('calm').paused);
+    check('누를 때 아직 안 튼 곡 요소는 소리 없이 틀었다 멈춰 잠금을 풀어 둔다(나중에 곡이 바뀔 때 틀 수 있게)', t.F.entries.battle.primed && t.el('battle').paused && !t.el('battle').muted);
+  }
+  const AUDIO_SRC = fs.readFileSync(path.join(ROOT, 'js/core/MusicFiles.js'), 'utf8');
+  check('파일은 <audio> 요소로만 연다(fetch · XHR 없음 — 더블클릭 file:// 에서도)', !/\bfetch\s*\(|XMLHttpRequest/.test(AUDIO_SRC) && /new global\.Audio\(\)/.test(AUDIO_SRC));
+  const build = fs.readFileSync(path.join(ROOT, 'tools/build-tester.js'), 'utf8');
+  check('테스트판 빌드는 음악 파일을 넣지 않는다(그림 PNG 만 안으로)', /\\.png\$\/i\.test\(name\)/.test(build) && !/mp3|assets\/music/.test(build));
+}
+
+swChecks().then(musicChecks).catch(e => { failures += 1; console.log('  FAIL  비동기 검사가 멈췄다  → ' + e.stack); }).then(() => {
   console.log(`\n────────────────────────────`);
   console.log(failures === 0 ? 'UI·연출 이상 없음' : `UI·연출 문제 ${failures}건`);
   process.exit(failures === 0 ? 0 : 1);

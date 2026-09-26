@@ -37,6 +37,7 @@ node tools/perf.js 4  # 휴대폰 성능 — CPU 4배 느린 갤럭시 흉내로
 | `js/systems/*Manager.js` | 규칙. 골드 상점 `GoldShopManager` · 정예 `EliteManager` · 보상 `RewardManager` |
 | `js/ui/UIManager.js` | 화면 대부분. 크다 — 파일 상단 구조 설명부터 읽는다 |
 | `css/mobile.css` | 휴대폰(1100px 미만) 레이아웃 — 가장 마지막에 불러온다. 필드 90° 돌림은 `Renderer.js`(`--field-rotate`) |
+| `js/data/music.js` · `js/core/MusicFiles.js` | 배경음악 파일 — 장면별(calm · battle · boss · hidden · immortal · transcend) `assets/music/*.mp3` · 곡별 음량 · 겹침 1초. 없으면 합성(AudioManager). `<audio>` 로만(file:// 가능). 실제 재생 검사 `node tools/musicplay.js` |
 | `js/render/FramePacer.js` | 언제 · 얼마나 곱게 그릴지 — 전투 최대 60fps · 쉬는 중 10fps · 느리면 화질 사다리(해상도 2→1.5→1.25→1→30fps). 게임 규칙 · 시간은 안 건드림 |
 | `js/core/Pwa.js` · `sw.js` · `manifest.webmanifest` | 홈 화면 앱 — 오프라인 저장 목록(자동으로 모음) · 설치 · 전체 화면. https·localhost 에서만(file:// · 테스트판은 끔). 아이콘은 `node tools/icons.js` |
 

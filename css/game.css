@@ -421,7 +421,7 @@ body:not([data-state="READY"]):not([data-state="IDLE"]) .startpanel { display: n
 .diffbtn__rec small { color: var(--faint); }
 .diffbtn__rec b { color: var(--text); }
 .diffbtn__rec b.is-clear { color: var(--gold); }
-@media (max-width: 1100px) { .difflist { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 1099.98px) { .difflist { grid-template-columns: repeat(2, 1fr); } }
 
 .trainerinfo {
   margin: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 10px;
@@ -475,7 +475,7 @@ body:not([data-state="READY"]):not([data-state="IDLE"]) .startpanel { display: n
 .bk__bd.is-off { opacity: .6; }
 .bk__extra { display: flex; gap: 10px; font-size: 11px; color: var(--muted); }
 .iconbtn--book { font-size: 10px; font-weight: 900; line-height: 1.05; color: var(--gold-hi); }
-@media (max-width: 1100px) { .bk__row { grid-template-columns: 1fr; } .bk__res { grid-row: auto; } }
+@media (max-width: 1099.98px) { .bk__row { grid-template-columns: 1fr; } .bk__res { grid-row: auto; } }
 
 
 /* ---------- 주문 입력 · 연출 ---------- */
@@ -520,6 +520,7 @@ body:not([data-state="READY"]):not([data-state="IDLE"]) .startpanel { display: n
 .bk__secret { color: var(--muted); font-size: 12px; }
 /* 아직 발견하지 않은 주문의 결과 — 그림자만 */
 .spr.is-shadow img { filter: brightness(0) contrast(1.2); opacity: .72; }
+.spr.is-shadow canvas { width: 100%; height: 100%; opacity: .72; image-rendering: pixelated; pointer-events: none; display: block; }   /* 경로를 안 남기는 그림자(세션 59) */
 .spr.is-shadow { box-shadow: inset 0 0 0 1px rgba(46, 230, 198, 0.35); }
 .bk__row--spell { box-shadow: 0 0 0 1px color-mix(in srgb, var(--tier) 60%, transparent), 0 0 18px color-mix(in srgb, var(--tier) 25%, transparent); }
 .bk__phrase { color: #fff; font-weight: 900; font-size: 13px; }

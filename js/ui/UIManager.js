@@ -221,9 +221,9 @@
         var poke = pic && (pic.dataset.def ? pic : pic.closest('.rres'));
         if (poke && poke.dataset.def) { openRecipePop(poke.dataset.def, []); return; }
         var row = e.target.closest('.rrow');
-        if (row && row.dataset.spell) {
-          var sp = RPD.SpellData.get(row.dataset.spell);
-          // 이미 발견한 주문이라 여기 떠 있다 — 문구를 다시 안 쳐도 바로 조합한다(일반 조합식과 같은 손맛)
+        if (row && (row.dataset.spell || row.dataset.spellN != null)) {
+          var sp = row.dataset.spell ? RPD.SpellData.get(row.dataset.spell) : RPD.SpellData.list[+row.dataset.spellN];
+          // 문구를 다시 안 쳐도 바로 조합한다(일반 조합식과 같은 손맛). 미발견 줄도 같다 — 첫 발견 연출은 SpellManager 의 spell:cast(firstTime)
           if (row.classList.contains('is-ready')) { row.classList.add('is-crafting'); RPD.SpellManager.cast(sp.phrase); }
           else { row.classList.remove('is-nope'); void row.offsetWidth; row.classList.add('is-nope'); }
           return;
@@ -311,9 +311,20 @@
         ownedDrag.def = cell.dataset.def;
         ownedDrag.x = e.clientX; ownedDrag.y = e.clientY;
         ownedDrag.active = false;
+        /* 손가락은 길게 눌러야(0.3초) 집는다 — 보유 목록은 손가락으로 스크롤하는 곳이라, 누르자마자 끌면 스크롤이 안 된다.
+         * 그 전에 움직이면 스크롤로 보고 놓는다(모바일 ② · 세션 52). 마우스는 예전처럼 6px 움직이면 바로 끌기. */
+        ownedDrag.touch = e.pointerType === 'touch';
+        ownedDrag.armed = !ownedDrag.touch;
+        clearTimeout(ownedDrag.timer);
+        if (ownedDrag.touch) ownedDrag.timer = setTimeout(armOwnedDrag, OWNED_HOLD_MS);
       });
       global.addEventListener('pointermove', function (e) { ownedDragMove(e.clientX, e.clientY); });
       global.addEventListener('pointerup', function (e) { ownedDragEnd(e.clientX, e.clientY); });
+      global.addEventListener('pointercancel', function () { cancelOwnedDrag(); });
+      // 집은 뒤에는 목록이 같이 스크롤되면 안 된다(첫 touchmove 를 막아야 브라우저가 스크롤로 가져가지 않는다)
+      el.storageList.addEventListener('touchmove', function (e) {
+        if (ownedDrag.def && ownedDrag.armed && e.cancelable && e.preventDefault) e.preventDefault();
+      }, { passive: false });
     }
 
     if (el.ownedPop) {
@@ -413,6 +424,7 @@
     if (!canvas) return;
 
     canvas.addEventListener('mousemove', function (e) {
+      if (fromTouch()) return;
       var p = RPD.Renderer.toLogical(e.clientX, e.clientY);
       F.setHover(F.hitTest(p.x, p.y));
     });
@@ -424,11 +436,13 @@
     });
 
     canvas.addEventListener('mousedown', function (e) {
+      if (fromTouch()) return;   // 터치 뒤 브라우저가 흉내 내는 마우스 — 손가락이 고른 칸을 정확 판정으로 다시 지우지 않게
       pointerDown(e.clientX, e.clientY, e.shiftKey);
     });
 
     // 드롭은 window 에서 받는다 — 캔버스 밖에서 손을 떼도 드래그 상태가 남지 않게.
     global.addEventListener('mouseup', function (e) {
+      if (fromTouch()) return;
       pointerUp(e.clientX, e.clientY);
     });
     global.addEventListener('mousemove', function (e) {
@@ -440,31 +454,52 @@
     canvas.addEventListener('touchstart', function (e) {
       if (!e.touches[0]) return;
       var t = e.touches[0];
+      touch.at = Date.now();
+      touch.x = t.clientX; touch.y = t.clientY; touch.moved = false;
       var p = RPD.Renderer.toLogical(t.clientX, t.clientY);
-      F.setHover(F.hitTest(p.x, p.y));
-      pointerDown(t.clientX, t.clientY, false);
+      F.setHover(F.hitTestNear(p.x, p.y, touchPad()));
+      pointerDown(t.clientX, t.clientY, false, true);
     }, { passive: true });
 
     canvas.addEventListener('touchmove', function (e) {
       if (!e.touches[0]) return;
       var t = e.touches[0];
+      if (Math.abs(t.clientX - touch.x) + Math.abs(t.clientY - touch.y) > TOUCH_SLOP) touch.moved = true;
       var p = RPD.Renderer.toLogical(t.clientX, t.clientY);
-      F.setHover(F.hitTest(p.x, p.y));
+      F.setHover(F.hitTestNear(p.x, p.y, touchPad()));
+      if (F.dragFromIndex >= 0) setOwnedDropHint(overOwnedPane(t.clientX, t.clientY));
       // 칸을 끌고 있는 동안에는 화면이 같이 스크롤되면 안 된다
       if (F.dragFromIndex >= 0 && e.cancelable && e.preventDefault) e.preventDefault();
     }, { passive: false });
 
     canvas.addEventListener('touchend', function (e) {
+      touch.at = Date.now();
       var t = (e.changedTouches && e.changedTouches[0]) || null;
       if (!t) { F.cancelDrag(); return; }
-      pointerUp(t.clientX, t.clientY);
+      // 손가락이 거의 안 움직였으면 누르기(고르기)일 뿐이다 — 작은 칸에서 떼는 순간 옆 칸으로 미끄러져 자리가 바뀌지 않게
+      if (!touch.moved) { F.cancelDrag(); setOwnedDropHint(false); F.setHover(-1); return; }
+      pointerUp(t.clientX, t.clientY, true);
       F.setHover(-1);
     });
 
     canvas.addEventListener('touchcancel', function () { F.cancelDrag(); F.setHover(-1); });
   }
 
-  function pointerDown(clientX, clientY, shift) {
+  /* 손가락 입력(모바일 ② · 세션 52)
+   *   TOUCH_PAD  — 칸을 이만큼(화면 px) 비껴 눌러도 가장 가까운 칸으로 본다. 휴대폰 칸은 24~32px 라 손가락 끝보다 작다.
+   *   TOUCH_SLOP — 이만큼(화면 px) 움직이기 전까지는 끌기가 아니라 누르기다. */
+  var TOUCH_PAD = 10, TOUCH_SLOP = 10;
+  var touch = { x: 0, y: 0, moved: false, at: 0 };
+  /* 손가락을 떼면 브라우저가 호환용 mousedown/mouseup 을 한 번 더 보낸다. 그걸 받으면 손가락 판정(근처 칸)으로 고른 칸을
+   * 마우스 판정(정확히 칸 안)이 다시 지운다 — 칸 가장자리 밖을 누르면 골랐다가 바로 풀렸다(실제로 그랬다). 직후 0.8초는 무시. */
+  function fromTouch() { return Date.now() - touch.at < 800; }
+  function touchPad() {
+    var sc = (RPD.Renderer.toCanvasCss ? RPD.Renderer.toCanvasCss(0, 0).scale : RPD.Renderer.scale) || 1;
+    return TOUCH_PAD / sc;
+  }
+  UIManager.TOUCH = { PAD: TOUCH_PAD, SLOP: TOUCH_SLOP };
+
+  function pointerDown(clientX, clientY, shift, isTouch) {
     var p = RPD.Renderer.toLogical(clientX, clientY);
 
     // 개발 도구: 전투 경로를 실제로 검증하기 위한 임시 타격
@@ -476,7 +511,7 @@
       }
     }
 
-    var idx = F.hitTest(p.x, p.y);
+    var idx = isTouch ? F.hitTestNear(p.x, p.y, touchPad()) : F.hitTest(p.x, p.y);
     F.select(idx);
 
     var slot = F.get(idx);
@@ -498,31 +533,55 @@
    * 6px 이상 움직여야 끌기로 본다 — 그보다 짧으면 평소처럼 상세창이 뜬다. */
   var ownedDrag = { def: null, x: 0, y: 0, active: false, ghost: null, suppressClick: false };
 
+  var OWNED_HOLD_MS = 300;
+  function showOwnedGhost() {
+    if (ownedDrag.ghost || typeof document === 'undefined' || !document.createElement) return;
+    var g = document.createElement('div');
+    g.className = 'dragghost';
+    g.innerHTML = RPD.UI.sprite(RPD.PokemonData.get(ownedDrag.def), 'spr--ghost');
+    document.body.appendChild(g);
+    ownedDrag.ghost = g;
+    if (g.style) { g.style.left = ownedDrag.x + 'px'; g.style.top = ownedDrag.y + 'px'; }
+  }
+  function armOwnedDrag() {
+    if (!ownedDrag.def || !ownedDrag.touch || ownedDrag.armed) return;
+    ownedDrag.armed = true;
+    ownedDrag.active = true;          // 집었다 — 손가락 아래에 그림을 띄운다
+    showOwnedGhost();
+    if (global.navigator && typeof global.navigator.vibrate === 'function') { try { global.navigator.vibrate(12); } catch (e) { /* 막힌 브라우저 */ } }
+  }
+  function cancelOwnedDrag() {
+    clearTimeout(ownedDrag.timer);
+    if (ownedDrag.ghost && ownedDrag.ghost.parentNode) ownedDrag.ghost.parentNode.removeChild(ownedDrag.ghost);
+    ownedDrag.ghost = null; ownedDrag.def = null; ownedDrag.active = false; ownedDrag.armed = false;
+  }
+  UIManager._ownedDrag = ownedDrag;   // 검사용
+
   function ownedDragMove(x, y) {
     if (!ownedDrag.def) return;
+    if (ownedDrag.touch && !ownedDrag.armed) {
+      // 집기 전에 움직였다 = 목록 스크롤. 끌기를 접는다.
+      if (Math.abs(x - ownedDrag.x) + Math.abs(y - ownedDrag.y) > TOUCH_SLOP) cancelOwnedDrag();
+      return;
+    }
     if (!ownedDrag.active) {
       if (Math.abs(x - ownedDrag.x) + Math.abs(y - ownedDrag.y) < 6) return;
       ownedDrag.active = true;
-      if (typeof document !== 'undefined' && document.createElement) {
-        var g = document.createElement('div');
-        g.className = 'dragghost';
-        g.innerHTML = RPD.UI.sprite(RPD.PokemonData.get(ownedDrag.def), 'spr--ghost');
-        document.body.appendChild(g);
-        ownedDrag.ghost = g;
-      }
+      showOwnedGhost();
     }
     if (ownedDrag.ghost && ownedDrag.ghost.style) {
       ownedDrag.ghost.style.left = x + 'px';
       ownedDrag.ghost.style.top = y + 'px';
     }
     var p = RPD.Renderer.toLogical(x, y);
-    F.setHover(F.hitTest(p.x, p.y));
+    F.setHover(ownedDrag.touch ? F.hitTestNear(p.x, p.y, touchPad()) : F.hitTest(p.x, p.y));
   }
 
   function ownedDragEnd(x, y) {
+    clearTimeout(ownedDrag.timer);
     if (!ownedDrag.def) return;
-    var def = ownedDrag.def, active = ownedDrag.active;
-    ownedDrag.def = null; ownedDrag.active = false;
+    var def = ownedDrag.def, active = ownedDrag.active, byTouch = ownedDrag.touch;
+    ownedDrag.def = null; ownedDrag.active = false; ownedDrag.armed = false;
     if (ownedDrag.ghost && ownedDrag.ghost.parentNode) ownedDrag.ghost.parentNode.removeChild(ownedDrag.ghost);
     ownedDrag.ghost = null;
     if (!active) return;
@@ -530,7 +589,7 @@
     var p = RPD.Renderer.toLogical(x, y);
     var inside = p.x >= 0 && p.x <= RPD.VIEW.width && p.y >= 0 && p.y <= RPD.VIEW.height;
     if (!inside) return;
-    var slot = F.hitTest(p.x, p.y);
+    var slot = byTouch ? F.hitTestNear(p.x, p.y, touchPad()) : F.hitTest(p.x, p.y);
     if (slot < 0) return;
     var idx = RPD.StorageManager.indexOfSpecies(def);
     if (idx < 0) return;
@@ -548,19 +607,26 @@
   /* 좌표가 보유 포켓몬 패널 위인가 — 필드에서 끌어 와 놓으면 창고로 보낸다 */
   function overOwnedPane(clientX, clientY) {
     if (typeof document === 'undefined' || !document.querySelector) return false;
-    var pane = document.querySelector('.pane--owned');
-    if (!pane || !pane.getBoundingClientRect) return false;
-    var r = pane.getBoundingClientRect();
-    return clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom;
+    // 휴대폰에선 보유 패널이 서랍 속이라 닫혀 있을 수 있다 — [보유] 탭 위에 놓아도 창고로(모바일 ②)
+    var targets = [document.querySelector('.pane--owned'), document.querySelector('.mtab[data-mtab="owned"]')];
+    for (var i = 0; i < targets.length; i++) {
+      var n = targets[i];
+      if (!n || !n.getBoundingClientRect) continue;
+      var r = n.getBoundingClientRect();
+      if (r.width > 0 && clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom) return true;
+    }
+    return false;
   }
 
   function setOwnedDropHint(on) {
     if (typeof document === 'undefined' || !document.querySelector) return;
     var pane = document.querySelector('.pane--owned');
     if (pane && pane.classList) pane.classList.toggle('is-droptarget', !!on);
+    var tab = document.querySelector('.mtab[data-mtab="owned"]');
+    if (tab && tab.classList) tab.classList.toggle('is-droptarget', !!on);
   }
 
-  function pointerUp(clientX, clientY) {
+  function pointerUp(clientX, clientY, isTouch) {
     if (F.dragFromIndex < 0) return;
     setOwnedDropHint(false);
     if (overOwnedPane(clientX, clientY)) {
@@ -575,7 +641,7 @@
     }
     var p = RPD.Renderer.toLogical(clientX, clientY);
     var inside = p.x >= 0 && p.x <= RPD.VIEW.width && p.y >= 0 && p.y <= RPD.VIEW.height;
-    F.endDrag(inside ? F.hitTest(p.x, p.y) : -1);
+    F.endDrag(inside ? (isTouch ? F.hitTestNear(p.x, p.y, touchPad()) : F.hitTest(p.x, p.y)) : -1);
   }
 
   function bindEvents() {
@@ -1010,6 +1076,7 @@
         }).join('') +
       '</dl>' +
       targetPickHtml(u) +
+      (def.bossDamage ? '<p class="sc__buffed">👑 보스에게 주는 피해 +' + Math.round(def.bossDamage * 100) + '%</p>' : '') +
       UI.trait(def.id, 'trait--card') +
       UI.aura(def.id, 'trait--card') +
       receivedAura(u) +
@@ -1069,7 +1136,13 @@
           : s235 >= 500 ? SLOT_KIND[2]
           : SLOT_KIND[3];
 
-    return '<div class="slotkind" title="' + k.hint + '">' +
+    // 두 갈래 경로(세션 56) — 명당 · 갈림길 · 위 길만 · 아래 길만 · 출구 방어
+    var where = slot.kindLabel
+      ? '<div class="slotkind slotkind--route" title="' + (slot.note || '') + '">' +
+          '<span class="slotkind__tag">' + slot.kindLabel + '</span>' +
+          '<span class="slotkind__hint">' + (slot.note || '') + '</span></div>'
+      : '';
+    return where + '<div class="slotkind" title="' + k.hint + '">' +
       '<span class="slotkind__tag">' + k.label + '</span>' +
       '<span class="slotkind__hint">' + k.hint + '</span>' +
     '</div>';
@@ -1386,13 +1459,15 @@
    * 조합식 목록에 주문(히든·불멸·초월)도 함께 늘어놓는다. 재료·문구는 다 보이고,
    * 아직 만들어 본 적 없는 결과만 그림자 + ??? 로 가린다. 줄을 누르면 채팅에 문구가 채워진다
    * (Enter 는 직접 — 외치는 손맛은 남긴다). 조합 버튼·배지는 조합식만 센다. */
-  function spellViews(counts) {
+  function knows(sp) { return !!(RPD.SaveManager.knowsSpell && RPD.SaveManager.knowsSpell(sp.id)); }
+  function spellViews(counts, withUnknown) {
     if (!RPD.SpellData || !RPD.SpellManager) return [];
     /* 필드 조합식에는 "히든"만 올린다 — 불멸·초월은 조합 사전에서만 본다(재료가 전설급이라
      * 판 하나에 몇 번 안 쓰고, 여기 섞이면 진짜 조합식 줄이 파묻힌다).
-     * 그리고 **발견한 것만** 줄로 뜬다 — 못 찾은 히든은 조합 사전에만 있고, 여기엔 아예 없다. */
+     * [전체] · 등급 칩에는 **발견한 것만**. [히든] 칩(withUnknown)에서는 미발견까지 전부 — 조합 사전과 같은 모양으로
+     * 재료 · 주문 문구는 보이고 결과만 그림자 + ???(세션 58 — 휴대폰에선 조합 사전으로 히든을 찾기 힘들어서). */
     return RPD.SpellData.list.filter(function (sp) {
-      return sp.kind === 'hidden' && RPD.SaveManager.knowsSpell && RPD.SaveManager.knowsSpell(sp.id);
+      return sp.kind === 'hidden' && (withUnknown || knows(sp));
     }).map(function (sp) {
       var def = RPD.PokemonData.get(sp.result);
       var used = {}, missing = 0;
@@ -1403,9 +1478,11 @@
         return { id: m, name: RPD.PokemonData.get(m).name, owned: owned };
       });
       var ok = RPD.SpellManager.check(sp).ok;
+      var known = knows(sp);
       return {
         spell: sp, key: 'spell:' + sp.id, resultId: sp.result, resultTier: def.tier, isHidden: true,
-        resultName: def.name, known: true, discovered: true,
+        // 미발견이면 이름을 들고 다니지도 않는다 — 정렬 · 빈 칸 문구 · 캐시 서명 어디로도 새지 않게
+        resultName: known ? def.name : '???', known: known, discovered: known,
         materials: mats, missingCount: ok ? 0 : Math.max(1, missing), ready: ok
       };
     });
@@ -1856,16 +1933,15 @@
     RPD.RecipeManager.view.forEach(function (v) {
       counts[v.resultTier] = (counts[v.resultTier] || 0) + 1;
     });
-    var hiddenCount = RPD.SpellData ? RPD.SpellData.list.filter(function (sp) {
-      return sp.kind === 'hidden' && RPD.SaveManager.knowsSpell && RPD.SaveManager.knowsSpell(sp.id);
-    }).length : 0;
+    var hiddenAll = RPD.SpellData ? RPD.SpellData.list.filter(function (sp) { return sp.kind === 'hidden'; }) : [];
+    var hiddenCount = hiddenAll.filter(knows).length + '/' + hiddenAll.length;   // 발견 수 / 전체 수
     var chips = ['ALL'].concat(RPD.TIER_ORDER.slice(1)).concat(['HIDDEN']).map(function (id) {
       if (id === 'ALL') {
         return '<button type="button" class="tchip' + (recipeTier === 'ALL' ? ' is-on' : '') +
           '" data-tier="ALL">전체</button>';
       }
       if (id === 'HIDDEN') {
-        // 히든은 안흔함/희귀함 등으로 쪼개지 않는다 — 발견한 히든을 전부 여기 한 칸에 모은다
+        // 히든은 안흔함/희귀함 등으로 쪼개지 않는다 — 히든을 전부(미발견은 그림자로) 여기 한 칸에 모은다
         return '<button type="button" class="tchip tchip--hidden' + (recipeTier === 'HIDDEN' ? ' is-on' : '') +
           '" data-tier="HIDDEN" style="--tier:#2ee6c6">🔒 히든<b>' + hiddenCount + '</b></button>';
       }
@@ -1918,7 +1994,7 @@
 
     var ownedNow = {};
     RPD.StorageManager.allUnits().forEach(function (u) { ownedNow[u.defId] = (ownedNow[u.defId] || 0) + 1; });
-    var all = list.concat(spellViews(ownedNow));
+    var all = list.concat(spellViews(ownedNow, recipeTier === 'HIDDEN'));
 
     var shown;
     if (recipeFilter === 'ready') shown = all.filter(function (v) { return v.ready; });
@@ -1941,6 +2017,12 @@
     /* 등급 순으로 묶는다(전설 → 흔함). 같은 등급 안에서는 완성 가능한 것이 위로.
      * 예전에는 완성 가능 순으로만 섞여 있어 "전설 조합식만 보고 싶다"가 안 됐다. */
     shown = shown.slice().sort(function (a, b) {
+      // [히든] 칩: 완성 가능 → 발견한 것 → 미발견(미발견끼리는 이름이 아니라 모자란 재료 수 · 주문 순 — 이름 순이면 정답이 샌다)
+      if (recipeTier === 'HIDDEN') {
+        if (a.ready !== b.ready) return a.ready ? -1 : 1;
+        if (a.discovered !== b.discovered) return a.discovered ? -1 : 1;
+        if (!a.discovered) return (a.missingCount - b.missingCount) || (RPD.SpellData.list.indexOf(a.spell) - RPD.SpellData.list.indexOf(b.spell));
+      }
       var at = RPD.tierRank(a.resultTier), bt = RPD.tierRank(b.resultTier);
       if (at !== bt) return bt - at;
       if (a.ready !== b.ready) return a.ready ? -1 : 1;
@@ -1968,7 +2050,7 @@
     if (!shown.length) {
       el.recipeList.innerHTML = '<p class="empty">' +
         (recipeSpecies ? '이 개체가 재료로 들어가는 조합식이 없습니다.'
-          : recipeTier === 'HIDDEN' ? '아직 발견한 히든이 없습니다. 채팅(Enter)으로 주문을 외쳐 보세요.'
+          : recipeTier === 'HIDDEN' ? '조건에 맞는 히든이 없습니다.'
           : recipeTier !== 'ALL' ? RPD.Tiers[recipeTier].label + ' 조합식이 여기에 없습니다.'
           : recipeFilter === 'ready' ? '지금 완성할 수 있는 조합식이 없습니다. 미완성 탭에서 부족한 재료를 확인하세요.'
           : '아직 공개된 조합식이 없습니다.') + '</p>';
@@ -2021,7 +2103,7 @@
     }).join('');
   }
 
-  /* 필드 조합식의 히든 줄 — 여기 뜨는 건 전부 이미 발견한 것이다(spellViews 가 미발견을 거른다).
+  /* 필드 조합식의 히든 줄 — [전체] · 등급 칩에는 발견한 것만, [히든] 칩에는 미발견도(결과만 그림자 + ???).
    * 그래도 재료 쪽에 "다른" 미발견 히든이 끼어 있을 수 있어(예: 상위 히든이 하위 히든을 재료로 쓸 때)
    * 그 재료만은 여전히 그림자로 가린다. */
   function spellRowHtml(v, counts) {
@@ -2039,11 +2121,19 @@
         '<span class="rmat__n">' + Math.min(c, 99) + '<small>/' + g.need + '</small></span>' +
         '<span class="rmat__name">' + (secret ? '???' : g.name) + '</span></span>';
     }).join('<span class="rplus">+</span>');
-    var result = '<span class="rres" data-def="' + v.resultId + '" title="누르면 조합식">' + UI.sprite(def, 'spr--res') +
-        '<span class="rres__name">' + def.name + '</span>';
-    var kind = '🔒 히든';
-    return '<button type="button" class="rrow rrow--spell' + (v.ready ? ' is-ready' : '') +
-      '" data-spell="' + sp.id + '" style="--tier:' + tierInfo.color + '">' +
+    /* 미발견 결과 — 조합 사전과 같은 그림자 + ???. 결과 칸에 data-def 를 안 달아 눌러도 조합식 창이 안 열린다
+     * (창 제목이 곧 이름이다). 그림자 그림의 data-def 도 뗀다 — 이름 · id 가 HTML 에 남지 않게. */
+    var result = v.discovered
+      ? '<span class="rres" data-def="' + v.resultId + '" title="누르면 조합식">' + UI.sprite(def, 'spr--res') +
+        '<span class="rres__name">' + def.name + '</span>'
+      : '<span class="rres rres--secret" title="아직 모르는 히든 — 재료를 모아 주문을 외치면 무엇인지 알게 된다">' +
+        UI.shadow(def, 'spr--res') +
+        '<span class="rres__name is-secret">???</span>';
+    var kind = v.discovered ? '🔒 히든' : '❔ 미발견';
+    return '<button type="button" class="rrow rrow--spell' + (v.discovered ? '' : ' rrow--secret') + (v.ready ? ' is-ready' : '') +
+      // 미발견 줄은 주문 id(= 포켓몬 id)를 안 달고 주문 목록 순번으로 — id 가 곧 정답이다
+      '" ' + (v.discovered ? 'data-spell="' + sp.id + '"' : 'data-spell-n="' + RPD.SpellData.list.indexOf(sp) + '"') +
+      ' style="--tier:' + tierInfo.color + '">' +
       '<span class="rrow__mats">' + mats + '</span>' +
       '<span class="rrow__arrow" aria-hidden="true"></span>' +
       result + '<span class="rres__tier">' + tierInfo.label + '</span>' +

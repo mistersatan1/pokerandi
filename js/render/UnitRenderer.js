@@ -213,8 +213,9 @@
     /* 히든(주문으로만 만드는 개체) — 테두리는 강함 등급 색 그대로, 왼쪽 위 모서리에 H 표시.
      * 히든은 등급이 아니라 얻는 법이라 색을 따로 쓰지 않는다. */
     if (unit.def && unit.def.hidden) {
+      var hAt = RPD.Renderer.at(slot.x, slot.y, -half + 7, -half + 7);   // 화면 기준 왼쪽 위
       ctx.beginPath();
-      ctx.arc(tx + 7, ty + 7, 6.5, 0, Math.PI * 2);
+      ctx.arc(hAt.x, hAt.y, 6.5, 0, Math.PI * 2);
       ctx.fillStyle = '#0b2a2a';
       ctx.fill();
       ctx.strokeStyle = '#2ee6c6';
@@ -224,7 +225,7 @@
       ctx.font = '900 8px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('H', tx + 7, ty + 7.5);
+      ctx.fillText('H', hAt.x, hAt.y + 0.5);
     }
 
     if (selected) {
@@ -274,9 +275,10 @@
       ctx.textBaseline = 'top';
       ctx.lineWidth = 3;
       ctx.strokeStyle = 'rgba(12,26,52,0.85)';
-      ctx.strokeText('+' + unit.level, slot.x + slot.size / 2 - 3, slot.y - slot.size / 2 + 2);
+      var lvAt = RPD.Renderer.at(slot.x, slot.y, slot.size / 2 - 3, -slot.size / 2 + 2);   // 화면 기준 오른쪽 위
+      ctx.strokeText('+' + unit.level, lvAt.x, lvAt.y);
       ctx.fillStyle = '#ffd23f';
-      ctx.fillText('+' + unit.level, slot.x + slot.size / 2 - 3, slot.y - slot.size / 2 + 2);
+      ctx.fillText('+' + unit.level, lvAt.x, lvAt.y);
     }
 
     // 침묵·기절 — 회색으로 죽이고 X 표시. 색만 바꾸면 작은 칸에서 안 읽힌다.

@@ -51,6 +51,11 @@
     el.sfxVol = $('sfxVol');
     el.mute = $('btnMute');
     el.ownedPopEl = $('ownedPop');
+    el.moreBtn = $('btnMore');
+    el.hudMore = document.getElementById('hudMore');
+    el.mobileTabs = $('mobileTabs');
+    el.fullscreenBtn = $('btnFullscreen');
+    el.installBtn = $('btnInstall');
 
     if (el.dexOpen) {
       el.dexOpen.addEventListener('click', function () {
@@ -76,6 +81,7 @@
     bindAudio();
     bindHotkeys();
     bindHelp();
+    bindMobile();
 
     RPD.bus.on('game:wave', renderNextReward);
     RPD.bus.on('game:reset', renderNextReward);
@@ -208,6 +214,165 @@
     return true;
   }
 
+  /* ---------- 휴대폰 탭(서랍) · ☰ 메뉴 (모바일 ① · 세션 51) ----------
+   * 1100px 미만에서만 보이는 버튼들이다. 서랍은 body[data-mtab] 하나로 켜고 끈다 — 보이는 패널은 CSS 가 고른다.
+   * 같은 탭을 다시 누르면 닫힌다. [상점]은 골드 상점 창(G)을 여닫는다. */
+  HudPanels.setDrawer = function (tab) {
+    if (typeof document === 'undefined' || !document.body) return;
+    var cur = document.body.getAttribute('data-mtab') || '';
+    var next = tab === cur ? '' : (tab || '');
+    document.body.setAttribute('data-mtab', next);
+    var tabs = document.querySelectorAll ? document.querySelectorAll('.mtab[data-mtab]') : [];
+    for (var i = 0; i < tabs.length; i++) {
+      var t = tabs[i];
+      if (t.getAttribute('data-mtab') !== 'shop') t.setAttribute('aria-pressed', String(t.getAttribute('data-mtab') === next));
+    }
+    return next;
+  };
+
+  HudPanels.toggleMore = function (open) {
+    var hud = el.hudMore && el.hudMore.parentNode;
+    var btn = el.moreBtn;
+    if (!hud || !hud.classList) return false;
+    var on = open == null ? !hud.classList.contains('is-more-open') : !!open;
+    hud.classList.toggle('is-more-open', on);
+    if (btn && btn.setAttribute) btn.setAttribute('aria-expanded', String(on));
+    return on;
+  };
+
+  function bindMobile() {
+    if (typeof document === 'undefined' || !document.addEventListener) return;
+    if (el.mobileTabs && el.mobileTabs.addEventListener) {
+      el.mobileTabs.addEventListener('click', function (e) {
+        var b = e.target && e.target.closest ? e.target.closest('[data-mtab]') : null;
+        if (!b) return;
+        var tab = b.getAttribute('data-mtab');
+        if (tab === 'shop') { if (RPD.GoldShopUI) RPD.GoldShopUI.toggle(); return; }
+        HudPanels.setDrawer(tab);
+      });
+    }
+    if (el.moreBtn && el.moreBtn.addEventListener) el.moreBtn.addEventListener('click', function () { HudPanels.toggleMore(); });
+    // 메뉴 안 버튼을 누르면 닫는다(소리 설정은 작은 창이 따로 열리니 둔다) · 메뉴 밖을 누르면 닫는다
+    document.addEventListener('click', function (e) {
+      var hud = document.querySelector('.hud');
+      if (!hud || !hud.classList || !hud.classList.contains('is-more-open') || !e.target || !e.target.closest) return;
+      if (e.target.closest('#btnMore') || e.target.closest('.audio')) return;
+      if (e.target.closest('#hudMore .iconbtn') || !e.target.closest('#hudMore')) HudPanels.toggleMore(false);
+    });
+    bindLongPressTips();
+    bindAppButtons();
+
+    // 조합 가능 개수를 [조합식] 탭에도 — 서랍이 닫혀 있어도 보이게
+    RPD.bus.on('recipe:changed', function () {
+      var badge = $('mtabCraft');
+      if (!badge || !RPD.RecipeManager) return;
+      var n = (RPD.RecipeManager.view || []).filter(function (v) { return v.ready; }).length;
+      badge.hidden = n === 0;
+      badge.textContent = n;
+    });
+  }
+
+  /* ---------- 홈 화면 앱 버튼 (모바일 ③ · 세션 53) — ☰ 메뉴 [전체 화면] · [앱 설치] ----------
+   * 전체 화면: 브라우저가 못 하면(아이폰 사파리) 숨기고, 전체 화면 앱으로 실행 중이면 필요 없으니 숨긴다.
+   * 앱 설치: 설치한 앱으로 실행 중이면 숨긴다. 안드로이드 크롬이 설치 창을 줄 수 있으면 띄우고, 아니면 방법을 말풍선으로. */
+  function refreshAppButtons() {
+    var P = RPD.Pwa;
+    if (!P) return;
+    var app = P.isApp();
+    if (el.fullscreenBtn) {
+      el.fullscreenBtn.hidden = app || !P.canFullscreen();
+      var on = P.isFullscreen();
+      el.fullscreenBtn.title = on ? '전체 화면 끝내기' : '전체 화면';
+      if (el.fullscreenBtn.setAttribute) el.fullscreenBtn.setAttribute('aria-pressed', String(on));
+    }
+    if (el.installBtn) {
+      el.installBtn.hidden = app;
+      var note = P.status === 'ready' ? ' · 오프라인 준비 끝' : P.status === 'saving' ? ' · 오프라인 준비 중 ' + P.saved + '/' + P.total : '';
+      el.installBtn.title = '홈 화면에 앱으로 설치' + note;
+    }
+  }
+  function bindAppButtons() {
+    if (el.fullscreenBtn) {
+      el.fullscreenBtn.addEventListener('click', function () {
+        if (RPD.Pwa) RPD.Pwa.toggleFullscreen().then(refreshAppButtons);
+      });
+    }
+    if (el.installBtn) {
+      el.installBtn.addEventListener('click', function () {
+        var P = RPD.Pwa;
+        if (!P || P.install()) return;
+        var r = el.installBtn.getBoundingClientRect ? el.installBtn.getBoundingClientRect() : null;
+        var msg = P.installHelp();
+        if (P.status === 'ready') msg += ' (오프라인 준비 끝 — 인터넷 없이도 켜집니다)';
+        HudPanels.showTip(msg, r);
+      });
+    }
+    document.addEventListener('fullscreenchange', refreshAppButtons);
+    document.addEventListener('webkitfullscreenchange', refreshAppButtons);
+    RPD.bus.on('pwa:status', refreshAppButtons);
+    refreshAppButtons();
+  }
+
+  /* ---------- 길게 누르기 → 설명 말풍선 (모바일 ② · 세션 52) ----------
+   * PC 는 마우스를 올리면 title 설명이 뜨지만 손가락에는 "올리기"가 없다. 0.5초 길게 누르면 그 설명을 말풍선으로 띄우고,
+   * 그 손을 뗄 때 버튼이 눌리지 않게 한 번 막는다. 움직이면(스크롤) 취소. 필드 캔버스 · 보유 칸(길게 눌러 집기)은 제외. */
+  var TIP_HOLD_MS = 500;
+  var tip = { timer: 0, x: 0, y: 0, node: null, eatClick: false, bubble: null, hideAt: 0 };
+  HudPanels.showTip = function (text, rect) {
+    if (!text || typeof document === 'undefined' || !document.createElement) return null;
+    var b = tip.bubble;
+    if (!b) { b = document.createElement('div'); b.className = 'tipbubble'; b.setAttribute('role', 'tooltip'); document.body.appendChild(b); tip.bubble = b; }
+    b.textContent = text;
+    b.hidden = false;
+    if (rect && b.style) {
+      var vw = global.innerWidth || 800;
+      var half = (b.offsetWidth || 0) / 2 + 8;   // 말풍선이 화면 밖으로 삐져나가지 않게(가운데 기준)
+      b.style.left = Math.max(half, Math.min(vw - half, rect.left + rect.width / 2)) + 'px';
+      // 위에 자리가 없으면(화면 맨 위 HUD · ☰ 메뉴) 아래로
+      var below = rect.top - 8 - (b.offsetHeight || 40) < 4;
+      b.style.top = (below ? rect.top + rect.height + 8 : Math.max(8, rect.top - 8)) + 'px';
+      b.style.transform = below ? 'translate(-50%, 0)' : '';
+    }
+    clearTimeout(tip.hideAt);
+    tip.hideAt = setTimeout(function () { if (tip.bubble) tip.bubble.hidden = true; }, 2600);
+    return b;
+  };
+  function bindLongPressTips() {
+    document.addEventListener('pointerdown', function (e) {
+      if (tip.bubble) tip.bubble.hidden = true;
+      if (e.pointerType !== 'touch' || !e.target || !e.target.closest) return;
+      var n = e.target.closest('[title]');
+      if (!n || n.id === 'gameCanvas' || e.target.closest('.scell')) return;
+      tip.node = n; tip.x = e.clientX; tip.y = e.clientY;
+      clearTimeout(tip.timer);
+      tip.timer = setTimeout(function () {
+        if (!tip.node) return;
+        HudPanels.showTip(tip.node.getAttribute('title'), tip.node.getBoundingClientRect ? tip.node.getBoundingClientRect() : null);
+        tip.eatClick = true;
+        tip.node = null;
+      }, TIP_HOLD_MS);
+    }, true);
+    document.addEventListener('pointermove', function (e) {
+      if (tip.node && Math.abs(e.clientX - tip.x) + Math.abs(e.clientY - tip.y) > 10) { clearTimeout(tip.timer); tip.node = null; }
+    }, true);
+    ['pointerup', 'pointercancel'].forEach(function (ev) {
+      document.addEventListener(ev, function () { clearTimeout(tip.timer); tip.node = null; }, true);
+    });
+    // 말풍선을 띄운 길게 누르기 끝의 click 은 먹는다(설명을 보려다 소환·방출이 눌리면 안 된다)
+    document.addEventListener('click', function (e) {
+      if (!tip.eatClick) return;
+      tip.eatClick = false;
+      if (e.stopPropagation) e.stopPropagation();
+      if (e.preventDefault) e.preventDefault();
+    }, true);
+    // 길게 누르기에 브라우저 기본 메뉴(복사 · 이미지 저장)가 뜨지 않게 — 입력칸은 둔다
+    document.addEventListener('contextmenu', function (e) {
+      var t = e.target && e.target.tagName;
+      if (t === 'INPUT' || t === 'TEXTAREA') return;
+      if (e.pointerType === 'touch' || (global.matchMedia && global.matchMedia('(pointer: coarse)').matches)) e.preventDefault();
+    });
+  }
+
   function bindHotkeys() {
     if (typeof document === 'undefined' || !document.addEventListener) return;
     document.addEventListener('keydown', function (e) {
@@ -234,6 +399,7 @@
         handled = true;
       } else if (key === 'escape') {
         RPD.FieldManager.select(-1);
+        HudPanels.toggleMore(false);
         if (RPD.SpellUI) RPD.SpellUI.close();
         ['ownedPop', 'recipePop', 'audioPop', 'helpOverlay', 'bookOverlay', 'goldShopOverlay', 'eliteOverlay'].forEach(function (id) {
           var n = document.getElementById(id);

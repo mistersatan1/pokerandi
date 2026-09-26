@@ -54,10 +54,24 @@ function boot() {
   // 곡선 실험용 덮어쓰기: LATE=1.07 WALL_STEP=3
   if (process.env.LATE) R.WaveData.lateGrowth = Number(process.env.LATE);
   if (process.env.WALL_STEP) R.WaveData.wallStep = Number(process.env.WALL_STEP);
+  // 맵 보정 실험: MAP_HP=0.85 (모든 적 체력 배율 WaveData.mapHpMul)
+  if (process.env.MAP_HP) R.WaveData.mapHpMul = Number(process.env.MAP_HP);
+  // 비행 시너지 실험: FLY_SYN=1.08,1.16,1.26 (단계별 공격속도) · FLY_SELF=1 (팀 전체가 아니라 비행 포켓몬에게만)
+  if (process.env.FLY_SYN || process.env.FLY_SELF) {
+    const vals = process.env.FLY_SYN ? process.env.FLY_SYN.split(',').map(Number) : null;
+    R.Synergies.FLYING.forEach((t, k) => {
+      const v = vals ? vals[k] : (t.bonus.attackSpeedMul || t.bonus.flyingAttackSpeedMul);
+      t.bonus = process.env.FLY_SELF ? { flyingAttackSpeedMul: v } : { attackSpeedMul: v };
+    });
+  }
+  // 보스 러시 보스 체력 실험: BR_BOSS_SHARE=1.3 (BOSS_RUSH.modifiers.bossShareMul 을 덮어쓴다)
+  if (process.env.BR_BOSS_SHARE) R.Modes.BOSS_RUSH.modifiers.bossShareMul = Number(process.env.BR_BOSS_SHARE);
   // 마지막 보스 체력 실험: FINAL_BOSS_HP=0.3 (그 모드의 modifiers.finalBossHpMul 을 덮어쓴다)
   if (process.env.FINAL_BOSS_HP) {
     Object.keys(R.Modes).forEach(k => { R.Modes[k].modifiers = R.Modes[k].modifiers || {}; R.Modes[k].modifiers.finalBossHpMul = Number(process.env.FINAL_BOSS_HP); });
   }
+  // 광역 불멸 보스 피해 실험: AOE_BOSS_DMG=1.5 (파이어 · 썬더의 pokemon.js bossDamage 를 덮어쓴다)
+  if (process.env.AOE_BOSS_DMG) ['moltres', 'zapdos'].forEach(id => { R.PokemonData.get(id).bossDamage = Number(process.env.AOE_BOSS_DMG); });
   // 불멸·초월 배율 실험: IMMORTAL_MUL=2.5 TRANSCEND_MUL=2.8 (재료 합의 몇 배 — craftpower.js 3번 규칙)
   if (process.env.IMMORTAL_MUL || process.env.TRANSCEND_MUL) {
     if (process.env.IMMORTAL_MUL) R.CraftPower.CFG.IMMORTAL = Number(process.env.IMMORTAL_MUL);
@@ -296,6 +310,10 @@ function playOne(modeId) {
       const all = F.getUnits().concat(R.StorageManager.units);
       const special = all.filter(u => u.def.tier === 'T6' || u.def.tier === 'T7').length;
       if (p.wave === 60) curStats.special60 = special;
+      /* 켜진 시너지(타입:단계) — 30 · 50 · 60 라운드. WALL_LOG 에 같이 남긴다 */
+      if (p.wave === 30 || p.wave === 50 || p.wave === 60) {
+        (curStats.syn = curStats.syn || {})[p.wave] = R.SynergyManager.active.filter(a => a.tierIndex >= 0).map(a => a.typeId + ':' + (a.tierIndex + 1));
+      }
       /* 공격 대상 선택(세션 42)을 쓰는 플레이어 — 보스 라운드엔 [모두 이렇게 → 보스], 끝나면 종 기본값으로.
        * BOT_TARGET=0 이면 안 쓴다(기능 전과 비교). */
       if (process.env.BOT_TARGET !== '0') {
@@ -357,7 +375,7 @@ function playOne(modeId) {
       if (p.ok) { curStats.eliteWin++; curStats.eliteGold += p.gold; } else curStats.eliteLose++;
     });
   }
-  const stats = { special60: null, life61: null, life66: null, finalBoss: null, finalBossFrac: null, crafts: 0, spells: 0, summons: 0, shopBuys: 0, elites: 0, eliteWin: 0, eliteLose: 0, eliteGold: 0, sells: 0, slots: 0, upgrades: 0, deploys: 0,
+  const stats = { special60: null, life61: null, life66: null, finalBoss: null, finalBossFrac: null, syn: null, crafts: 0, spells: 0, summons: 0, shopBuys: 0, elites: 0, eliteWin: 0, eliteLose: 0, eliteGold: 0, sells: 0, slots: 0, upgrades: 0, deploys: 0,
                   expands: 0, shardBuys: 0, byTier: {}, goldSum: 0, goldN: 0 };
   curStats = stats;
   WM.begin();
@@ -412,7 +430,7 @@ for (let i = 0; i < RUNS; i++) {
   const r = playOne(MODE);
   results.push(r);
   if (process.env.WALL_LOG) require('fs').appendFileSync(process.env.WALL_LOG,
-    JSON.stringify({ round: r.round, win: r.win, special60: r.special60, finalBoss: r.finalBoss, finalBossFrac: r.finalBossFrac, trace: r.trace || [] }) + '\n');
+    JSON.stringify({ round: r.round, win: r.win, special60: r.special60, finalBoss: r.finalBoss, finalBossFrac: r.finalBossFrac, syn: r.syn || {}, trace: r.trace || [] }) + '\n');
   if (VERBOSE) {
     console.log(
       String(i + 1).padStart(2) +

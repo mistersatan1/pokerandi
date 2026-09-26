@@ -106,7 +106,7 @@
         // 보스를 밀면 보스전이 무너진다 — 보스는 제외
         if (!target.alive || target.isBoss || !U.chance(t.chance)) return;
         target.distance = Math.max(0, target.distance - t.push);
-        var pos = RPD.MapData.path.pointAt(target.distance);
+        var pos = RPD.MapData.pathFor(target).pointAt(target.distance);
         target.x = pos.x; target.y = pos.y;
         this.proc(unit, t, { x: target.x, y: target.y });
         return;

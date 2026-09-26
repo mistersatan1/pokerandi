@@ -51,6 +51,8 @@
 
     ctx.save();
     if (opts.alpha != null) ctx.globalAlpha = opts.alpha;
+    // 필드를 90° 돌려 그릴 때(휴대폰 세로)도 포켓몬은 똑바로 선다
+    if (RPD.Renderer && RPD.Renderer.upright && ctx === RPD.Renderer.ctx) RPD.Renderer.upright(ctx, cx, cy);
 
     if (entry && entry.state === 'ready') {
       // 도트 그림은 뭉개지지 않게, 크게 줄여 그리는 고해상도 그림은 부드럽게

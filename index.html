@@ -2,11 +2,21 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>포켓몬 랜덤 디펜스</title>
+<!-- 홈 화면 앱(모바일 ③) — 인터넷 주소로 열었을 때만 쓰인다. 더블클릭(file://)에서는 브라우저가 무시한다. js/core/Pwa.js · sw.js -->
+<meta name="theme-color" content="#07122b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="포랜디">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/icons/icon-32.png">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
 <link rel="stylesheet" href="css/main.css">
 <link rel="stylesheet" href="css/game.css">
 <link rel="stylesheet" href="css/ui.css">
+<link rel="stylesheet" href="css/mobile.css">
 </head>
 <body data-state="READY">
 
@@ -44,6 +54,10 @@
       <button type="button" class="speed__btn" data-speed="2">x2</button>
       <button type="button" class="speed__btn" data-speed="3">x3</button>
     </div>
+    <button type="button" class="iconbtn" id="btnPause" title="일시정지" aria-label="일시정지" disabled><span class="ico ico--pause"></span></button>
+    <!-- 휴대폰(1100px 미만)에서는 이 묶음이 ☰ 메뉴가 된다. PC 에서는 display: contents 라 예전과 똑같이 한 줄에 놓인다. -->
+    <button type="button" class="iconbtn hud__morebtn" id="btnMore" title="메뉴" aria-label="메뉴 열기" aria-expanded="false" aria-controls="hudMore">☰</button>
+    <div class="hud__more" id="hudMore">
     <div class="audio">
       <button type="button" class="iconbtn" id="btnAudio" title="소리" aria-label="소리 설정"><span class="ico ico--sound"></span></button>
       <div class="audiopop" id="audioPop" hidden>
@@ -81,8 +95,11 @@
     <button type="button" class="iconbtn iconbtn--gshop" id="btnGoldShop" title="골드 상점 (G)" aria-label="골드 상점">골드<br>상점</button>
     <button type="button" class="iconbtn iconbtn--elite" id="btnElite" title="정예 소환 (E)" aria-label="정예 소환">정예<br>소환</button>
     <button type="button" class="iconbtn" id="btnDex" title="도감" aria-label="도감"><span class="ico ico--book"></span></button>
-    <button type="button" class="iconbtn" id="btnPause" title="일시정지" aria-label="일시정지" disabled><span class="ico ico--pause"></span></button>
+    <!-- 휴대폰에서만(☰ 메뉴) — PC 는 F11 · 브라우저 설치 버튼이 있다 -->
+    <button type="button" class="iconbtn iconbtn--mobile" id="btnFullscreen" title="전체 화면" aria-label="전체 화면">⛶</button>
+    <button type="button" class="iconbtn iconbtn--mobile" id="btnInstall" title="홈 화면에 앱으로 설치" aria-label="앱 설치">📲</button>
     <button type="button" class="iconbtn iconbtn--ghost" id="btnRestart" title="처음부터" aria-label="처음부터"><span class="ico ico--restart"></span></button>
+    </div>
   </header>
 
   <!-- ============ LEFT: 필드 + 하단 ============ -->
@@ -392,6 +409,17 @@
     </div>
   </main>
 
+  <!-- ============ 휴대폰 탭(서랍) — 1100px 미만에서만 보인다 ============
+       필드를 가리지 않게 패널은 기본으로 닫혀 있고, 탭을 누르면 서랍이 열리며 필드가 그만큼 줄어든다.
+       같은 탭을 다시 누르면 닫힌다. [상점]은 골드 상점 창을 연다(G 와 같다). -->
+  <nav class="mtabs" id="mobileTabs" aria-label="패널">
+    <button type="button" class="mtab" data-mtab="recipes" aria-pressed="false"><span class="ico ico--spark"></span>조합식<b class="mtab__badge" id="mtabCraft" hidden>0</b></button>
+    <button type="button" class="mtab" data-mtab="owned" aria-pressed="false"><span class="ico ico--box"></span>보유</button>
+    <button type="button" class="mtab" data-mtab="synergy" aria-pressed="false"><span class="ico ico--synergy"></span>시너지</button>
+    <button type="button" class="mtab" data-mtab="dex" aria-pressed="false"><span class="ico ico--book"></span>도감</button>
+    <button type="button" class="mtab mtab--shop" data-mtab="shop" aria-pressed="false">◎<span>상점</span></button>
+  </nav>
+
   <!-- ============ RIGHT: 시너지 / 도감 ============ -->
   <aside class="side">
     <section class="pane pane--synergy">
@@ -421,11 +449,14 @@
 <script src="js/core/Utils.js"></script>
 <script src="js/core/EventBus.js"></script>
 <script src="js/core/Assets.js"></script>
+<script src="js/core/Pwa.js"></script>
 <script src="js/core/PathFollower.js"></script>
 <script src="js/core/Loop.js"></script>
+<script src="js/core/MusicFiles.js"></script>
 <script src="js/core/AudioManager.js"></script>
 
 <script src="js/data/types.js"></script>
+<script src="js/data/music.js"></script>
 <script src="js/data/map.js"></script>
 <script src="js/data/tiers.js"></script>
 <script src="js/data/pokemon.js"></script>
@@ -467,6 +498,7 @@
 <script src="js/systems/SpellManager.js"></script>
 
 <script src="js/render/SpriteFactory.js"></script>
+<script src="js/render/FramePacer.js"></script>
 <script src="js/render/Renderer.js"></script>
 <script src="js/render/MapRenderer.js"></script>
 <script src="js/render/FxRenderer.js"></script>

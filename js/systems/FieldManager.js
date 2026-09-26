@@ -50,8 +50,8 @@
         label: s.label || '',
         unit: null,
         // 이 슬롯에서 경로까지의 최단 거리.
-        distToPath: RPD.MapData.path.closestDistanceTo(s.x, s.y),
-        // 사거리별로 이 칸이 경로를 몇 px 덮는지. 배치 판단의 근거를 숫자로 보여 준다.
+        distToPath: RPD.MapData.closestDistanceTo(s.x, s.y),
+        // 사거리별로 이 칸이 경로를 몇 px 덮는지(적 한 마리 기준 — 두 갈래는 절반씩, MapData.coverageAt).
         coverage: {
           100: RPD.MapData.coverageAt(s.x, s.y, RPD.Range.SHORT),
           155: RPD.MapData.coverageAt(s.x, s.y, RPD.Range.MID),
@@ -138,6 +138,21 @@
       }
     }
     return -1;
+  };
+
+  /* 손가락용 — 칸을 조금 비껴 눌러도 가장 가까운 칸(모바일 ② · 세션 52).
+   * 정확히 칸 안이면 그 칸, 아니면 칸 가장자리에서 pad(논리 단위) 안에 있는 가장 가까운 칸. 마우스는 hitTest 그대로. */
+  FieldManager.hitTestNear = function (x, y, pad) {
+    var exact = this.hitTest(x, y);
+    if (exact >= 0 || !(pad > 0)) return exact;
+    var best = -1, bestD = pad;
+    for (var i = 0; i < this.slots.length; i++) {
+      var s = this.slots[i], half = s.size / 2;
+      var dx = Math.max(0, Math.abs(x - s.x) - half), dy = Math.max(0, Math.abs(y - s.y) - half);
+      var d = Math.sqrt(dx * dx + dy * dy);
+      if (d <= bestD) { bestD = d; best = i; }
+    }
+    return best;
   };
 
   FieldManager.setHover = function (index) {

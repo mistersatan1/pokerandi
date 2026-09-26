@@ -33,6 +33,7 @@
       armorShredAdd: 0,
       executeAdd: 0,
       attackSpeedMul: 1,
+      flyingAttackSpeedMul: 1,   // 비행 포켓몬에게만 붙는 공격속도(UnitManager.recompute)
       auraMul: 1,
       goldMul: 1,
       summonCostMul: 1,
@@ -108,6 +109,7 @@
     });
 
     var changed = this.bonus.attackSpeedMul !== bonus.attackSpeedMul ||
+                  this.bonus.flyingAttackSpeedMul !== bonus.flyingAttackSpeedMul ||
                   this.active.length !== active.length;
 
     this.counts = counts;

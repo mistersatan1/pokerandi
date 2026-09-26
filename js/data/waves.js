@@ -35,7 +35,10 @@
      * 기울기(60 이후 라운드마다 1.17)로 먼저 시도했는데, 61~62 에선 오히려 예전보다 쉬워
      * 불멸 없는 봇이 22/23 으로 60을 넘었다 — 벽은 기울기가 아니라 계단이어야 했다. */
     lateFrom: 50, lateGrowth: 1.07,
-    wallAt: 61, wallStep: 3.5, wallGrowth: 1.02,   // 2.5 → 3.5: 역할 보정·버퍼 상향 뒤 불멸 없이도 넘는 판이 늘어 되돌렸다
+    // 2.5 → 3.5: 역할 보정·버퍼 상향 뒤 불멸 없이도 넘는 판이 늘어 되돌렸다.
+    // 3.5 → 5.5 (세션 45): 불멸 없는 판 클리어 24% → 9% (목표 약 10%). 마지막 보스는 69R 체력에서 나오니 finalBossHpMul 로 되돌려 같은 체력.
+    // 5.5 → 5.4 (세션 57): 두 갈래 맵으로 떨어진 클리어율을 적 체력(mapHpMul 0.97) · 칸 +2 와 함께 맞췄다. 마지막 보스도 같이 조금 내려간다.
+    wallAt: 61, wallStep: 5.4, wallGrowth: 1.02,
     speedGrowth: 1.006,        // 이동속도는 아주 천천히만 오른다 (사거리 설계가 무너지지 않게)
     armorGrowth: 1.2,          // 웨이브당 방어력 가산
 
@@ -187,6 +190,10 @@
   WaveData.earlyBoost = 0.45;
   WaveData.earlyUntil = 20;
 
+  /* 맵 보정(세션 57) — 두 갈래 맵은 한쪽 칸이 적의 절반만 봐서 판 전체 화력이 약 20% 줄었다.
+   * 모드마다 따로가 아니라 모든 적(잡몹 · 정예 · 보스 — 전부 scaleHp 를 지난다)에 같이 곱한다. */
+  WaveData.mapHpMul = 0.97;
+
   /* 1라운드 대비 체력 배율 — ~50 hpGrowth · 이후 lateGrowth · 61 에서 wallStep 계단 */
   WaveData.growthTo = function (wave) {
     var w = Math.max(1, wave);
@@ -199,7 +206,7 @@
   };
 
   WaveData.scaleHp = function (baseHp, wave, mode) {
-    var modeMul = (mode && mode.hpMul) || 1;
+    var modeMul = ((mode && mode.hpMul) || 1) * this.mapHpMul;
     var early = 1 + this.earlyBoost * Math.max(0, (this.earlyUntil - wave) / (this.earlyUntil - 1));
     return Math.round(baseHp * this.growthTo(wave) * modeMul * early);
   };

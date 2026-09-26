@@ -56,17 +56,19 @@
       paintBackground(ctx, bounds);
       paintPath(ctx, bounds);
     }
+    // 글자는 굽지 않고 매 프레임 — 구운 그림에 넣으면 필드를 돌렸을 때 같이 눕는다
+    paintEndpointLabels(ctx);
   };
 
   /* 배경은 캔버스 전체(논리 영역 바깥 가장자리 포함)를 한 번만 굽는다. */
   function bakeBackground(bounds) {
     if (typeof document === 'undefined' || !document.createElement) return null;
     var dpr = RPD.Renderer.dpr || 1;
-    var cssW = RPD.Renderer.cssWidth || RPD.VIEW.width;
-    var cssH = RPD.Renderer.cssHeight || RPD.VIEW.height;
+    var sc = RPD.Renderer.scale || 1;
     var off = document.createElement('canvas');
-    off.width = Math.max(1, Math.round(cssW * dpr));
-    off.height = Math.max(1, Math.round(cssH * dpr));
+    // 논리 크기 기준으로 굽는다 — 필드를 돌려 그릴 때(휴대폰 세로)는 화면 가로·세로와 논리 가로·세로가 바뀐다
+    off.width = Math.max(1, Math.round(bounds.w * sc * dpr));
+    off.height = Math.max(1, Math.round(bounds.h * sc * dpr));
     var octx = off.getContext('2d');
     if (!octx) return null;
     var k = (off.width / bounds.w);
@@ -129,7 +131,7 @@
   /* 장식(나무·덤불·바위·꽃·연못). 경로와 칸을 절대 가리지 않는 자리에만 놓는다.
    * 전부 굽는 배경에 들어가므로 프레임 비용은 0 이다. */
   function clearOf(x, y, pad) {
-    var d = MAP.path && MAP.path.distanceTo ? MAP.path.distanceTo(x, y) : distToPolyline(x, y);
+    var d = MAP.closestDistanceTo ? MAP.closestDistanceTo(x, y) : distToPolyline(x, y);
     if (d < MAP.pathWidth / 2 + pad) return false;
     for (var i = 0; i < MAP.slots.length; i++) {
       var sl = MAP.slots[i];
@@ -244,13 +246,17 @@
   /* 가장자리가 보이게 됐으므로 길도 캔버스 끝까지 이어 그린다.
    * 적이 숲 밖에서 걸어 들어오는 것처럼 보인다. 판정 경로(MapData.path)는 그대로다. */
   function tracePath(ctx) {
-    var pts = MAP.waypoints;
+    // 두 갈래 — 길마다 한 줄씩(입구 줄기 · 합류 뒤 꼬리는 겹쳐 그려진다)
+    var routes = MAP.routes || [MAP.waypoints];
     var B = pathBounds;
     ctx.beginPath();
-    var first = pts[0], last = pts[pts.length - 1];
-    ctx.moveTo(B ? Math.min(first.x, B.x - 30) : first.x, first.y);
-    for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-    if (B) ctx.lineTo(Math.max(last.x, B.x + B.w + 30), last.y);
+    for (var r = 0; r < routes.length; r++) {
+      var pts = routes[r];
+      var first = pts[0], last = pts[pts.length - 1];
+      ctx.moveTo(B ? Math.min(first.x, B.x - 30) : first.x, first.y);
+      for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      if (B) ctx.lineTo(Math.max(last.x, B.x + B.w + 30), last.y);
+    }
   }
 
   function paintPath(ctx, bounds) {
@@ -310,30 +316,34 @@
     eg.addColorStop(0, 'rgba(111,212,138,0.55)');
     eg.addColorStop(1, 'rgba(111,212,138,0)');
     ctx.fillStyle = eg;
-    ctx.fillRect(0, MAP.laneY.A - w / 2, 70, w);
+    ctx.fillRect(0, MAP.entry.y - w / 2, 70, w);
 
     // 출구 — 여기로 빠져나가면 라이프가 깎인다
     var xg = ctx.createLinearGradient(1000, 0, 920, 0);
     xg.addColorStop(0, 'rgba(224,85,79,0.62)');
     xg.addColorStop(1, 'rgba(224,85,79,0)');
     ctx.fillStyle = xg;
-    ctx.fillRect(920, MAP.laneY.C - w / 2, 80, w);
+    ctx.fillRect(920, MAP.exit.y - w / 2, 80, w);
 
-    ctx.font = '600 13px ' + RPD.FONT_STACK;
+  }
+
+  function paintEndpointLabels(ctx) {
+    var w = MAP.pathWidth;
+    ctx.save();
     ctx.textBaseline = 'middle';
-
     ctx.font = '800 13px ' + RPD.FONT_STACK;
     ctx.lineWidth = 3.5;
     ctx.strokeStyle = 'rgba(12,28,50,0.75)';
     ctx.textAlign = 'left';
-    ctx.strokeText('적 등장', 10, MAP.laneY.A - w / 2 - 14);
+    ctx.strokeText('적 등장', 10, MAP.entry.y - w / 2 - 14);
     ctx.fillStyle = '#c8ffd6';
-    ctx.fillText('적 등장', 10, MAP.laneY.A - w / 2 - 14);
+    ctx.fillText('적 등장', 10, MAP.entry.y - w / 2 - 14);
 
     ctx.textAlign = 'right';
-    ctx.strokeText('출구', 990, MAP.laneY.C + w / 2 + 15);
+    ctx.strokeText('출구', 990, MAP.exit.y + w / 2 + 15);
     ctx.fillStyle = '#ffd0cb';
-    ctx.fillText('출구', 990, MAP.laneY.C + w / 2 + 15);
+    ctx.fillText('출구', 990, MAP.exit.y + w / 2 + 15);
+    ctx.restore();
   }
 
   /* ---------- 슬롯 (매 프레임) ---------- */
@@ -387,13 +397,14 @@
       ctx.stroke();
       ctx.setLineDash([]);
 
-      drawLock(ctx, slot.x, slot.y - 8, affordable ? '#ffd23f' : PALETTE.muted);
+      var lockAt = RPD.Renderer.at(slot.x, slot.y, 0, -8), costAt = RPD.Renderer.at(slot.x, slot.y, 0, 15);
+      drawLock(ctx, lockAt.x, lockAt.y, affordable ? '#ffd23f' : PALETTE.muted);
 
       ctx.font = '700 11px ' + RPD.FONT_STACK;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = affordable ? '#fff3b8' : PALETTE.muted;
-      ctx.fillText(slot.cost + 'G', slot.x, slot.y + 15);
+      ctx.fillText(slot.cost + 'G', costAt.x, costAt.y);
 
       ctx.restore();
       return;
@@ -453,6 +464,8 @@
   };
 
   function drawLock(ctx, cx, cy, color) {
+    ctx.save();
+    RPD.Renderer.upright(ctx, cx, cy);   // 필드를 돌려 그려도 자물쇠는 똑바로
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
     ctx.lineWidth = 2;
@@ -461,6 +474,7 @@
     ctx.stroke();
     roundRect(ctx, cx - 6.5, cy - 2, 13, 10, 2);
     ctx.fill();
+    ctx.restore();
   }
 
   function roundRect(ctx, x, y, w, h, r) {

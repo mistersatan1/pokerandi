@@ -7,7 +7,7 @@
     "autoplay": "node tools/autoplay.js 20",
     "tierpower": "node tools/tierpower.js",
     "build": "node tools/build-tester.js",
-    "screenshot": "node tools/build-tester.js && node tools/screenshot.js"
+    "screenshot": "node tools/build-tester.js && node tools/screenshot.js && node tools/musicplay.js"
   },
   "devDependencies": {
     "playwright": "^1.56.0"

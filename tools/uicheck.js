@@ -637,7 +637,7 @@ console.log('\n소리');
 
 const AUDIO = fs.readFileSync(path.join(ROOT, 'js/core/AudioManager.js'), 'utf8');
 
-run('음원 파일 없이 합성으로 소리를 만든다', () => {
+run('효과음 · 기본 배경음은 합성(AudioManager 안에 음원 경로 없음 — 곡 파일 경로는 js/data/music.js 에만)', () => {
   if (!RPD.AudioManager) throw new Error('AudioManager 가 없다');
   if (/[\w/]+\.(mp3|ogg|wav|m4a)\b/.test(AUDIO)) throw new Error('없는 음원 파일을 참조한다');
   if (AUDIO.indexOf('createOscillator') < 0) throw new Error('합성 코드가 없다');
@@ -1582,7 +1582,7 @@ run('레이아웃 영역 9개가 CSS 에 정의돼 있다', () => {
 });
 
 run('자주 쓰는 해상도 4종의 분기가 있다', () => {
-  if (!/max-height:\s*820px/.test(css) || !/max-width:\s*1500px/.test(css) || !/max-width:\s*1100px/.test(css)) {
+  if (!/max-height:\s*820px/.test(css) || !/max-width:\s*1500px/.test(css) || !/max-width:\s*1099\.98px/.test(css)) {
     throw new Error('반응형 분기가 빠졌다');
   }
 });
@@ -1632,6 +1632,413 @@ run('정보 카드가 필드 클릭을 막지 않는다', () => {
   if (block.indexOf('pointer-events: none') < 0) throw new Error('카드가 클릭을 가로챈다');
 });
 
-console.log(`\n────────────────────────────`);
-console.log(failures === 0 ? 'UI·연출 이상 없음' : `UI·연출 문제 ${failures}건`);
-process.exit(failures === 0 ? 0 : 1);
+/* ---------- 모바일 ① — 필드를 돌렸을 때 칸 누르기 (세션 51) ---------- */
+console.log('\n모바일 필드 회전');
+{
+  const R = RPD.Renderer, F = RPD.FieldManager;
+  const saved = { canvas: R.canvas, gcs: sandbox.getComputedStyle };
+  // 화면 위치를 흉내 내는 캔버스 — 휴대폰 세로(갤럭시 S24 크기) · 가로
+  const fakeCanvas = (rect) => Object.assign(makeCanvas(), { getBoundingClientRect: () => rect });
+  const setRotate = (v) => { sandbox.getComputedStyle = () => ({ getPropertyValue: (k) => (k === '--field-rotate' ? v : '') }); };
+
+  /* 기대 화면 좌표는 Renderer 를 거치지 않고 따로 계산한다(같은 식을 두 번 믿으면 검사가 아니다).
+   * 세로: 1000x600 을 시계 방향 90° — 논리 x(적 등장→출구)가 위→아래, 논리 y 가 오른쪽→왼쪽. */
+  function expectScreen(rect, rotated, x, y) {
+    if (!rotated) {
+      const s = Math.min(rect.width / 1000, rect.height / 600);
+      return { x: rect.left + (rect.width - 1000 * s) / 2 + x * s, y: rect.top + (rect.height - 600 * s) / 2 + y * s, s };
+    }
+    const s = Math.min(rect.width / 600, rect.height / 1000);
+    const ox = (rect.width - 600 * s) / 2, oy = (rect.height - 1000 * s) / 2;
+    return { x: rect.left + ox + (600 - y) * s, y: rect.top + oy + x * s, s };
+  }
+
+  const cases = [
+    { name: '휴대폰 세로(돌림)', rect: { left: 4, top: 118, width: 352, height: 571 }, rot: '1', rotated: true },
+    { name: '휴대폰 가로', rect: { left: 4, top: 44, width: 632, height: 308 }, rot: '0', rotated: false },
+    { name: 'PC', rect: { left: 8, top: 76, width: 1300, height: 640 }, rot: '', rotated: false }
+  ];
+  F.init();
+  for (const c of cases) {
+    setRotate(c.rot);
+    R.init(fakeCanvas(c.rect));
+    check(`${c.name}: 필드 방향이 레이아웃대로다(${c.rotated ? '90° 돌림' : '그대로'})`, R.rotated === c.rotated, `rotated=${R.rotated}`);
+
+    // 칸 한가운데 · 네 모서리 가까이(칸 크기의 40%) — 전부 그 칸이어야 한다
+    const miss = [];
+    F.slots.forEach((slot, i) => {
+      const e = expectScreen(c.rect, c.rotated, slot.x, slot.y);
+      const d = slot.size * 0.4 * e.s;
+      for (const [dx, dy] of [[0, 0], [-d, -d], [d, -d], [-d, d], [d, d]]) {
+        const p = R.toLogical(e.x + dx, e.y + dy);
+        const hit = F.hitTest(p.x, p.y);
+        if (hit !== i) miss.push(`칸${i}(${dx.toFixed(0)},${dy.toFixed(0)})→${hit}`);
+      }
+    });
+    check(`${c.name}: 칸 ${F.slots.length}개를 눌러 정확히 그 칸을 고른다(가운데 + 네 모서리)`, miss.length === 0, miss.slice(0, 6).join(' · '));
+
+    // 그리는 변환과 누르는 변환이 같은 자리를 가리키는가 — 그림은 A 칸인데 누르면 B 칸이 되는 일이 없게
+    let T = null;
+    const cap = makeCtx();
+    cap.setTransform = function (a, b, cc, d, e2, f) { T = [a, b, cc, d, e2, f]; };
+    R.ctx = cap; R.layers = []; R.shakeX = R.shakeY = 0;
+    R.render(0);
+    const dpr = R.dpr;
+    const off = [];
+    F.slots.forEach((slot, i) => {
+      const e = expectScreen(c.rect, c.rotated, slot.x, slot.y);
+      const px = (T[0] * slot.x + T[2] * slot.y + T[4]) / dpr + c.rect.left;
+      const py = (T[1] * slot.x + T[3] * slot.y + T[5]) / dpr + c.rect.top;
+      if (Math.abs(px - e.x) > 0.5 || Math.abs(py - e.y) > 0.5) off.push(`칸${i} 그림(${px.toFixed(1)},${py.toFixed(1)}) ≠ 누름(${e.x.toFixed(1)},${e.y.toFixed(1)})`);
+      // 정보 카드 위치(DOM)도 같은 자리
+      const cc = R.toCanvasCss(slot.x, slot.y);
+      if (Math.abs(cc.x + c.rect.left - e.x) > 0.5 || Math.abs(cc.y + c.rect.top - e.y) > 0.5) off.push(`칸${i} 카드 위치 어긋남`);
+    });
+    check(`${c.name}: 그리는 자리 = 누르는 자리 = 정보 카드 자리`, off.length === 0, off.slice(0, 4).join(' · '));
+  }
+  sandbox.getComputedStyle = saved.gcs;
+  R.init(makeCanvas());
+}
+
+/* ---------- 모바일 ② — 손가락 누름 영역 (세션 52) ---------- */
+console.log('\n모바일 터치 누름 영역');
+{
+  const F = RPD.FieldManager;
+  F.init();
+  const pad = 18;   // 논리 단위 — 휴대폰 배율 약 0.55 에서 화면 10px
+  const nearest = (x, y) => {   // 따로 계산: 칸 가장자리까지 거리가 가장 짧은 칸
+    let best = -1, bd = Infinity;
+    F.slots.forEach((s, i) => { const h = s.size / 2; const dx = Math.max(0, Math.abs(x - s.x) - h), dy = Math.max(0, Math.abs(y - s.y) - h); const d = Math.hypot(dx, dy); if (d < bd) { bd = d; best = i; } });
+    return { i: best, d: bd };
+  };
+  const bad = [];
+  F.slots.forEach((s, i) => {
+    const h = s.size / 2;
+    for (const [dx, dy] of [[h + pad * 0.7, 0], [-(h + pad * 0.7), 0], [0, h + pad * 0.7], [0, -(h + pad * 0.7)]]) {
+      const x = s.x + dx, y = s.y + dy, want = nearest(x, y);
+      const got = F.hitTestNear(x, y, pad);
+      if (got !== (want.d <= pad ? want.i : -1)) bad.push(`칸${i}(${dx.toFixed(0)},${dy.toFixed(0)})→${got}/${want.i}`);
+    }
+  });
+  check('칸을 조금 비껴 눌러도(가장자리 밖 pad 안) 가장 가까운 칸을 고른다', bad.length === 0, bad.slice(0, 5).join(' · '));
+  const exactSame = F.slots.every((s, i) => F.hitTestNear(s.x, s.y, pad) === i && F.hitTest(s.x, s.y) === i);
+  check('칸 안을 누르면 누름 영역과 상관없이 그 칸', exactSame);
+  let farPoint = null;
+  for (let x = 5; x < 1000 && !farPoint; x += 7) for (let y = 5; y < 600; y += 7) { if (nearest(x, y).d > pad * 2) { farPoint = { x, y }; break; } }
+  check('칸에서 먼 곳을 누르면 아무 칸도 고르지 않는다', !!farPoint && F.hitTestNear(farPoint.x, farPoint.y, pad) === -1, JSON.stringify(farPoint));
+  const outside = F.slots[0];
+  check('마우스(hitTest)는 그대로 정확하다 — 칸 밖 1px 은 칸이 아니다', F.hitTest(outside.x + outside.size / 2 + 1, outside.y) !== 0);
+}
+
+/* ---------- 모바일 ③ — 홈 화면 앱 (세션 53) ---------- */
+console.log('\n홈 화면 앱 — 매니페스트 · 아이콘 · 오프라인 목록');
+const pngSize = f => { const b = fs.readFileSync(path.join(ROOT, f)); return b.slice(1, 4).toString() === 'PNG' ? `${b.readUInt32BE(16)}x${b.readUInt32BE(20)}` : null; };
+{
+  const INDEX = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  let man = null;
+  run('manifest.webmanifest 이 JSON 으로 읽힌다', () => { man = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.webmanifest'), 'utf8')); });
+  man = man || {};
+  check('매니페스트: 이름 · 짧은 이름 · 시작 주소 · 범위(폴더째 옮겨도 되게 상대 주소) · 전체 화면',
+    man.name && man.short_name && man.start_url === './index.html' && man.scope === './' && man.display === 'fullscreen',
+    JSON.stringify({ start: man.start_url, scope: man.scope, display: man.display }));
+  const icons = man.icons || [];
+  const iconBad = icons.filter(i => !fs.existsSync(path.join(ROOT, i.src)) || pngSize(i.src) !== i.sizes).map(i => i.src + ':' + (fs.existsSync(path.join(ROOT, i.src)) ? pngSize(i.src) : '없음'));
+  check('매니페스트 아이콘 파일이 전부 있고 적힌 크기와 같다', icons.length >= 3 && iconBad.length === 0, iconBad.join(' · '));
+  check('설치에 필요한 아이콘: 192 · 512 · 가려도 되는(maskable) 512',
+    icons.some(i => i.sizes === '192x192') && icons.some(i => i.sizes === '512x512' && i.purpose === 'any') &&
+    icons.some(i => i.sizes === '512x512' && i.purpose === 'maskable'));
+  const headLinks = [...INDEX.matchAll(/<link rel="(manifest|icon|apple-touch-icon)"[^>]*href="([^"]+)"/g)].map(m => ({ rel: m[1], href: m[2] }));
+  check('index.html 이 매니페스트 · 탭 아이콘 · 아이폰 아이콘을 걸고 파일이 있다',
+    ['manifest', 'icon', 'apple-touch-icon'].every(r => headLinks.some(l => l.rel === r && fs.existsSync(path.join(ROOT, l.href)))) &&
+    pngSize((headLinks.find(l => l.rel === 'apple-touch-icon') || {}).href || 'index.html') === '180x180',
+    JSON.stringify(headLinks));
+  check('화면 끝까지 쓰기(viewport-fit=cover) + 노치 자리 비우기(safe-area)',
+    /viewport-fit=cover/.test(INDEX) && /safe-area-inset-left/.test(fs.readFileSync(path.join(ROOT, 'css/mobile.css'), 'utf8')));
+
+  const P = RPD.Pwa;
+  const SW = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
+  check('페이지(Pwa.js)와 서비스 워커(sw.js)가 같은 저장소 이름을 쓴다', (SW.match(/var CACHE = '([^']+)'/) || [])[1] === P.CACHE);
+  check('더블클릭(file://) · 테스트판 한 파일에서는 서비스 워커를 쓰지 않는다', (() => {
+    const was = { loc: sandbox.location, nav: sandbox.navigator, caches: sandbox.caches, inl: sandbox.RPD_INLINE };
+    const nav = { serviceWorker: {} };
+    sandbox.navigator = nav; sandbox.caches = {};
+    sandbox.location = { protocol: 'file:' }; const file = P.supported();
+    sandbox.location = { protocol: 'https:' }; const https = P.supported();
+    sandbox.RPD_INLINE = {}; const inline = P.supported();
+    Object.assign(sandbox, { location: was.loc, navigator: was.nav, caches: was.caches, RPD_INLINE: was.inl });
+    return !file && https && !inline;
+  })());
+
+  // 저장 목록 — index.html 을 흉내 낸 문서로
+  const fakeDoc = { querySelectorAll: () => [...INDEX.matchAll(/<(script) src="([^"]+)"|<link rel="([^"]+)"[^>]*href="([^"]+)"/g)].map(m => ({
+    getAttribute: a => (a === 'src' ? (m[1] ? m[2] : null) : (m[1] ? null : m[4])) })) };
+  const list = P.files(fakeDoc);
+  const want = [
+    ...[...INDEX.matchAll(/<script src="([^"]+)"/g)].map(m => m[1]),
+    ...[...INDEX.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map(m => m[1]),
+    'manifest.webmanifest', './', 'index.html', ...icons.map(i => i.src),
+    ...RPD.PokemonData.all().map(d => d.sprite).filter(f => f && fs.existsSync(path.join(ROOT, f))),
+    ...RPD.EnemySkins.allFiles()
+  ];
+  const lack = [...new Set(want)].filter(f => !list.includes(f));
+  check(`오프라인 목록(${list.length}개)에 게임 파일 · 매니페스트 · 아이콘 · 포켓몬 그림 · 적 그림이 전부 있다`, lack.length === 0, lack.slice(0, 6).join(' · '));
+  const onDisk = list.filter(f => f === './' || fs.existsSync(path.join(ROOT, f)));
+  const gone = list.filter(f => !onDisk.includes(f));
+  check('목록에서 파일이 없는 것은 원래 그림이 없는 기본 적 그림뿐(대체 그림으로 그린다)', gone.every(f => /^assets\/enemies\/[a-z_]+\.png$/.test(f)), gone.slice(0, 5).join(' · '));
+}
+
+/* ---------- 모바일 ④ — 그리기 조절 FramePacer (세션 54) ---------- */
+console.log('\n성능 — 그리기 조절(FramePacer)');
+{
+  const FP = RPD.FramePacer, GM = RPD.GameManager, S = RPD.GameState;
+  let T = 0;
+  const realClock = FP.clock, realDpr = FP.deviceDpr, realResize = RPD.Renderer.resize;
+  FP.clock = () => T;
+  RPD.Renderer.resize = function () {};           // 캔버스 없는 검사 환경
+  const wasState = GM.state, wasPaused = RPD.Loop.paused;
+  // hz 로 sec 초 동안 화면 새로고침 → 그린 횟수
+  const run = (hz, sec) => { let n = 0; const dt = 1 / hz; for (let i = 0; i < hz * sec; i++) { T += dt * 1000; if (FP.tick(dt)) n += 1; } return n; };
+  const fresh = (dpr) => { FP.reset(); FP.deviceDpr = () => dpr; FP._wakeUntil = 0; FP.mode = 'battle'; };
+
+  GM.state = S.RUNNING; RPD.Loop.paused = false; fresh(3);
+  check('전투 · 60Hz 화면: 매 새로고침마다 그린다(60/60)', run(60, 1) === 60);
+  check('전투 · 120Hz 화면: 1초에 60번만 그린다(눈에 보이는 차이 없는 두 배 일을 안 한다)', Math.abs(run(120, 1) - 60) <= 1);
+  const hz90 = run(90, 2) / 2, hz144 = run(144, 2) / 2;
+  check('90Hz · 144Hz 화면도 1초에 약 60번(남은 시간을 버리면 90Hz 가 45fps 로 떨어진다)', Math.abs(hz90 - 60) <= 1 && Math.abs(hz144 - 60) <= 2, hz90 + ' · ' + hz144);
+  fresh(3); run(90, 12);
+  check('90Hz 화면에서 화질을 괜히 내리지 않는다', FP.level === 0, String(FP.level));
+  RPD.Loop.paused = true;
+  const idle = run(60, 3) / 3;
+  check('일시정지(손 안 댐): 1초에 약 10번만 그린다', idle >= 9 && idle <= 11, String(idle));
+  FP.wake(); const woke = run(60, 0.5);
+  check('손을 대면(누르기 · 움직이기 · 키) 바로 제속도 — 끌기 · 칸 고르기 표시가 끊기지 않는다', woke === 30, String(woke));
+  GM.state = S.READY; RPD.Loop.paused = false; FP._wakeUntil = 0;
+  check('판 시작 전 · 결과 화면도 쉬는 중(10fps)', Math.abs(run(60, 2) / 2 - 10) <= 1);
+  GM.state = S.RUNNING;
+
+  fresh(3); run(60, 12);
+  check('전투가 60fps 로 돌면 화질을 안 내린다', FP.level === 0 && FP.maxDpr() === 2);
+  fresh(3);
+  const steps = [];
+  for (let k = 0; k < 6; k++) { run(30, 4.1); steps.push(FP.level); }
+  check('느리면(30fps) 4초마다 한 칸씩: 해상도 2 → 1.5 → 1.25 → 1 → 30fps 고정, 거기서 멈춘다',
+    JSON.stringify(steps) === JSON.stringify([1, 2, 3, 4, 4, 4]), JSON.stringify(steps));
+  check('마지막 칸은 1초에 30번 그린다', Math.abs(run(60, 1) - 30) <= 1);
+  fresh(3); run(60, 2.02); run(30, 2.02); run(60, 2.02); run(30, 2.02); run(60, 2.02);
+  check('잠깐 느린 건(라운드 시작 등 2초 창 하나) 화질을 안 내린다', FP.level === 0, String(FP.level));
+  fresh(1); run(30, 4.1);
+  check('원래 1배 화면인 휴대폰은 해상도 칸을 건너뛰고 바로 30fps 칸', FP.level === 4, String(FP.level));
+  fresh(1.5); run(30, 4.1);
+  check('1.5배 화면이면 2배 칸은 건너뛰고 1.25배로', FP.maxDpr() === 1.25, String(FP.maxDpr()));
+  RPD.Loop.paused = true; fresh(3); run(20, 10);
+  check('쉬는 중(일부러 덜 그림)은 느림으로 치지 않는다', FP.level === 0, String(FP.level));
+
+  FP.clock = realClock; FP.deviceDpr = realDpr; RPD.Renderer.resize = realResize; FP.reset();
+  GM.state = wasState; RPD.Loop.paused = wasPaused;
+  check('Renderer 가 FramePacer 의 해상도 상한을 쓴다', /FramePacer\.maxDpr\(\)/.test(fs.readFileSync(path.join(ROOT, 'js/render/Renderer.js'), 'utf8')));
+}
+
+/* sw.js 를 가짜 브라우저(저장소 · 인터넷)에서 돌려 "어디서 주는지"를 본다 */
+async function swChecks() {
+  console.log('\n홈 화면 앱 — 서비스 워커(오프라인)');
+  const ORIGIN = 'https://game.example/porandi/';
+  const stores = new Map();
+  const key = (u, ignoreSearch) => { const x = new URL(typeof u === 'string' ? u : u.url, ORIGIN); if (ignoreSearch) x.search = ''; return x.href; };
+  const openStore = name => {
+    if (!stores.has(name)) stores.set(name, new Map());
+    const m = stores.get(name);
+    return {
+      match: async (u, o) => { const k = key(u, o && o.ignoreSearch); for (const [kk, v] of m) if ((o && o.ignoreSearch ? key(kk, true) : kk) === k) return v.clone(); return undefined; },
+      put: async (u, res) => { m.set(key(u), res); }
+    };
+  };
+  const net = { online: true, hang: false, body: 'net', calls: 0 };
+  const handlers = {};
+  const sw = {
+    self: null, URL, Response, Promise, setTimeout, clearTimeout, console,
+    caches: {
+      open: async n => openStore(n), keys: async () => [...stores.keys()],
+      delete: async n => stores.delete(n)
+    },
+    fetch: req => { net.calls += 1; if (net.hang) return new Promise(() => {}); return net.online ? Promise.resolve(new Response(net.body + ':' + (req.url || req), { status: 200 })) : Promise.reject(new TypeError('offline')); }
+  };
+  sw.self = { location: new URL('sw.js', ORIGIN), addEventListener: (t, f) => { handlers[t] = f; }, skipWaiting: () => {}, clients: { claim: async () => {} } };
+  vm.createContext(sw);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8'), sw, { filename: 'sw.js' });
+  sw.NETWORK_TIMEOUT_MS = 60;   // 검사는 4초를 기다리지 않는다
+
+  const ask = async (url, opt) => {
+    const req = Object.assign({ url: new URL(url, ORIGIN).href, method: 'GET', mode: 'cors', destination: '' }, opt);
+    let p = null; const bg = [];
+    handlers.fetch({ request: req, respondWith: x => { p = x; }, waitUntil: x => bg.push(x) });
+    if (!p) return { handled: false };
+    let res = null, err = null;
+    try { res = await p; } catch (e) { err = e; }
+    await Promise.all(bg).catch(() => {});
+    return { handled: true, text: res ? await res.text() : null, err };
+  };
+  const cached = async url => { const r = await openStore('porandi-v1').match(new URL(url, ORIGIN).href); return r ? r.text() : null; };
+
+  const r1 = await ask('js/main.js');
+  check('인터넷이 되면 코드는 인터넷에서 받고 저장소도 새것으로', r1.text === 'net:' + ORIGIN + 'js/main.js' && await cached('js/main.js') === r1.text);
+  net.body = 'net2';
+  const r2 = await ask('js/main.js');
+  check('코드가 바뀌면 다음 열 때 바로 새 판(저장소 것을 먼저 주지 않는다)', r2.text.startsWith('net2:'));
+  net.online = false;
+  const r3 = await ask('js/main.js');
+  check('오프라인이면 저장해 둔 코드', r3.text === 'net2:' + ORIGIN + 'js/main.js');
+  net.online = true; await ask('index.html', { mode: 'navigate' }); net.online = false;
+  const r4 = await ask('?from=homescreen', { mode: 'navigate' });
+  check('오프라인에서 주소를 조금 다르게 열어도(?…) 게임 화면', r4.text === 'net2:' + ORIGIN + 'index.html', r4.text || String(r4.err));
+  const r5 = await ask('js/never.js');
+  check('오프라인 + 저장 안 된 파일은 실패로(가짜 응답을 만들지 않는다)', !!r5.err);
+  net.online = true; net.body = 'img1'; await ask('assets/pokemon/mew.png', { destination: 'image' });
+  net.body = 'img2'; const calls = net.calls;
+  const r6 = await ask('assets/pokemon/mew.png', { destination: 'image' });
+  check('그림은 저장소 것을 먼저(빠르게) · 뒤에서 새것을 받아 저장소만 바꾼다', r6.text.startsWith('img1:') && net.calls === calls + 1 && (await cached('assets/pokemon/mew.png')).startsWith('img2:'));
+  net.hang = true;
+  const t0 = Date.now(); const r7 = await Promise.race([ask('js/main.js'), new Promise(r => setTimeout(() => r({ text: 'TIMEOUT' }), 1500))]);
+  check('인터넷이 응답 없이 늘어지면(약한 신호) 기다리다 저장소 것으로', r7.text && r7.text.startsWith('net2:') && Date.now() - t0 < 1000, r7.text);
+  net.hang = false;
+  check('다른 주소(글꼴 등) · GET 이 아닌 요청은 손대지 않는다',
+    !(await ask('https://fonts.example/a.css')).handled && !(await ask('js/main.js', { method: 'POST' })).handled);
+  stores.set('porandi-v0', new Map()); stores.set('other-app', new Map());
+  let act = null; handlers.activate({ waitUntil: p => { act = p; } }); await act;
+  check('새 서비스 워커가 켜지면 예전 저장소(porandi-*)만 지운다', !stores.has('porandi-v0') && stores.has('other-app') && stores.has('porandi-v1'));
+}
+
+/* ---------- 배경음악 파일 (세션 55) ----------
+ * 가짜 <audio>(있는 파일이면 loadedmetadata, 없으면 error) · 가짜 AudioContext 로 AudioManager + MusicFiles 를 새 판에서 돌린다. */
+async function musicChecks() {
+  console.log('\n배경음악 파일 — 있을 때 · 없을 때');
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const make = ({ present, protocol = 'file:', inline = false, blockPlay = false, fade = 0.2, volumes = {} }) => {
+    const docL = {};
+    const env = { present: new Set(present), block: blockPlay, els: [] };
+    function FakeAudio() {
+      this.paused = true; this.volume = 1; this.muted = false; this.loop = false; this.preload = ''; this.currentTime = 0; this._l = {}; this._src = '';
+      env.els.push(this);
+    }
+    FakeAudio.prototype.addEventListener = function (t, f) { (this._l[t] = this._l[t] || []).push(f); };
+    Object.defineProperty(FakeAudio.prototype, 'src', { get() { return this._src; }, set(v) {
+      this._src = v; const el = this; setTimeout(() => (el._l[env.present.has(v) ? 'loadedmetadata' : 'error'] || []).forEach(f => f()), 5); } });
+    FakeAudio.prototype.play = function () { if (env.block) return Promise.reject(new Error('NotAllowedError')); this.paused = false; this.currentTime += 0.5; return Promise.resolve(); };
+    FakeAudio.prototype.pause = function () { this.paused = true; };
+    const gainNode = () => ({ gain: { value: 1, setValueAtTime(v) { this.value = v; }, linearRampToValueAtTime(v) { this.value = v; },
+      exponentialRampToValueAtTime() {}, cancelScheduledValues() {} }, connect() {} });
+    function FakeCtx() { this.currentTime = 0; this.destination = {}; this.sources = 0; }
+    FakeCtx.prototype.createGain = gainNode;
+    FakeCtx.prototype.createOscillator = () => ({ type: '', frequency: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {}, start() {}, stop() {} });
+    FakeCtx.prototype.createMediaElementSource = function () { this.sources += 1; return { connect() {} }; };
+    FakeCtx.prototype.resume = () => {};
+    const settings = {};
+    const sb = { console, setTimeout, clearTimeout, setInterval, clearInterval, Date, Math, Promise, Audio: FakeAudio, AudioContext: FakeCtx,
+      location: { protocol }, document: { hidden: false, addEventListener: (t, f) => { (docL[t] = docL[t] || []).push(f); } } };
+    if (inline) sb.RPD_INLINE = {};
+    sb.window = sb; sb.globalThis = sb;
+    vm.createContext(sb);
+    for (const f of ['js/core/RPD.js', 'js/core/Utils.js', 'js/core/EventBus.js', 'js/data/music.js', 'js/core/MusicFiles.js', 'js/core/AudioManager.js'])
+      vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), sb, { filename: f });
+    const R = sb.RPD;
+    R.MusicData.crossfade = fade;
+    Object.keys(volumes).forEach(k => { R.MusicData.tracks[k].volume = volumes[k]; });
+    R.SaveManager = { getSetting: (k, d) => (k in settings ? settings[k] : d), setSetting: (k, v) => { settings[k] = v; } };
+    R.GameManager = { isPlayable: () => false };
+    R.Loop = { paused: false };
+    R.AudioManager.init();
+    const gesture = () => { ['pointerdown'].forEach(t => (docL[t] || []).slice().forEach(f => f({}))); };
+    const el = name => env.els.find(e => e.src === R.MusicData.tracks[name].file);
+    return { R, A: R.AudioManager, F: R.MusicFiles, env, gesture, el };
+  };
+  const ALL = ['calm', 'battle', 'boss', 'hidden', 'immortal', 'transcend'];
+
+  // 1) 파일 있음
+  {
+    const t = make({ present: ['assets/music/calm.mp3', 'assets/music/battle.mp3'] });
+    await wait(30);
+    check('music.js 에 장면 여섯 개(calm · battle · boss · hidden · immortal · transcend) · 곡별 음량', ALL.every(k => t.R.MusicData.tracks[k] && t.R.MusicData.tracks[k].file === 'assets/music/' + k + '.mp3' && t.R.MusicData.tracks[k].volume != null));
+    check('있는 파일은 ok · 없는 파일은 failed 로 가린다(불러오기 전엔 머리만 — preload metadata)',
+      t.F.status('calm') === 'ok' && t.F.status('battle') === 'ok' && t.F.status('boss') === 'failed' && t.el('boss').preload === 'metadata');
+    check('첫 누르기 전에는 아무것도 안 튼다(휴대폰 제한)', !t.A.ready && t.env.els.every(e => e.paused));
+    t.gesture(); await wait(10);
+    check('첫 누르기 후: 평시(calm) 파일을 반복 재생 · 합성은 안 돈다', t.A.source === 'file' && !t.el('calm').paused && t.el('calm').loop && !t.A.debug().timer, JSON.stringify(t.A.debug()));
+    check('파일 음량 = 배경음 음량 × 곡 음량 × 페이드(file:// 은 요소 음량으로)', Math.abs(t.el('calm').volume - 0.35) < 1e-6, String(t.el('calm').volume));
+    t.A.setTrack('battle');
+    await wait(90);
+    const mid = { calm: t.el('calm').volume, battle: t.el('battle').volume, calmOn: !t.el('calm').paused, battleOn: !t.el('battle').paused };
+    await wait(250);
+    check('곡이 바뀌면 겹쳐 넘어간다: 중간엔 둘 다 울리고(하나는 줄고 하나는 커짐) 끝나면 새 곡만',
+      mid.calmOn && mid.battleOn && mid.calm > 0.01 && mid.calm < 0.34 && mid.battle > 0.01 && mid.battle < 0.34 && t.el('calm').paused && !t.el('battle').paused && Math.abs(t.el('battle').volume - 0.35) < 1e-6,
+      JSON.stringify(mid));
+    t.A.setMusicVolume(0.8);
+    check('배경음 음량을 바꾸면 파일 음악에도 바로', Math.abs(t.el('battle').volume - 0.8) < 1e-6, String(t.el('battle').volume));
+    t.A.setMuted(true);
+    check('음소거면 파일도 멈춘다(음량 0)', t.el('battle').paused && t.el('battle').volume === 0 && !t.A.musicRunning());
+    t.A.setMuted(false);
+    check('음소거를 풀면 다시 울린다', !t.el('battle').paused && t.A.musicRunning());
+    const pos = t.el('battle').currentTime;
+    t.R.Loop.paused = true; t.R.bus.emit('loop:paused', true);
+    const pausedNow = t.el('battle').paused;
+    t.R.Loop.paused = false; t.R.bus.emit('loop:paused', false);
+    check('일시정지면 멈추고, 풀면 그 자리부터 이어서(처음부터 다시가 아니다)', pausedNow && !t.el('battle').paused && t.el('battle').currentTime > pos, pos + ' → ' + t.el('battle').currentTime);
+    t.A.setTrack('boss'); await wait(350);
+    check('파일이 없는 장면(boss)은 합성 음악으로 겹쳐 넘어간다', t.A.source === 'synth' && t.A.debug().timer && t.el('battle').paused, JSON.stringify(t.A.debug()));
+    t.A.playScene('battle'); await wait(350);
+    check('합성 → 파일도 겹쳐 넘어가고, 넘어간 뒤 합성은 멈춘다', t.A.source === 'file' && !t.A.debug().timer && !t.el('battle').paused, JSON.stringify(t.A.debug()));
+  }
+  // 2) 파일 없음(폴더째 없음)
+  {
+    const t = make({ present: [] });
+    await wait(30);
+    t.gesture(); await wait(10);
+    check('파일이 하나도 없으면 예전과 같은 합성 음악', t.A.source === 'synth' && t.A.debug().timer && t.env.els.every(e => e.paused) && ALL.every(k => t.F.status(k) === 'failed'));
+    t.A.setTrack('battle'); t.A.setTrack('boss');
+    check('없는 파일 사이를 오가도 합성 그대로(파일을 틀려고 하지 않는다)', t.A.source === 'synth' && t.env.els.every(e => e.paused));
+  }
+  // 3) 파일이 늦게 도착 — 합성으로 시작했다가 도착하면 파일로
+  {
+    const t = make({ present: ['assets/music/calm.mp3'] });
+    t.gesture();                       // 불러오기 전에 눌렀다
+    check('불러오는 중에 누르면 우선 합성으로', t.A.source === 'synth');
+    await wait(300);
+    check('파일이 도착하면 합성에서 파일로 겹쳐 넘어간다', t.A.source === 'file' && !t.el('calm').paused && !t.A.debug().timer, JSON.stringify(t.A.debug()));
+  }
+  // 4) 곡별 음량
+  {
+    const t = make({ present: ['assets/music/calm.mp3'], volumes: { calm: 0.5 } });
+    await wait(30); t.gesture(); await wait(10);
+    check('곡별 음량(calm 0.5) × 배경음 음량(0.35)', Math.abs(t.el('calm').volume - 0.175) < 1e-6, String(t.el('calm').volume));
+  }
+  // 5) 인터넷 주소 — WebAudio 에 연결(아이폰은 요소 volume 을 무시)
+  {
+    const t = make({ present: ['assets/music/calm.mp3'], protocol: 'https:' });
+    await wait(30); t.gesture(); await wait(10);
+    const e = t.F.entries.calm;
+    check('인터넷 주소에서는 요소를 WebAudio 에 연결해 합성과 같은 음량 · 음소거 마디를 지난다', !!e.gain && e.gain.gain.value === 1 && t.el('calm').volume === 1 && !t.el('calm').paused);
+  }
+  // 6) 테스트판(한 파일)
+  {
+    const t = make({ present: ['assets/music/calm.mp3'], inline: true });
+    await wait(30); t.gesture(); await wait(10);
+    check('한 파일짜리 테스트판(RPD_INLINE)은 파일을 찾지도 않고 합성 음악', t.env.els.length === 0 && t.A.source === 'synth');
+  }
+  // 7) 휴대폰: 누르기 밖에서 틀면 막힌다 → 다음 누르기에서 다시
+  {
+    const t = make({ present: ['assets/music/calm.mp3', 'assets/music/battle.mp3'], blockPlay: true });
+    await wait(30); t.gesture(); await wait(10);
+    const blocked = t.el('calm').paused;
+    t.env.block = false; t.gesture(); await wait(10);
+    check('틀기가 막히면(휴대폰 · 누르기 밖) 다음 누르기에서 다시 튼다', blocked && !t.el('calm').paused);
+    check('누를 때 아직 안 튼 곡 요소는 소리 없이 틀었다 멈춰 잠금을 풀어 둔다(나중에 곡이 바뀔 때 틀 수 있게)', t.F.entries.battle.primed && t.el('battle').paused && !t.el('battle').muted);
+  }
+  const AUDIO_SRC = fs.readFileSync(path.join(ROOT, 'js/core/MusicFiles.js'), 'utf8');
+  check('파일은 <audio> 요소로만 연다(fetch · XHR 없음 — 더블클릭 file:// 에서도)', !/\bfetch\s*\(|XMLHttpRequest/.test(AUDIO_SRC) && /new global\.Audio\(\)/.test(AUDIO_SRC));
+  const build = fs.readFileSync(path.join(ROOT, 'tools/build-tester.js'), 'utf8');
+  check('테스트판 빌드는 음악 파일을 넣지 않는다(그림 PNG 만 안으로)', /\\.png\$\/i\.test\(name\)/.test(build) && !/mp3|assets\/music/.test(build));
+}
+
+swChecks().then(musicChecks).catch(e => { failures += 1; console.log('  FAIL  비동기 검사가 멈췄다  → ' + e.stack); }).then(() => {
+  console.log(`\n────────────────────────────`);
+  console.log(failures === 0 ? 'UI·연출 이상 없음' : `UI·연출 문제 ${failures}건`);
+  process.exit(failures === 0 ? 0 : 1);
+});

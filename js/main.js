@@ -46,6 +46,7 @@
     RPD.UnitRenderer.init();
     if (RPD.AttackFx) RPD.AttackFx.init();
 
+    if (RPD.FramePacer) RPD.FramePacer.init();
     RPD.Renderer.init(canvas);
     RPD.MapRenderer.init();
     RPD.UIManager.init();
@@ -63,6 +64,8 @@
     // 1배속 기본은 너무 느리다. 저장된 설정이 없으면 2배속으로 시작한다.
     RPD.Loop.setSpeed(RPD.SaveManager.getSetting('speed', 2));
     RPD.Loop.start();
+    // 홈 화면 앱(모바일 ③) — 인터넷 주소로 열었을 때만 오프라인 저장 · 설치. 게임 화면이 뜬 다음에 돈다
+    if (RPD.Pwa) RPD.Pwa.start();
 
     console.log('[RPD] v' + RPD.VERSION + ' 준비 완료 · 슬롯 ' +
                 RPD.FieldManager.slots.length + '칸 · 경로 ' +
@@ -104,7 +107,9 @@
     });
 
     RPD.Loop.onRender(function (dt) {
-      RPD.Renderer.render(dt);
+      // 쉬는 동안 · 가려졌을 때는 덜 그리고, 느린 휴대폰은 화질을 내린다(FramePacer). 게임 시간은 위 update 가 그대로 간다
+      var drawDt = RPD.FramePacer ? RPD.FramePacer.tick(dt) : dt;
+      if (drawDt) RPD.Renderer.render(drawDt);
       clockAcc += dt;
       if (clockAcc >= 0.25) { clockAcc = 0; RPD.UIManager.refreshClock(); }
     });

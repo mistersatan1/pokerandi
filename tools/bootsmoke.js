@@ -626,9 +626,136 @@ check('필드 조합식 — 발견 전에는 히든 줄이 아예 없다', () =>
   const sp = RPD.SpellData.forResult('pikachu');
   if (panelHtml('recipeList').indexOf('data-spell="' + sp.id + '"') >= 0) throw new Error('발견 전인데 줄이 있다');
   const chips = panelHtml('tierFilter');
-  const m = chips.match(/data-tier="HIDDEN"[^>]*>[^<]*<b>(\d+)</);
-  if (!m) throw new Error('[히든] 칩이 없다');
-  if (Number(m[1]) !== 0) throw new Error('아직 하나도 안 밝혔는데 히든 칩 수가 ' + m[1]);
+  const m = chips.match(/data-tier="HIDDEN"[^>]*>[^<]*<b>(\d+)\/(\d+)</);
+  if (!m) throw new Error('[히든] 칩이 없다(또는 "발견/전체" 꼴이 아니다)');
+  const total = RPD.SpellData.list.filter(s => s.kind === 'hidden').length;
+  if (Number(m[1]) !== 0 || Number(m[2]) !== total) throw new Error('아직 하나도 안 밝혔는데 히든 칩이 ' + m[1] + '/' + m[2]);
+});
+
+/* 세션 58 — [히든] 칩에서는 미발견 히든도 뜬다(결과만 그림자 + ???). [전체] · 등급 칩은 그대로 발견한 것만. */
+const hiddenRows = html => [...html.matchAll(/<button type="button" class="rrow rrow--spell[^"]*"[\s\S]*?<\/button>/g)].map(m => m[0]);
+check('필드 조합식 [히든] 칩 — 미발견 히든이 전부 그림자 + ??? 로 뜬다 · 칩 숫자는 발견/전체', () => {
+  RPD.SaveManager.data.spells = {};
+  const found = RPD.SpellData.forResult('pikachu');
+  RPD.SaveManager.recordSpell(found.id);                    // 하나만 발견
+  RPD.FieldManager.init(); RPD.StorageManager.reset();
+  RPD.bus.emit('field:changed', {});
+  clickTab('all'); clickChip('HIDDEN');
+  const hidden = RPD.SpellData.list.filter(s => s.kind === 'hidden');
+  const rows = hiddenRows(panelHtml('recipeList'));
+  if (rows.length !== hidden.length) throw new Error('[히든] 칩 줄 ' + rows.length + '개 — 히든은 ' + hidden.length + '개');
+  const secret = rows.filter(r => r.indexOf('rrow--secret') >= 0);
+  if (secret.length !== hidden.length - 1) throw new Error('미발견 줄 ' + secret.length + '개(기대 ' + (hidden.length - 1) + ')');
+  for (const r of secret) {
+    if (r.indexOf('is-shadow') < 0 || r.indexOf('???') < 0) throw new Error('미발견 결과가 그림자 + ??? 가 아니다');
+    if (r.indexOf('「') < 0) throw new Error('미발견 줄에 주문 문구가 없다');
+  }
+  const m = panelHtml('tierFilter').match(/data-tier="HIDDEN"[^>]*>[^<]*<b>(\d+)\/(\d+)</);
+  if (!m || +m[1] !== 1 || +m[2] !== hidden.length) throw new Error('칩 숫자 ' + (m ? m[1] + '/' + m[2] : '없음'));
+  // 정렬: 발견한 것(피카츄) → 미발견
+  if (rows[0].indexOf('rrow--secret') >= 0) throw new Error('발견한 히든이 미발견보다 아래에 있다');
+  clickChip('ALL');
+  RPD.SaveManager.data.spells = {};
+});
+
+check('필드 조합식 [전체] · 등급 칩 — 미발견 히든은 안 뜬다', () => {
+  RPD.SaveManager.data.spells = {};
+  RPD.bus.emit('field:changed', {});
+  clickTab('all'); clickChip('ALL');
+  if (panelHtml('recipeList').indexOf('rrow--secret') >= 0) throw new Error('[전체] 칩에 미발견 히든이 떴다');
+  clickChip('T2');
+  if (panelHtml('recipeList').indexOf('rrow--secret') >= 0) throw new Error('등급 칩에 미발견 히든이 떴다');
+  clickChip('ALL');
+});
+
+check('필드 조합식 [히든] 칩 — 미발견 결과의 이름 · id 가 HTML 에 안 샌다(눌러도 조합식 창이 안 열린다)', () => {
+  RPD.SaveManager.data.spells = {};
+  RPD.bus.emit('field:changed', {});
+  clickTab('all'); clickChip('HIDDEN');
+  const html = panelHtml('recipeList');
+  const bad = [];
+  for (const sp of RPD.SpellData.list.filter(s => s.kind === 'hidden')) {
+    const name = RPD.PokemonData.get(sp.result).name;
+    const rows = hiddenRows(html);
+    const row = rows.find(r => r.indexOf('data-spell-n="' + RPD.SpellData.list.indexOf(sp) + '"') >= 0);
+    if (!row) { bad.push(sp.id + ': 줄 없음'); continue; }
+    // 결과 칸(rres) 만 떼어 본다 — 재료 칸에는 다른 포켓몬 이름이 정상적으로 보인다
+    const res = row.slice(row.indexOf('<span class="rres'), row.indexOf('<span class="rrow__state">'));
+    if (res.indexOf(name) >= 0) bad.push(sp.id + ': 결과 칸에 이름');
+    if (/data-def=|data-result=/.test(res)) bad.push(sp.id + ': 결과 칸이 눌린다(data-def)');
+    // 그림자 그림도 파일 경로(assets/pokemon/<id>.png) · id 를 안 남긴다(세션 59) — 빈 캔버스 + 무작위 번호표
+    if (res.indexOf('<img') >= 0 || res.indexOf(sp.result) >= 0 || res.indexOf('<canvas') < 0) bad.push(sp.id + ': 그림자에 그림 경로 · id');
+    if (row.indexOf('data-spell="') >= 0) bad.push(sp.id + ': data-spell 에 id');
+    // 이 결과가 다른 히든의 재료로 쓰이지 않는 한, 줄 전체 어디에도 이름이 없어야 한다
+    const asMat = sp.materials.indexOf(sp.result) >= 0;
+    if (!asMat && row.indexOf(name) >= 0) bad.push(sp.id + ': 줄 어딘가에 이름');
+  }
+  // 줄 밖(빈 칸 문구 · 개수)에도
+  const outside = html.replace(/<button[\s\S]*?<\/button>/g, '');
+  RPD.SpellData.list.filter(s => s.kind === 'hidden').forEach(sp => { if (outside.indexOf(RPD.PokemonData.get(sp.result).name) >= 0) bad.push(sp.id + ': 줄 밖에 이름'); });
+  if (bad.length) throw new Error(bad.slice(0, 5).join(' · '));
+  clickChip('ALL');
+});
+
+check('조합 사전 — 미발견 주문 결과의 그림자도 파일 경로 · id 를 안 남긴다', () => {
+  RPD.SaveManager.data.spells = {};
+  RPD.RecipeBook.open(); const book = panelHtml('bookList'); RPD.RecipeBook.close();
+  const bad = [];
+  const rows = [...book.matchAll(/<article class="bk__row bk__row--spell bk__row--secret"[\s\S]*?<\/article>/g)].map(m => m[0]);
+  if (!rows.length) throw new Error('사전에 미발견 주문 줄이 없다');
+  for (const r of rows) {
+    const res = r.slice(r.indexOf('<div class="bk__res">'), r.indexOf('<div class="bk__mats">'));
+    const sp = RPD.SpellData.byPhrase((r.match(/bk__phrase">「([^」]+)」/) || [])[1] || '');
+    if (!sp) { bad.push('주문 못 찾음'); continue; }
+    if (res.indexOf('<img') >= 0 || res.indexOf('assets/pokemon/') >= 0 || res.indexOf('"' + sp.result + '"') >= 0 || res.indexOf(RPD.PokemonData.get(sp.result).name) >= 0) bad.push(sp.id);
+  }
+  if (bad.length) throw new Error('결과 칸에 경로 · id · 이름: ' + bad.slice(0, 5).join(', '));
+});
+
+check('그림자 HTML 에 정답(id · 이름 · 경로)이 없고, 번호표는 매번 다르다(대응표는 JS 안에만)', () => {
+  const html = RPD.UI.shadow(RPD.PokemonData.get('mewtwo'), 'spr--res');
+  if (/mewtwo|뮤츠|assets\//.test(html)) throw new Error('그림자 HTML 에 정답이 있다: ' + html);
+  const m = html.match(/data-sh="([^"]+)"/);
+  if (!m) throw new Error('번호표가 없다');
+  const again = RPD.UI.shadow(RPD.PokemonData.get('mewtwo'), 'spr--res').match(/data-sh="([^"]+)"/)[1];
+  if (again === m[1]) throw new Error('같은 포켓몬에 같은 번호표 — 번호표로 정답을 맞힐 수 있다');
+});
+
+check('필드 조합식 [히든] 칩 — 재료가 모인 미발견 줄을 누르면 바로 조합되고 첫 발견이 된다 · 화면도 바로 바뀐다', () => {
+  RPD.SaveManager.data.spells = {};
+  const sp = RPD.SpellData.forResult('pikachu');
+  RPD.FieldManager.init(); RPD.StorageManager.reset();
+  sp.materials.forEach(id => RPD.StorageManager.add(RPD.UnitManager.create(id)));
+  RPD.bus.emit('field:changed', {});
+  clickTab('all'); clickChip('HIDDEN');
+  const n = RPD.SpellData.list.indexOf(sp);
+  let row = hiddenRows(panelHtml('recipeList')).find(r => r.indexOf('data-spell-n="' + n + '"') >= 0);
+  if (!row || row.indexOf('is-ready') < 0) throw new Error('재료가 다 있는데 완성 가능으로 안 뜬다');
+  if (hiddenRows(panelHtml('recipeList'))[0] !== row) throw new Error('완성 가능한 줄이 맨 위가 아니다');
+  let first = null;
+  const onCast = p => { if (p) first = p.firstTime; };
+  RPD.bus.on('spell:cast', onCast);
+  // 순번(data-spell-n)으로 누른다
+  const l = listeners.recipeList.click;
+  const fake = { dataset: { spellN: String(n) }, classList: { contains: c => c === 'is-ready', add() {}, remove() {} }, offsetWidth: 0 };
+  l.forEach(fn => fn({ target: { closest: sel => (sel === '.rrow' ? fake : null) } }));
+  const got = RPD.StorageManager.allUnits().concat(RPD.FieldManager.getUnits()).filter(u => u.defId === 'pikachu');
+  if (!got.length) throw new Error('눌렀는데 조합되지 않았다');
+  if (first !== true) throw new Error('첫 발견(firstTime)으로 알리지 않았다');
+  if (!RPD.SaveManager.knowsSpell(sp.id)) throw new Error('발견으로 기록되지 않았다');
+  // 캐시(recipeSig) 때문에 화면이 그대로면 안 된다 — 발견 즉시 이름이 드러난 줄로
+  RPD.bus.emit('field:changed', {});
+  row = hiddenRows(panelHtml('recipeList')).find(r => r.indexOf('data-spell="' + sp.id + '"') >= 0);
+  if (!row || row.indexOf('rrow--secret') >= 0 || row.indexOf(RPD.PokemonData.get('pikachu').name) < 0) throw new Error('발견했는데 화면이 안 바뀌었다(캐시)');
+  RPD.bus.off('spell:cast', onCast);
+  // 재료 수는 그대로 두고 발견만 기록돼도(채팅으로 외친 경우 등) 캐시 서명이 달라져야 한다
+  const other = RPD.SpellData.forResult('eevee');
+  RPD.bus.emit('field:changed', {});
+  RPD.SaveManager.recordSpell(other.id);
+  RPD.bus.emit('field:changed', {});
+  if (!hiddenRows(panelHtml('recipeList')).some(r => r.indexOf('data-spell="' + other.id + '"') >= 0)) throw new Error('재료 수가 그대로일 때 발견해도 화면이 안 바뀐다(캐시 서명에 발견 여부가 없다)');
+  clickChip('ALL');
+  RPD.SaveManager.data.spells = {};
 });
 
 check('필드 조합식 — 발견하면 그 자리에 줄이 뜨고, 클릭 한 번으로 바로 조합된다(채팅 없이)', () => {

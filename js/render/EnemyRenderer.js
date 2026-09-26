@@ -132,9 +132,13 @@
   EnemyRenderer.drawBossBar = function (ctx) {
     var boss = RPD.EnemyManager.boss;
     if (!boss || !boss.alive) return;
+    // 필드를 돌려 그려도(휴대폰 세로) 체력바는 화면 위쪽에 가로로
+    if (RPD.Renderer && RPD.Renderer.withScreenFrame) RPD.Renderer.withScreenFrame(ctx, function (c, W) { drawBossBarIn(c, W, boss); });
+    else drawBossBarIn(ctx, RPD.VIEW.width, boss);
+  };
 
-    var W = RPD.VIEW.width;
-    var barW = 460;
+  function drawBossBarIn(ctx, W, boss) {
+    var barW = Math.min(460, W - 40);
     var x = (W - barW) / 2;
     // 화면 위쪽 가운데는 라운드 진행 알약(DOM)이 차지한다. 그 아래로 내린다.
     var y = 56;
@@ -180,7 +184,7 @@
     ctx.fillStyle = '#e9e7d8';
     ctx.fillText(Math.ceil(Math.max(0, boss.hp)) + ' / ' + boss.maxHp, x + barW / 2, y + 12.5);
     ctx.restore();
-  };
+  }
 
   function mix(a, b, t) {
     var pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);

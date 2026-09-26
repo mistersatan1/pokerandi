@@ -21,6 +21,7 @@
 
   EnemyManager.reset = function () {
     this.enemies.length = 0;
+    if (RPD.MapData.resetRoutes) RPD.MapData.resetRoutes();
     this.boss = null;
     this.clock = 0;
     RPD.bus.emit('enemy:countChanged', 0);
@@ -55,6 +56,8 @@
       isElite: !!def.isElite,
 
       distance: opts.distance || 0,
+      // 두 갈래 경로 — 위(0) · 아래(1) 번갈아. 분열 · 무리는 부모 · 첫 마리의 길을 따른다
+      route: opts.route != null ? opts.route : (RPD.MapData.nextRoute ? RPD.MapData.nextRoute() : 0),
       x: 0, y: 0,
 
       maxHp: maxHp,
@@ -84,7 +87,7 @@
       enemy.elite = !!skin.elite;
     }
 
-    var p = RPD.MapData.path.pointAt(enemy.distance);
+    var p = RPD.MapData.pathFor(enemy).pointAt(enemy.distance);
     enemy.x = p.x;
     enemy.y = p.y;
 
@@ -102,8 +105,9 @@
     if (!def.packSize || def.packSize <= 1) return [this.spawn(enemyId, wave)];
 
     var out = [];
+    var route = RPD.MapData.nextRoute ? RPD.MapData.nextRoute() : 0;   // 무리는 한 길로 같이
     for (var i = 0; i < def.packSize; i++) {
-      out.push(this.spawn(enemyId, wave, { distance: -i * 16 }));
+      out.push(this.spawn(enemyId, wave, { distance: -i * 16, route: route }));
     }
     return out;
   };
@@ -111,7 +115,7 @@
   /* ---------- 갱신 ---------- */
 
   EnemyManager.update = function (dt) {
-    var path = RPD.MapData.path;
+    var M = RPD.MapData;
     this.clock += dt;
     var now = this.clock;
 
@@ -133,6 +137,7 @@
         RPD.bus.emit('boss:enraged', e);
       }
 
+      var path = M.pathFor(e);
       var speed = currentSpeed(e);
       if (speed > 0) {
         e.distance += speed * dt;
@@ -183,6 +188,9 @@
     var ax = opts.source && opts.source.auraExtras;
     var auraPierce = ax && ax.armorPierce ? enemy.armor * ax.armorPierce : 0;
     if (ax && ax.bossDamage && enemy.isBoss) amount *= 1 + ax.bossDamage;
+    // 종 자체의 보스 피해(pokemon.js bossDamage) — 광역 불멸이 단일 보스를 못 잡던 것을 메운다(세션 44 +50% · 세션 50 +80%)
+    var own = opts.source && opts.source.def && opts.source.def.bossDamage;
+    if (own && enemy.isBoss) amount *= 1 + own;
     var armor = Math.max(0, enemy.armor - (enemy.effects.armorShred || 0) - (opts.armorPierce || 0) - auraPierce);
     var mitigation = opts.ignoreArmor ? 1 : (100 / (100 + armor));
     var dealt = amount * mitigation;
@@ -313,7 +321,8 @@
       // 진행 방향으로 살짝 어긋나게 놓아 겹쳐 보이지 않게 한다
       var offset = (i - (cfg.count - 1) / 2) * (cfg.spread || 30);
       var child = mgr.spawn(cfg.id, enemy.wave, {
-        distance: Math.max(0, enemy.distance + offset)
+        distance: Math.max(0, enemy.distance + offset),
+        route: enemy.route
       });
       RPD.bus.emit('enemy:split', { parent: enemy, child: child });
     }

@@ -7,6 +7,29 @@
 
 > **운으로 뽑지만, 조합식과 위치로 운을 뒤집는 랜덤 디펜스.**
 
+![두 갈래 맵 — PC 화면](docs/img/map_pc.png)
+
+## 여는 방법 · 휴대폰에 앱으로 설치
+
+| 방법 | 어떻게 | 오프라인 · 앱 설치 |
+|---|---|---|
+| 더블클릭 | 폴더를 받아 `index.html` 을 연다 | 안 됨(브라우저 규칙) |
+| 테스트판 한 파일 | `npm run build` → `dist/포켓몬랜덤디펜스_테스트.html` 하나만 보내면 된다 | 안 됨 |
+| 인터넷 주소(https) | 저장소를 https 주소에 올린다 — 예: GitHub **Settings → Pages → Branch `main` / `(root)` → Save** 후 `https://<아이디>.github.io/<저장소>/` | **됨** |
+
+**휴대폰 홈 화면에 앱으로 설치** (https 주소로 열었을 때만)
+
+- 안드로이드 크롬: 오른쪽 위 **☰ 메뉴 → 📲 [앱 설치]**. 설치 창이 안 뜨면 브라우저 메뉴(⋮) → [앱 설치] 또는 [홈 화면에 추가].
+- 아이폰 사파리: 공유 버튼 → **[홈 화면에 추가]** (사파리는 설치 창을 띄워 주지 않아 📲 을 누르면 방법을 알려 준다).
+- 설치한 앱은 처음부터 전체 화면이고, 한 번 열어 두면 게임 파일 · 그림을 전부 저장해 **인터넷 없이도** 된다.
+  인터넷이 되면 항상 새 판을 받는다(고친 게 안 보이면 앱을 완전히 닫았다 다시 연다).
+- 브라우저로 열었을 때는 ☰ 메뉴 **⛶ [전체 화면]** 으로 주소창 없이 할 수 있다.
+
+<img src="docs/img/app_menu_phone.png" alt="휴대폰 세로 화면 — ☰ 메뉴의 📲 앱 설치 · ⛶ 전체 화면" width="300">
+
+휴대폰(1100px 미만)은 전용 배치다 — 세로는 필드를 90° 돌려 크게, 패널은 아래 탭 서랍으로. 단축키 기능은 전부 화면 버튼으로도 있다.
+길게 누르면 설명 · 사거리, 끌어서 자리 바꾸기 · 보유 탭에 놓아 창고로.
+
 ES 모듈 대신 클래식 `<script>` 를 쓰는 이유가 이것이다 — 모듈은 `file://` 에서 CORS 로 막혀
 반드시 서버를 띄워야 한다. 서버로 보고 싶다면 `python3 -m http.server 8000`.
 
@@ -40,7 +63,7 @@ ES 모듈 대신 클래식 `<script>` 를 쓰는 이유가 이것이다 — 모�
 | 조합 사전 | 모든 조합식 · 흔함 환산 · 초성 검색 · 보유 기준 정렬 (R) |
 | 보스 보상 | 10R 특별함 · 20R 소환권3+특별함 · 30R 희귀함 · 40R 소환권3+희귀함 · 50R 전설 |
 | 창고 | 14칸(확장 가능). 필드와 양방향으로 옮기고, 창고에서 바로 방출한다 |
-| 필드 | 26칸(기본 18 + 골드로 사는 확장 8). 출구 구간까지 덮는다 |
+| 필드 | **두 갈래 맵** — 입구 → 위 · 아래 두 길(적이 번갈아) → 합류 → 출구. 28칸(기본 20 + 골드로 사는 확장 8). 칸 종류: 명당(두 길 사이, 모든 적) · 한쪽(한 길만, 가까이서 오래) · 출구(합류 뒤) |
 | 스킬 | 희귀함부터 고유 스킬 13종, 전설은 스킬 + 전설 패시브 5종 |
 | 특성 | 27종 — 희귀함 5종 · 특별함 전부 · 안흔함 6종 · 흔함 4종. 종류 14가지. `js/data/traits.js` 에서 추가·수정 |
 | 시너지 | 타입 17종. 우측에 항상 보인다 |
@@ -68,7 +91,7 @@ ES 모듈 대신 클래식 `<script>` 를 쓰는 이유가 이것이다 — 모�
 완성 가능한 조합식, 고른 칸, 골드. 빨강은 라이프에만 쓴다.
 
 1920×1080 / 1366×768 / 1280×720 에서 스크롤 없이 한 화면에 들어간다.
-1100px 미만이면 세로로 풀리고 영역마다 자체 스크롤이 생긴다.
+1100px 미만(휴대폰)은 `css/mobile.css` 의 전용 배치 — 위 "여는 방법" 참고.
 마우스와 터치가 같은 경로를 쓴다 — 끌어서 칸을 바꾸는 것이 태블릿에서도 된다.
 
 ## 설계에서 지킨 것
@@ -163,20 +186,23 @@ node tools/build-tester.js     # 테스터용 단일 HTML 만들기 → dist/
 
 ## 소리
 
-배경음 3곡(평시·전투·보스)과 효과음 19종이 **전부 WebAudio 합성**이다. 음원 파일이 없다.
+효과음 19종과 기본 배경음은 **WebAudio 합성**이다.
+배경음악은 내 곡으로 바꿀 수 있다 — `assets/music/` 에 `calm · battle · boss · hidden · immortal · transcend .mp3` 를 넣으면
+그 장면에서 파일을 반복 재생하고(곡이 바뀔 때 1초 겹침), 없는 장면은 합성 음악. 곡별 음량은 `js/data/music.js`. 더블클릭으로 열어도 된다.
 상단 스피커 버튼에서 배경음·효과음 음량과 음소거를 조절하고, 설정은 저장된다.
 브라우저 정책상 첫 클릭에서 소리가 깨어난다.
 
 ## 폴더 구조
 
 ```
-js/core/     RPD.js(설정·등급·모드) Utils EventBus Assets PathFollower Loop AudioManager
+js/core/     RPD.js(설정·등급·모드) Utils EventBus Assets PathFollower Loop AudioManager MusicFiles Pwa
 js/data/     types map tiers pokemon enemies waves recipes dexbonus skills attackfx
 js/systems/  Game Field Economy Stats Synergy Unit Summon Enemy Combat Skill Boss
              Recipe Storage Shard Wave Save
-js/render/   SpriteFactory Renderer Map Fx Unit Enemy AttackFx
+js/render/   SpriteFactory Renderer FramePacer Map Fx Unit Enemy AttackFx
 js/ui/       Icons UIManager HudPanels
-css/         main(토큰·레이아웃) game(필드·오버레이) ui(패널·버튼)
+css/         main(토큰·레이아웃) game(필드·오버레이) ui(패널·버튼) mobile(휴대폰)
+sw.js · manifest.webmanifest   홈 화면 앱(오프라인 · 설치)
 ```
 
 ## 문서
@@ -184,7 +210,7 @@ css/         main(토큰·레이아웃) game(필드·오버레이) ui(패널·�
 | 파일 | 내용 |
 |---|---|
 | `VERSION.md` | 개발 기록 — 무엇을 왜 바꿨는지, 측정값과 함께 |
-| `CHECKPOINT.md` | 최근 작업(UI 리디자인 · 고유 스킬)의 진행 상황과 다음 할 일 |
+| `CHECKPOINT.md` | 오래된 기록(세션 33 무렵) — 현재 상태는 `VERSION.md` |
 | `docs/REDESIGN.md` | v1 → v2 리디자인 기술 설계서 |
 | `docs/설명서.md` | 플레이어용 — 단축키 · 조각 상점 (게임 안 ? / H 와 같은 내용) |
 | `docs/RECIPES_GUIDE.md` | 조합식·포켓몬 직접 추가하는 법 |

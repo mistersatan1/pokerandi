@@ -131,7 +131,7 @@
   /* 장식(나무·덤불·바위·꽃·연못). 경로와 칸을 절대 가리지 않는 자리에만 놓는다.
    * 전부 굽는 배경에 들어가므로 프레임 비용은 0 이다. */
   function clearOf(x, y, pad) {
-    var d = MAP.path && MAP.path.distanceTo ? MAP.path.distanceTo(x, y) : distToPolyline(x, y);
+    var d = MAP.closestDistanceTo ? MAP.closestDistanceTo(x, y) : distToPolyline(x, y);
     if (d < MAP.pathWidth / 2 + pad) return false;
     for (var i = 0; i < MAP.slots.length; i++) {
       var sl = MAP.slots[i];
@@ -246,13 +246,17 @@
   /* 가장자리가 보이게 됐으므로 길도 캔버스 끝까지 이어 그린다.
    * 적이 숲 밖에서 걸어 들어오는 것처럼 보인다. 판정 경로(MapData.path)는 그대로다. */
   function tracePath(ctx) {
-    var pts = MAP.waypoints;
+    // 두 갈래 — 길마다 한 줄씩(입구 줄기 · 합류 뒤 꼬리는 겹쳐 그려진다)
+    var routes = MAP.routes || [MAP.waypoints];
     var B = pathBounds;
     ctx.beginPath();
-    var first = pts[0], last = pts[pts.length - 1];
-    ctx.moveTo(B ? Math.min(first.x, B.x - 30) : first.x, first.y);
-    for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-    if (B) ctx.lineTo(Math.max(last.x, B.x + B.w + 30), last.y);
+    for (var r = 0; r < routes.length; r++) {
+      var pts = routes[r];
+      var first = pts[0], last = pts[pts.length - 1];
+      ctx.moveTo(B ? Math.min(first.x, B.x - 30) : first.x, first.y);
+      for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      if (B) ctx.lineTo(Math.max(last.x, B.x + B.w + 30), last.y);
+    }
   }
 
   function paintPath(ctx, bounds) {
@@ -312,14 +316,14 @@
     eg.addColorStop(0, 'rgba(111,212,138,0.55)');
     eg.addColorStop(1, 'rgba(111,212,138,0)');
     ctx.fillStyle = eg;
-    ctx.fillRect(0, MAP.laneY.A - w / 2, 70, w);
+    ctx.fillRect(0, MAP.entry.y - w / 2, 70, w);
 
     // 출구 — 여기로 빠져나가면 라이프가 깎인다
     var xg = ctx.createLinearGradient(1000, 0, 920, 0);
     xg.addColorStop(0, 'rgba(224,85,79,0.62)');
     xg.addColorStop(1, 'rgba(224,85,79,0)');
     ctx.fillStyle = xg;
-    ctx.fillRect(920, MAP.laneY.C - w / 2, 80, w);
+    ctx.fillRect(920, MAP.exit.y - w / 2, 80, w);
 
   }
 
@@ -331,14 +335,14 @@
     ctx.lineWidth = 3.5;
     ctx.strokeStyle = 'rgba(12,28,50,0.75)';
     ctx.textAlign = 'left';
-    ctx.strokeText('적 등장', 10, MAP.laneY.A - w / 2 - 14);
+    ctx.strokeText('적 등장', 10, MAP.entry.y - w / 2 - 14);
     ctx.fillStyle = '#c8ffd6';
-    ctx.fillText('적 등장', 10, MAP.laneY.A - w / 2 - 14);
+    ctx.fillText('적 등장', 10, MAP.entry.y - w / 2 - 14);
 
     ctx.textAlign = 'right';
-    ctx.strokeText('출구', 990, MAP.laneY.C + w / 2 + 15);
+    ctx.strokeText('출구', 990, MAP.exit.y + w / 2 + 15);
     ctx.fillStyle = '#ffd0cb';
-    ctx.fillText('출구', 990, MAP.laneY.C + w / 2 + 15);
+    ctx.fillText('출구', 990, MAP.exit.y + w / 2 + 15);
     ctx.restore();
   }
 

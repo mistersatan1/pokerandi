@@ -1136,7 +1136,13 @@
           : s235 >= 500 ? SLOT_KIND[2]
           : SLOT_KIND[3];
 
-    return '<div class="slotkind" title="' + k.hint + '">' +
+    // 두 갈래 경로(세션 56) — 명당 · 갈림길 · 위 길만 · 아래 길만 · 출구 방어
+    var where = slot.kindLabel
+      ? '<div class="slotkind slotkind--route" title="' + (slot.note || '') + '">' +
+          '<span class="slotkind__tag">' + slot.kindLabel + '</span>' +
+          '<span class="slotkind__hint">' + (slot.note || '') + '</span></div>'
+      : '';
+    return where + '<div class="slotkind" title="' + k.hint + '">' +
       '<span class="slotkind__tag">' + k.label + '</span>' +
       '<span class="slotkind__hint">' + k.hint + '</span>' +
     '</div>';

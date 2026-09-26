@@ -125,8 +125,11 @@
   }
   UnitManager.auraExtrasFor = auraExtrasFor;
 
-  // 4×4 격자에서 상하좌우·대각선으로 맞닿은 칸
+  /* 옆 칸 — 칸 중심 사이 거리가 MapData.neighborRange(200px) 이내(세션 56 두 갈래 맵).
+   * 예전 4×4 격자는 행 · 열 번호로 셌는데, 새 맵에는 격자가 없다(격자 밖 출구 · 확장 칸이 600px 넘게 떨어져도 "옆 칸"이던 문제도 같이 없어졌다). */
   function isNeighbor(a, b) {
+    var R = RPD.MapData && RPD.MapData.neighborRange;
+    if (R && a.x != null && b.x != null) { var dx = a.x - b.x, dy = a.y - b.y; return dx * dx + dy * dy <= R * R; }
     return Math.abs(a.row - b.row) <= 1 && Math.abs(a.col - b.col) <= 1;
   }
 

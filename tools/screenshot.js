@@ -123,6 +123,30 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
   console.log('bossrush20', await page.evaluate(() => { const b = window.RPD.EnemyManager.boss; return b ? { name: b.name, maxHp: Math.round(b.maxHp) } : null; }));
   await page.screenshot({ path: require('path').join(__dirname, '..', 'dist', '09_bossrush_final.png') });
 
+  // ⑩ 두 갈래 경로(세션 56) — 명당 · 갈림길 · 한쪽 · 출구 칸에 포켓몬, 두 길로 번갈아 걷는 적, 명당 칸 정보 카드
+  await page.evaluate(() => {
+    const R = window.RPD;
+    document.querySelectorAll('.modepick, .result, .help, .book').forEach(o => o.hidden = true);
+    R.Game.resetAll('NORMAL', 'NORMAL'); R.Game.startRun('NORMAL', 'NORMAL');
+    R.GameManager.setWave(14); R.WaveManager.startRound(14);
+    const F = R.FieldManager, put = (i, id) => F.place(i, R.UnitManager.create(id));
+    F.slots.forEach(sl => { if (sl.unit) F.remove ? F.remove(sl.index) : (sl.unit = null); });   // 시작 포켓몬을 치우고 종류별로 놓는다
+    // 약한 포켓몬으로 — 적이 두 길에 살아서 보이게
+    put(0, 'charmander'); put(1, 'pikachu'); put(2, 'squirtle'); put(3, 'bulbasaur');   // 명당 3 + 갈림길
+    put(4, 'rattata'); put(5, 'pidgey'); put(8, 'caterpie'); put(9, 'weedle');         // 주머니(위 · 아래)
+    put(16, 'geodude'); put(17, 'oddish');                                              // 출구 방어
+    R.UnitManager.recomputeAll(); R.bus.emit('field:changed', {});
+    R.GameManager.life = 999;
+  });
+  await page.waitForTimeout(9000);
+  console.log('routes', await page.evaluate(() => { const E = window.RPD.EnemyManager.enemies; return { top: E.filter(e => e.route === 0).length, bottom: E.filter(e => e.route === 1).length }; }));
+  await page.screenshot({ path: require('path').join(__dirname, '..', 'dist', '10_twin_routes.png') });
+  await page.evaluate(() => { window.RPD.Loop.setPaused(true); window.RPD.FieldManager.select(1); window.RPD.bus.emit('field:changed', {}); });
+  await page.waitForTimeout(400);
+  console.log('centercard', await page.evaluate(() => { const c = document.querySelector('#slotCard'); return c ? c.innerText.split('\n').slice(0, 6).join(' | ') : null; }));
+  await page.screenshot({ path: require('path').join(__dirname, '..', 'dist', '10b_center_slot.png') });
+  await page.evaluate(() => { window.RPD.FieldManager.select(-1); window.RPD.Loop.setPaused(false); });
+
   console.log('errors', errors.slice(0, 5));
 
   /* ---------- 모바일 ① — 휴대폰 흉내(갤럭시 S24 · 아이폰 15, 세로 · 가로) ----------
@@ -288,6 +312,9 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     st = await state();
     res['A → B 끌기는 자리를 바꾼다'] = st.at[A.i] === 'squirtle' && st.at[B.i] === 'charmander';
     // ④ 필드 → [보유] 탭에 놓기(서랍 닫힌 채) → 창고로
+    // (끌기 뒤 고른 칸의 정보 카드가 아래 절반을 덮는다 — 두 갈래 맵에서는 B 가 그 아래에 있어 카드부터 닫는다. 사람도 그렇게 한다)
+    await tp.evaluate(() => { window.RPD.FieldManager.select(-1); window.RPD.bus.emit('field:changed', {}); });
+    await hold(150);
     const tab = await tp.evaluate(() => { const b = document.querySelector('.mtab[data-mtab="owned"]').getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; });
     await drag(B.x, B.y, tab.x, tab.y, 12);
     st = await state();

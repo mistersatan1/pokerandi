@@ -50,8 +50,8 @@
         label: s.label || '',
         unit: null,
         // 이 슬롯에서 경로까지의 최단 거리.
-        distToPath: RPD.MapData.path.closestDistanceTo(s.x, s.y),
-        // 사거리별로 이 칸이 경로를 몇 px 덮는지. 배치 판단의 근거를 숫자로 보여 준다.
+        distToPath: RPD.MapData.closestDistanceTo(s.x, s.y),
+        // 사거리별로 이 칸이 경로를 몇 px 덮는지(적 한 마리 기준 — 두 갈래는 절반씩, MapData.coverageAt).
         coverage: {
           100: RPD.MapData.coverageAt(s.x, s.y, RPD.Range.SHORT),
           155: RPD.MapData.coverageAt(s.x, s.y, RPD.Range.MID),

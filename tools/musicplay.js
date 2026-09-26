@@ -71,7 +71,7 @@ async function scenario(browser, name, url) {
   fs.copyFileSync(path.join(ROOT, 'index.html'), path.join(tmp, 'index.html'));
   for (const d of ['js', 'css']) fs.symlinkSync(path.join(ROOT, d), path.join(tmp, d));
   fs.mkdirSync(path.join(tmp, 'assets'));
-  for (const d of fs.readdirSync(path.join(ROOT, 'assets'))) fs.symlinkSync(path.join(ROOT, 'assets', d), path.join(tmp, 'assets', d));
+  for (const d of fs.readdirSync(path.join(ROOT, 'assets'))) if (d !== 'music') fs.symlinkSync(path.join(ROOT, 'assets', d), path.join(tmp, 'assets', d));   // music 은 아래에서 따로(저장소 쪽엔 README 만)
   fs.mkdirSync(path.join(tmp, 'assets', 'music'));
   fs.writeFileSync(path.join(tmp, 'assets/music/calm.mp3'), wav(440));
   fs.writeFileSync(path.join(tmp, 'assets/music/battle.mp3'), wav(660));

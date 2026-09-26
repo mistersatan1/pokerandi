@@ -192,7 +192,7 @@ section('필드 배치');
   check('칸끼리 겹치지 않는다', overlaps.length === 0, `bad=${overlaps.slice(0, 5)}`);
 
   const onPath = RPD.MapData.slots.filter(sl =>
-    RPD.MapData.path.closestDistanceTo(sl.x, sl.y) < RPD.MapData.pathWidth / 2 + S / 2);
+    RPD.MapData.closestDistanceTo(sl.x, sl.y) < RPD.MapData.pathWidth / 2 + S / 2);
   check('칸이 경로 위에 올라앉지 않는다', onPath.length === 0, `bad=${onPath.length}`);
 
   // 클릭 판정이 실제로 정확한지
@@ -200,6 +200,106 @@ section('필드 배치');
   const misHit = F.slots.filter(sl => F.hitTest(sl.x, sl.y) !== sl.index);
   check('모든 칸이 자기 중심을 클릭하면 잡힌다', misHit.length === 0,
     `bad=${misHit.map(sl => sl.index)}`);
+}
+
+/* ---------- 두 갈래 경로 (세션 56) ----------
+ * 예전 한 줄 경로의 "긴 사거리로 못 덮는 구간 없음 · 출구 방어 칸" 조건을 새 맵에 맞게 다시 세운다. */
+section('두 갈래 경로 · 칸 종류');
+{
+  const M = RPD.MapData, R = RPD.Range;
+  const [P0, P1] = M.paths;
+  check('길이 두 개 · 길이가 같다(출구 앞 적 고르기 · 걷는 시간이 두 길에서 같게)', M.paths.length === 2 && Math.abs(P0.length - P1.length) < 0.5,
+    M.paths.map(p => Math.round(p.length)).join(' · '));
+  check('길이가 예전 한 줄 경로(2510px)와 비슷하다(±10%)', Math.abs(P0.length - 2510) / 2510 <= 0.10, String(Math.round(P0.length)));
+  const same = (a, b) => Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) < 0.5;
+  const trunkLen = M.partPaths.find(p => p.id === 'trunk').path.length, tailLen = M.partPaths.find(p => p.id === 'tail').path.length;
+  let sharedOk = true, splitOk = false;
+  for (let d = 0; d <= P0.length; d += 5) {
+    const a = P0.pointAt(d), b = P1.pointAt(d);
+    if ((d <= trunkLen || d >= P0.length - tailLen) && !same(a, b)) sharedOk = false;
+    if (d > trunkLen + 60 && d < P0.length - tailLen - 60 && Math.abs(a.y - b.y) > 100) splitOk = true;
+  }
+  check('입구에서 한 줄 → 갈림길에서 위 · 아래로 나뉨 → 출구 앞에서 다시 한 줄', sharedOk && splitOk);
+  let jump = 0;
+  M.paths.forEach(p => { let prev = p.pointAt(0); for (let d = 2; d <= p.length; d += 2) { const c = p.pointAt(d); jump = Math.max(jump, Math.hypot(c.x - prev.x, c.y - prev.y)); prev = c; } });
+  check('두 길 모두 끊기지 않는다(순간이동 없음) · 끝이 화면 오른쪽 밖', jump < 3.5 && P0.pointAt(P0.length).x >= RPD.VIEW.width && P1.pointAt(P1.length).x >= RPD.VIEW.width, jump.toFixed(2));
+
+  const F = RPD.FieldManager; F.init();
+  const base = F.slots.filter(s => s.unlocked), ext = F.slots.filter(s => s.expansion);
+  check('칸 수는 그대로: 기본 18 + 확장 8', base.length === 18 && ext.length === 8 && M.baseSlotCount === 18, base.length + '+' + ext.length);
+
+  // 긴 사거리로 못 덮는 구간 — 기본 칸만으로, 모든 조각(입구 · 위 · 아래 · 합류 뒤)의 모든 점
+  const holes = [];
+  M.partPaths.forEach(pp => {
+    for (let d = 0; d <= pp.path.length; d += 4) {
+      const q = pp.path.pointAt(d);
+      if (q.x < 0 || q.x > RPD.VIEW.width) continue;   // 화면 밖(들어오기 · 나가기 전)
+      if (!base.some(s => Math.hypot(s.x - q.x, s.y - q.y) <= R.LONG)) holes.push(pp.id + '@' + Math.round(q.x) + ',' + Math.round(q.y));
+    }
+  });
+  check('긴 사거리(235)로 기본 칸이 못 덮는 구간이 없다(두 길 · 줄기 · 꼬리 모두)', holes.length === 0, holes.slice(0, 5).join(' · '));
+
+  const parts = s => M.coverageParts(s.x, s.y, R.MID);
+  const exitDef = base.filter(s => parts(s).tail >= 150);
+  check('출구 방어 칸: 합류 뒤 한 줄을 사거리 155 로 150px 넘게 덮는 기본 칸이 2칸 이상', exitDef.length >= 2 && exitDef.every(s => s.kind === 'exit'),
+    exitDef.map(s => s.index + ':' + parts(s).tail).join(' '));
+  const both = base.filter(s => parts(s).upper >= 150 && parts(s).lower >= 150);
+  check('명당: 위 · 아래 길이 다 사거리 155 안(각 150px 넘게)인 기본 칸이 3~4칸(가운데 3 + 갈림길)',
+    both.length >= 3 && both.length <= 4 && both.filter(s => s.kind === 'center').length === 3, both.map(s => s.index + ':' + s.kind).join(' '));
+  const one = base.filter(s => (parts(s).upper >= 150) !== (parts(s).lower >= 150) && Math.min(parts(s).upper, parts(s).lower) === 0);
+  check('한쪽 길만 보는 기본 칸이 여러 개(위 · 아래 같은 수)', one.length >= 8 && one.filter(s => s.kind === 'upper').length === one.filter(s => s.kind === 'lower').length,
+    one.length + '칸');
+  const mirrorBad = F.slots.filter(s => s.kind === 'upper' && !F.slots.some(t => t.kind === 'lower' && t.x === s.x && t.y === 600 - s.y && !!t.expansion === !!s.expansion));
+  check('위 · 아래 칸은 대칭(짝이 있다) — 어느 길로 오든 같은 조건', mirrorBad.length === 0, mirrorBad.map(s => s.index).join(','));
+  const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
+  const cenMid = avg(base.filter(s => s.kind === 'center').map(s => M.coverageAt(s.x, s.y, R.MID)));
+  const oneMid = avg(one.map(s => M.coverageAt(s.x, s.y, R.MID)));
+  const cenLong = avg(base.filter(s => s.kind === 'center').map(s => M.coverageAt(s.x, s.y, R.LONG)));
+  const oneLong = avg(one.map(s => M.coverageAt(s.x, s.y, R.LONG)));
+  check('커버리지는 "적 한 마리 기준"(두 갈래는 절반) — 명당이 한쪽 칸보다 넓다(사거리 155 · 235 평균)', cenMid > oneMid && cenLong > oneLong,
+    `155: ${cenMid.toFixed(0)} vs ${oneMid.toFixed(0)} · 235: ${cenLong.toFixed(0)} vs ${oneLong.toFixed(0)}`);
+
+  // 옆 칸(버퍼 오라)
+  const UM = RPD.UnitManager;
+  const nb = F.slots.map(a => F.slots.filter(b => b !== a && UM.isNeighbor(a, b)));
+  check('옆 칸: 모든 칸이 옆 칸을 2개 이상 · 옆 칸은 200px 안(멀리 떨어진 칸이 옆 칸이 되지 않는다)',
+    nb.every(l => l.length >= 2) && nb.every((l, i) => l.every(b => Math.hypot(b.x - F.slots[i].x, b.y - F.slots[i].y) <= 200)),
+    nb.map(l => l.length).join(','));
+
+  // 적 배정 — 번갈아 · 무리는 한 길 · 분열은 부모 길
+  const EM = RPD.EnemyManager;
+  EM.reset();
+  const routes = [];
+  for (let i = 0; i < 6; i++) routes.push(EM.spawn('grunt', 10).route);
+  check('적은 위 · 아래 길에 번갈아(판 시작은 위 길부터)', routes.join('') === '010101', routes.join(''));
+  const allDefs = RPD.EnemyData.list.map(d => (typeof d === 'string' ? RPD.EnemyData.get(d) : d));
+  const swarm = allDefs.find(d => d.packSize > 1);
+  const pack = swarm ? EM.spawnEntry(swarm.id, 10) : [];
+  check('무리(군집)는 한 길로 같이 간다', pack.length > 1 && pack.every(e => e.route === pack[0].route), pack.map(e => e.route).join(''));
+  const splitter = allDefs.find(d => d.splitInto);
+  let childOk = true;
+  if (splitter) {
+    EM.reset();
+    EM.spawn('grunt', 10);                         // 다음은 아래 길(1)
+    const parent = EM.spawn(splitter.id, 10);
+    parent.distance = 900;
+    const kids = [];
+    RPD.bus.on('enemy:split', p => { if (p.parent === parent) kids.push(p.child); });
+    EM.kill(parent, null);
+    childOk = parent.route === 1 && kids.length > 0 && kids.every(k => k.route === 1);
+  }
+  check('분열한 적은 부모가 가던 길로', childOk);
+  EM.reset();
+  const a = EM.spawn('grunt', 10), b = EM.spawn('grunt', 10);
+  a.distance = b.distance = P0.length * 0.4;
+  EM.update(1 / 60);
+  check('위 길 적은 위(y<300) · 아래 길 적은 아래(y>300)로 걷는다', a.y < 300 && b.y > 300, a.y.toFixed(0) + ' · ' + b.y.toFixed(0));
+  let leaked = 0;
+  const offLeak = RPD.bus.on ? RPD.bus.on('enemy:leaked', () => { leaked += 1; }) : null;
+  a.distance = b.distance = P0.length - 0.5;
+  for (let i = 0; i < 30; i++) EM.update(1 / 60);
+  check('두 길 모두 끝에 닿으면 새어 나간다', EM.enemies.length === 0);
+  EM.reset();
 }
 
 /* ---------- 라운드별 등급 해금 ---------- */

@@ -51,12 +51,68 @@
       '" draggable="false" loading="lazy" data-def="' + def.id + '" onerror="RPD.UI.spriteFallback(this)"></span>';
   };
 
-  /* 아직 발견하지 않은 주문의 결과 — 그림자(실루엣)만. 이름·alt 도 가린다.
-   * 재료와 주문은 다 보여 주고, "무엇이 나오는지"만 힌트로 남긴다. */
+  /* 아직 발견하지 않은 것(주문 결과 · 미발견 재료) — 그림자(실루엣)만. 이름 · alt 도 가린다.
+   * 재료와 주문은 다 보여 주고, "무엇이 나오는지"만 힌트로 남긴다.
+   *
+   * img 태그(assets/pokemon/피카츄id.png) 로 그리면 파일 경로에 id(= 정답)가 그대로 남는다(세션 59).
+   * 그래서 빈 <canvas> 에 **무작위 번호표**만 달아 내보내고, 화면에 붙은 직후(paintShadows) 그림을 그려 검게 칠한 뒤 번호표를 뗀다.
+   * 번호 → 포켓몬 대응은 이 파일 안 변수에만 있다. 더블클릭(file://)에서는 그림을 data URL 로 바꿀 수 없지만(보안)
+   * 캔버스에 그리는 것까지는 되므로 이 방법이 file:// · 인터넷 주소 · 한 파일 테스트판 모두에서 같게 돈다. */
+  var shadowQueue = {};
+  var shadowSeq = 0;
+  var shadowTimer = null;
   UI.shadow = function (def, cls) {
     if (!def) return '<span class="spr spr--empty ' + (cls || '') + '"></span>';
-    return '<span class="spr is-shadow ' + (cls || '') + '" title="아직 만들어 본 적 없다"><img src="' + RPD.Assets.url(def.sprite) +
-      '" alt="???" draggable="false" loading="lazy" data-def="' + def.id + '" onerror="RPD.UI.spriteFallback(this)"></span>';
+    var tok = 's' + (++shadowSeq).toString(36) + Math.random().toString(36).slice(2, 7);
+    shadowQueue[tok] = def.id;
+    scheduleShadows();
+    return '<span class="spr is-shadow ' + (cls || '') + '" title="아직 만들어 본 적 없다">' +
+      '<canvas class="spr__shadow" data-sh="' + tok + '" width="96" height="96" role="img" aria-label="???"></canvas></span>';
+  };
+
+  function scheduleShadows() {
+    if (shadowTimer || typeof global.setTimeout !== 'function') return;
+    // innerHTML 에 넣는 건 같은 흐름 안에서 끝난다 — 그 다음 차례에 칠한다
+    shadowTimer = global.setTimeout(function () { shadowTimer = null; UI.paintShadows(); }, 0);
+  }
+
+  function paintShadow(cv, id) {
+    var g = cv.getContext && cv.getContext('2d');
+    var def = RPD.PokemonData && RPD.PokemonData.get(id);
+    if (!g || !def) return;
+    var draw = function (src) {
+      if (!src) return;
+      g.clearRect(0, 0, cv.width, cv.height);
+      g.imageSmoothingEnabled = false;
+      g.globalCompositeOperation = 'source-over';
+      g.drawImage(src, 0, 0, cv.width, cv.height);
+      g.globalCompositeOperation = 'source-in';   // 그림이 있는 자리만 검게
+      g.fillStyle = '#000';
+      g.fillRect(0, 0, cv.width, cv.height);
+      g.globalCompositeOperation = 'source-over';
+    };
+    var made = function () { return RPD.SpriteFactory ? RPD.SpriteFactory.get(def) : null; };
+    var e = RPD.Assets && RPD.Assets.get(def.sprite);
+    if (!e || !e.img) { draw(made()); return; }
+    if (e.state === 'ready') { draw(e.img); return; }
+    if (e.state === 'failed') { draw(made()); return; }
+    e.img.addEventListener('load', function () { draw(e.img); });
+    e.img.addEventListener('error', function () { draw(made()); });
+  }
+
+  /* 화면에 붙은 그림자 캔버스를 칠하고 번호표를 뗀다. 칠하지 못한(이미 다시 그려져 사라진) 번호는 버린다. */
+  UI.paintShadows = function () {
+    var d = global.document;
+    var q = shadowQueue;
+    shadowQueue = {};
+    if (!d || !d.querySelectorAll) return 0;
+    var list = d.querySelectorAll('canvas[data-sh]'), n = 0;
+    for (var i = 0; i < list.length; i++) {
+      var cv = list[i], tok = cv.getAttribute('data-sh'), id = q[tok];
+      cv.removeAttribute('data-sh');
+      if (id) { paintShadow(cv, id); n += 1; }
+    }
+    return n;
   };
 
   UI.spriteFallback = function (img) {

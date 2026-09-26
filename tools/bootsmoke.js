@@ -683,6 +683,8 @@ check('필드 조합식 [히든] 칩 — 미발견 결과의 이름 · id 가 HT
     const res = row.slice(row.indexOf('<span class="rres'), row.indexOf('<span class="rrow__state">'));
     if (res.indexOf(name) >= 0) bad.push(sp.id + ': 결과 칸에 이름');
     if (/data-def=|data-result=/.test(res)) bad.push(sp.id + ': 결과 칸이 눌린다(data-def)');
+    // 그림자 그림도 파일 경로(assets/pokemon/<id>.png) · id 를 안 남긴다(세션 59) — 빈 캔버스 + 무작위 번호표
+    if (res.indexOf('<img') >= 0 || res.indexOf(sp.result) >= 0 || res.indexOf('<canvas') < 0) bad.push(sp.id + ': 그림자에 그림 경로 · id');
     if (row.indexOf('data-spell="') >= 0) bad.push(sp.id + ': data-spell 에 id');
     // 이 결과가 다른 히든의 재료로 쓰이지 않는 한, 줄 전체 어디에도 이름이 없어야 한다
     const asMat = sp.materials.indexOf(sp.result) >= 0;
@@ -693,6 +695,30 @@ check('필드 조합식 [히든] 칩 — 미발견 결과의 이름 · id 가 HT
   RPD.SpellData.list.filter(s => s.kind === 'hidden').forEach(sp => { if (outside.indexOf(RPD.PokemonData.get(sp.result).name) >= 0) bad.push(sp.id + ': 줄 밖에 이름'); });
   if (bad.length) throw new Error(bad.slice(0, 5).join(' · '));
   clickChip('ALL');
+});
+
+check('조합 사전 — 미발견 주문 결과의 그림자도 파일 경로 · id 를 안 남긴다', () => {
+  RPD.SaveManager.data.spells = {};
+  RPD.RecipeBook.open(); const book = panelHtml('bookList'); RPD.RecipeBook.close();
+  const bad = [];
+  const rows = [...book.matchAll(/<article class="bk__row bk__row--spell bk__row--secret"[\s\S]*?<\/article>/g)].map(m => m[0]);
+  if (!rows.length) throw new Error('사전에 미발견 주문 줄이 없다');
+  for (const r of rows) {
+    const res = r.slice(r.indexOf('<div class="bk__res">'), r.indexOf('<div class="bk__mats">'));
+    const sp = RPD.SpellData.byPhrase((r.match(/bk__phrase">「([^」]+)」/) || [])[1] || '');
+    if (!sp) { bad.push('주문 못 찾음'); continue; }
+    if (res.indexOf('<img') >= 0 || res.indexOf('assets/pokemon/') >= 0 || res.indexOf('"' + sp.result + '"') >= 0 || res.indexOf(RPD.PokemonData.get(sp.result).name) >= 0) bad.push(sp.id);
+  }
+  if (bad.length) throw new Error('결과 칸에 경로 · id · 이름: ' + bad.slice(0, 5).join(', '));
+});
+
+check('그림자 HTML 에 정답(id · 이름 · 경로)이 없고, 번호표는 매번 다르다(대응표는 JS 안에만)', () => {
+  const html = RPD.UI.shadow(RPD.PokemonData.get('mewtwo'), 'spr--res');
+  if (/mewtwo|뮤츠|assets\//.test(html)) throw new Error('그림자 HTML 에 정답이 있다: ' + html);
+  const m = html.match(/data-sh="([^"]+)"/);
+  if (!m) throw new Error('번호표가 없다');
+  const again = RPD.UI.shadow(RPD.PokemonData.get('mewtwo'), 'spr--res').match(/data-sh="([^"]+)"/)[1];
+  if (again === m[1]) throw new Error('같은 포켓몬에 같은 번호표 — 번호표로 정답을 맞힐 수 있다');
 });
 
 check('필드 조합식 [히든] 칩 — 재료가 모인 미발견 줄을 누르면 바로 조합되고 첫 발견이 된다 · 화면도 바로 바뀐다', () => {

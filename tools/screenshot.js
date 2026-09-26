@@ -170,6 +170,13 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
   };
   console.log('hiddenchip pc', JSON.stringify(await page.evaluate(hiddenPrep)));
   await page.waitForTimeout(400);
+  // 그림자 캔버스가 실제로 칠해졌는가(번호표는 떼어졌는가) · 목록 HTML 에 그림 경로가 없는가 — 테스트판은 그림이 data URL 이라 픽셀을 읽을 수 있다
+  console.log('shadows pc', JSON.stringify(await page.evaluate(() => {
+    const cs = [...document.querySelectorAll('#recipeList .rrow--secret .rres canvas')];
+    const painted = cs.filter(c => { try { const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; for (let i = 3; i < d.length; i += 4) if (d[i] > 0) return true; } catch (e) { return 'tainted'; } return false; }).length;
+    return { canvases: cs.length, painted, tagsLeft: document.querySelectorAll('canvas[data-sh]').length,
+      pathInHtml: /assets\/pokemon\//.test(document.getElementById('recipeList').innerHTML) };
+  })));
   await page.screenshot({ path: require('path').join(__dirname, '..', 'dist', '11_hidden_chip_pc.png') });
   await page.evaluate(() => { const c = document.querySelector('#tierFilter [data-tier="ALL"]'); if (c) c.click(); window.RPD.Loop.setPaused(false); });
   console.log('errors', errors.slice(0, 5));
@@ -296,7 +303,9 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
       document.querySelectorAll('.modepick, .result, .help, .book').forEach(o => o.hidden = true);
       R.Game.resetAll('NORMAL', 'NORMAL'); R.Game.startRun('NORMAL', 'NORMAL');
       R.Loop && R.Loop.setPaused && R.Loop.setPaused(true);
-      const F = R.FieldManager, open = F.slots.filter(s => s.unlocked);
+      const F = R.FieldManager;
+      F.slots.forEach(s => { if (s.unit) F.remove(s.index); });   // 시작 포켓몬이 무작위 칸에 있어 끌기 결과가 판마다 달랐다 — 비우고 시작
+      const open = F.slots.filter(s => s.unlocked);
       F.place(open[0].index, R.UnitManager.create('charmander'));
       F.place(open[1].index, R.UnitManager.create('squirtle'));
       R.StorageManager.add(R.UnitManager.create('pikachu'));

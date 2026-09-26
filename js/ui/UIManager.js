@@ -2127,7 +2127,7 @@
       ? '<span class="rres" data-def="' + v.resultId + '" title="누르면 조합식">' + UI.sprite(def, 'spr--res') +
         '<span class="rres__name">' + def.name + '</span>'
       : '<span class="rres rres--secret" title="아직 모르는 히든 — 재료를 모아 주문을 외치면 무엇인지 알게 된다">' +
-        UI.shadow(def, 'spr--res').replace(/ data-def="[^"]*"/g, '') +
+        UI.shadow(def, 'spr--res') +
         '<span class="rres__name is-secret">???</span>';
     var kind = v.discovered ? '🔒 히든' : '❔ 미발견';
     return '<button type="button" class="rrow rrow--spell' + (v.discovered ? '' : ' rrow--secret') + (v.ready ? ' is-ready' : '') +

@@ -54,12 +54,12 @@
 
   /* ---------- 전설 패시브 ---------- */
 
-  SkillManager.recomputePassives = function () {
+  /* 종 목록(def)에서 팀 패시브를 합친다 — 필드 전체(recomputePassives)와 도감 카드(혼자 올렸을 때)가 같이 쓴다 */
+  SkillManager.passiveFor = function (defs) {
     var p = basePassive();
-    var units = RPD.FieldManager.getUnits();
     var seen = {};
-    for (var i = 0; i < units.length; i++) {
-      var def = units[i].def;
+    for (var i = 0; i < defs.length; i++) {
+      var def = defs[i];
       var pas = RPD.SkillData.passiveForUnit(def);
       // 같은 전설을 두 마리 올려도 패시브는 한 번만 — 중복 스택은 후반을 무너뜨린다
       if (!pas || seen[pas.id]) continue;
@@ -81,6 +81,11 @@
       if (pas.burnOnHit) p.burnOnHit = Math.max(p.burnOnHit, pas.burnOnHit);
       if (pas.teamArmorPierce) p.teamArmorPierce += pas.teamArmorPierce;
     }
+    return p;
+  };
+
+  SkillManager.recomputePassives = function () {
+    var p = SkillManager.passiveFor(RPD.FieldManager.getUnits().map(function (u) { return u.def; }));
     // 능력치에 들어가는 축이 바뀌면 전체를 다시 계산한다
     var changed = p.teamAttackMul !== this.passive.teamAttackMul ||
       p.teamCritDamageAdd !== this.passive.teamCritDamageAdd ||

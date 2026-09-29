@@ -975,13 +975,6 @@
     if (slot) positionSlotCard(slot);
   };
 
-  var ATTACK_LABEL = {
-    SINGLE: '단일 공격',
-    SPLASH: '광역 공격',
-    PIERCE: '관통 공격',
-    CHAIN: '연쇄 공격'
-  };
-
   var TARGET_LABEL = {
     FIRST: '출구에 가까운 적',
     LAST: '갓 나온 적',
@@ -1035,16 +1028,8 @@
     var tier = RPD.Tiers[u.tier] || RPD.Tiers.T1;
     var def = u.def;
 
-    var types = (u.types || []).map(function (id) {
-      var t = RPD.Types[id];
-      if (!t) return '';
-      return '<span class="typechip" style="--tc:' + t.color + '">' + UI.typeIcon(id) + t.label + '</span>';
-    }).join('');
-
-    var attackNote = ATTACK_LABEL[u.attackType] || ATTACK_LABEL.SINGLE;
-    if (u.attackType === 'SPLASH') attackNote += ' ' + u.splash;
-    else if (u.attackType === 'PIERCE') attackNote += ' ' + u.pierce + '체';
-    else if (u.attackType === 'CHAIN') attackNote += ' ' + u.chain + '회';
+    var types = UI.typeChips(u.types);
+    var attackNote = UI.attackNote(u);
 
     var stats = [
       ['DPS', U.formatNumber(Math.round(u.dps)), true],
@@ -1080,15 +1065,8 @@
       UI.trait(def.id, 'trait--card') +
       UI.aura(def.id, 'trait--card') +
       receivedAura(u) +
-      (u.skill ? '<div class="sc__skill' + (u.skillCooldown <= 0 ? ' is-ready' : '') + '">' +
-          '<span class="sc__skillName">' + u.skill.name + '</span>' +
-          '<span class="sc__skillCd">' + (u.skillCooldown <= 0 ? '준비 완료'
-            : Math.ceil(u.skillCooldown) + '초') + '</span>' +
-          '<span class="sc__skillDesc">' + u.skill.desc + '</span>' +
-        '</div>' : '') +
-      (RPD.SkillData && RPD.SkillData.passiveForUnit(def) ?
-        '<div class="sc__passive"><b>' + RPD.SkillData.passiveForUnit(def).name + '</b>' +
-        RPD.SkillData.passiveForUnit(def).desc + '</div>' : '') +
+      UI.skillBox(u.skill, u.skillCooldown <= 0 ? '준비 완료' : Math.ceil(u.skillCooldown) + '초', u.skillCooldown <= 0) +
+      UI.passiveBox(def) +
       '<div class="sc__foot">' + slotKindHtml(slot) +
         '<span class="sc__dmg">누적 ' + U.formatNumber(u.totalDamage) + '</span></div>';
 
@@ -1490,11 +1468,7 @@
   /* 히든(🔒) 재료 표시 — 조합식 목록에 없고 채팅 주문으로만 만든다 */
   /* 히든인데 아직 그 주문을 성공한 적 없는 재료 — 필드 쪽에서는 이름·그림을 가린다.
    * (조합 사전은 다르다: 사전은 재료를 항상 다 보여 준다 — 이건 필드 조합식/조합식 창/보유 상세용) */
-  function matSecret(id) {
-    if (!RPD.PokemonData.isHidden(id)) return false;
-    var sp = RPD.SpellData && RPD.SpellData.forResult(id);
-    return !(sp && RPD.SaveManager.knowsSpell && RPD.SaveManager.knowsSpell(sp.id));
-  }
+  function matSecret(id) { return RPD.UI.isSecret(id); }
   function lockTag(id) {
     if (matSecret(id)) return '<span class="rmat__lock rmat__lock--mystery" title="아직 모르는 재료 — 무엇인지는 이 포켓몬을 먼저 찾아내야 안다">❔</span>';
     return RPD.PokemonData.isHidden(id) ? '<span class="rmat__lock" title="히든 — 채팅 주문으로만 만든다">🔒</span>' : '';
@@ -2201,14 +2175,19 @@
     }
 
     if (el.dexGrid) {
+      /* 칸을 누르면 세부 카드(DexCard). 칸이 가리키는 건 id 가 아니라 도감 번호(data-dex-n) —
+       * 안 만난 칸은 그림자(UI.shadow)라 HTML 에 영어 id · 이름 · 그림 경로가 남지 않는다(세션 61). */
+      var no = {};
+      RPD.PokemonData.list.forEach(function (d, i) { no[d.id] = i; });
       el.dexGrid.innerHTML = RPD.ALL_TIERS.map(function (t) {
         return RPD.PokemonData.ofTier(t).map(function (id) {
           var def = RPD.PokemonData.byId[id];
           var seen = SV.hasSeen(id);
-          return '<div class="dexcell' + (seen ? '' : ' is-locked') + '" style="--tier:' + RPD.Tiers[t].color + '">' +
-            RPD.UI.sprite(def, 'spr--dex') +
+          return '<button type="button" class="dexcell' + (seen ? '' : ' is-locked') + '" data-dex-n="' + no[id] + '" style="--tier:' + RPD.Tiers[t].color + '"' +
+            ' title="' + (seen ? def.name + ' — 눌러서 자세히' : '아직 만나지 못한 포켓몬') + '">' +
+            (seen ? RPD.UI.sprite(def, 'spr--dex') : RPD.UI.shadow(def, 'spr--dex')) +
             '<span class="dexcell__name">' + (seen ? def.name : '???') + '</span>' +
-          '</div>';
+          '</button>';
         }).join('');
       }).join('');
     }
@@ -2219,6 +2198,7 @@
 
   function hideDex() {
     if (!el.dex) return;
+    if (RPD.DexCard) RPD.DexCard.close();
     el.dex.hidden = true;
     if (GM.isPlayable()) RPD.Loop.setPaused(false);
   }

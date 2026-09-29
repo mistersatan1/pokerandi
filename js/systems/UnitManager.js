@@ -207,6 +207,36 @@
     unit.dps = expected;
   };
 
+  /* ---------- 기본값 (도감 카드 · 세션 61) ----------
+   * 필드에 없는 임시 개체를 만들어 **recompute 를 그대로** 돌린다 — 게임 속 수치와 같은 식이라 어긋날 일이 없다.
+   * 판 안에서 바뀌는 것만 잠깐 중립으로 바꿔 끼운다: 시너지 · 골드 상점 · 스킬 버프 · 다른 전설의 팀 패시브 · 도감 보너스 · 전체 공격 대상.
+   * 자기 전설 패시브는 넣는다 — 필드에 올리면 언제나 자신에게도 걸리므로 "혼자 올렸을 때"와 같게(SkillManager.passiveFor).
+   * 영구 보정(CraftPower · RoleTuning)과 종 고유 특성(TraitManager.applyStats)도 그대로 들어간다. 강화 0 · 옆 버퍼 없음. */
+  UnitManager.baseStats = function (defId) {
+    if (!RPD.PokemonData.get(defId)) return null;
+    var SM = RPD.SynergyManager, SK = RPD.SkillManager, DB = RPD.DexBonus, GS = RPD.GoldShopManager, GM = RPD.GameManager;
+    var saved = {
+      bonus: SM.bonus, buff: SK && SK.buff, passive: SK && SK.passive,
+      totals: DB && DB.totals, atk: GS && GS.attackMul, spd: GS && GS.speedMul, all: GM && GM.targetAll
+    };
+    var unit;
+    try {
+      SM.bonus = SM.baseBonus();
+      if (SK) { SK.buff = null; SK.passive = SK.passiveFor([RPD.PokemonData.get(defId)]); }
+      if (DB) DB.totals = function () { return { damage: 0, attackSpeed: 0, gold: 0, critRate: 0, startGold: 0 }; };
+      if (GS) { GS.attackMul = function () { return 1; }; GS.speedMul = function () { return 1; }; }
+      if (GM) GM.targetAll = null;
+      unit = UnitManager.create(defId);        // create 가 recompute(unit, 0) 까지 한다 — 위 중립 상태에서
+    } finally {
+      SM.bonus = saved.bonus;
+      if (SK) { SK.buff = saved.buff; SK.passive = saved.passive; }
+      if (DB) DB.totals = saved.totals;
+      if (GS) { GS.attackMul = saved.atk; GS.speedMul = saved.spd; }
+      if (GM) GM.targetAll = saved.all;
+    }
+    return unit;
+  };
+
   /* ---------- 공격 대상 선택 (세션 42) ----------
    * 우선순위: 개체에 고른 것 > "전체 적용"으로 고른 것(판 동안, 새로 뽑은 개체에도) > 종 기본값.
    * 보스를 쳐야 할 때 잡몹을 먼저 치는 개체를 사람이 바로잡을 수 있게. 스킬도 같은 선택을 따른다(SkillManager). */

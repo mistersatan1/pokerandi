@@ -37,6 +37,7 @@ node tools/perf.js 4  # 휴대폰 성능 — CPU 4배 느린 갤럭시 흉내로
 | `js/data/waves.js` | 적 체력 곡선 — ~50 ×1.109, 51~60 ×1.07, **61R 계단 ×5.4**, 이후 ×1.02 · 맵 보정 `mapHpMul` 0.97(모든 적). 70R 보스는 69R 체력에서 나오니 벽을 바꾸면 모드의 `finalBossHpMul` 도 같이 |
 | `js/systems/*Manager.js` | 규칙. 골드 상점 `GoldShopManager` · 정예 `EliteManager` · 보상 `RewardManager` |
 | `js/ui/UIManager.js` | 화면 대부분. 크다 — 파일 상단 구조 설명부터 읽는다 |
+| `js/ui/DexCard.js` | 도감 세부 카드(세션 61) — 수치는 `UnitManager.baseStats`(임시 개체 + recompute, 판 안 버프 중립). 칸 카드와 같이 쓰는 조각은 `Icons.js`(UI.typeChips · skillBox · passiveBox · isSecret) |
 | `css/mobile.css` | 휴대폰(1100px 미만) 레이아웃 — 가장 마지막에 불러온다. 필드 90° 돌림은 `Renderer.js`(`--field-rotate`) |
 | `js/data/music.js` · `js/core/MusicFiles.js` | 배경음악 파일 — 장면별(calm · battle · boss · hidden · immortal · transcend) `assets/music/*.mp3` · 곡별 음량 · 겹침 1초. 없으면 합성(AudioManager). `<audio>` 로만(file:// 가능). 실제 재생 검사 `node tools/musicplay.js` |
 | `js/render/FramePacer.js` | 언제 · 얼마나 곱게 그릴지 — 전투 최대 60fps · 쉬는 중 10fps · 느리면 화질 사다리(해상도 2→1.5→1.25→1→30fps). 게임 규칙 · 시간은 안 건드림 |
@@ -108,6 +109,7 @@ node tools/perf.js 4  # 휴대폰 성능 — CPU 4배 느린 갤럭시 흉내로
   ④ 성능 — 저사양 휴대폰에서 프레임 · 발열 · 배터리 ← **세션 54 완료**(`FramePacer` · `tools/perf.js`. 실기기 확인은 아직 — 헤드리스는 GPU 가 없어 그리기가 실제보다 비싸다)
 - 두 갈래 맵(세션 56 · 57): 불멸 없음은 체력 ×0.97 · 벽 5.4 · 명당 +2 로 맞췄다(8%). **광역 불멸 2마리는 24% 로 목표 35% 에 못 미친다** — 사용자 결정 대기. 보스 러시 · 엔드리스 · 챌린지는 두 갈래 맵에서 아직 안 쟀다.
 - 봇이 불멸을 스스로 거의 못 만든다 — 사람이 60R 전에 불멸을 갖출 수 있는지는 **플레이로 확인 필요**.
+- `burnChance`(18종)는 전투 코드가 안 읽는 죽은 값(세션 61 발견) — 지울지 효과를 붙일지 결정 대기.
 - 61R 인데 HUD 라운드 옆에 "2R 뒤 희귀함"이 뜬다 — 다음 해금 표시 버그로 보임(미확인).
 - 메타몽: 인수인계에는 "소환 가능"이었으나 조합식 v2 표대로 히든으로 넣었다 — 결정 대기.
 - 시라소몬(희귀함·히든)이 흔함 3마리분으로 지나치게 싸다(괴력몬 전설도 연쇄로 싸다).

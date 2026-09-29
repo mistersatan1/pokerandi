@@ -142,6 +142,50 @@
       ' <small>패시브</small></span><span class="trait__desc">' + a.desc + '</span></div>';
   };
 
+  /* ---------- 칸 정보 카드 · 도감 카드가 같이 쓰는 조각 (세션 61) ---------- */
+
+  /* 타입 칩 줄 */
+  UI.typeChips = function (types) {
+    return (types || []).map(function (id) {
+      var t = RPD.Types[id];
+      if (!t) return '';
+      return '<span class="typechip" style="--tc:' + t.color + '">' + UI.typeIcon(id) + t.label + '</span>';
+    }).join('');
+  };
+
+  UI.ATTACK_LABEL = { SINGLE: '단일 공격', SPLASH: '광역 공격', PIERCE: '관통 공격', CHAIN: '연쇄 공격' };
+  /* "광역 공격 58" · "연쇄 공격 3회" — 실효 스탯(unit) 기준 */
+  UI.attackNote = function (u) {
+    var note = UI.ATTACK_LABEL[u.attackType] || UI.ATTACK_LABEL.SINGLE;
+    if (u.attackType === 'SPLASH') note += ' ' + u.splash;
+    else if (u.attackType === 'PIERCE') note += ' ' + u.pierce + '체';
+    else if (u.attackType === 'CHAIN') note += ' ' + u.chain + '회';
+    return note;
+  };
+
+  /* 고유 스킬 상자. state 는 오른쪽 작은 글자(칸 카드: 남은 쿨다운 · 도감: "쿨다운 22초") */
+  UI.skillBox = function (skill, state, ready) {
+    if (!skill) return '';
+    return '<div class="sc__skill' + (ready ? ' is-ready' : '') + '">' +
+      '<span class="sc__skillName">' + skill.name + '</span>' +
+      '<span class="sc__skillCd">' + state + '</span>' +
+      '<span class="sc__skillDesc">' + skill.desc + '</span></div>';
+  };
+
+  /* 전설 · 불멸 · 초월 패시브 상자 */
+  UI.passiveBox = function (def) {
+    var p = RPD.SkillData && RPD.SkillData.passiveForUnit(def);
+    return p ? '<div class="sc__passive"><b>' + p.name + '</b>' + p.desc + '</div>' : '';
+  };
+
+  /* 히든인데 아직 그 주문을 성공한 적 없는 포켓몬 — 이름 · 그림을 가린다(그림자 + ❔, 눌러도 안 열림).
+   * 필드 조합식 · 조합식 창 · 보유 창 · 도감 카드가 같은 규칙을 쓴다. */
+  UI.isSecret = function (id) {
+    if (!RPD.PokemonData.isHidden(id)) return false;
+    var sp = RPD.SpellData && RPD.SpellData.forResult(id);
+    return !(sp && RPD.SaveManager && RPD.SaveManager.knowsSpell && RPD.SaveManager.knowsSpell(sp.id));
+  };
+
   UI.tierColor = function (tierId) {
     return (RPD.Tiers[tierId] || RPD.Tiers.T1).color;
   };

@@ -51,6 +51,7 @@
     RPD.MapRenderer.init();
     RPD.UIManager.init();
     if (RPD.RecipeBook) RPD.RecipeBook.init();
+    if (RPD.DexCard) RPD.DexCard.init();
     if (RPD.GoldShopUI) RPD.GoldShopUI.init();
     if (RPD.EliteUI) RPD.EliteUI.init();
     if (RPD.SpellUI) RPD.SpellUI.init();

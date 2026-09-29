@@ -489,7 +489,7 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
       R.bus.emit('field:changed', {});
       // 화상을 누가 걸었는지 센다(도구 쪽 관찰 — 게임 코드는 그대로)
       const EM = R.EnemyManager, orig = EM.applyDot;
-      window.__burn = { procNonFire: 0, strong: 0 };
+      window.__burn = { procNonFire: 0 };
       EM.applyDot = function (enemy, perSecond, duration, source, kind, maxStacks) {
         if (kind === 'burn' && source && source.def && source.def.burnChance && !source.typeFlags.FIRE) window.__burn.procNonFire += 1;
         return orig.apply(this, arguments);

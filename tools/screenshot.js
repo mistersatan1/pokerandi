@@ -422,6 +422,54 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     await hctx.close();
   }
 
+  // ⑫ 도감 세부 카드(세션 61) — 전설(스킬 · 패시브 · 특성: 라이츄) · 버퍼(픽시) · 미등록(뮤츠). PC · 휴대폰 세로 · 가로.
+  //    도감 칸을 실제로 눌러 연다. 확인: 카드가 화면 안에 다 들어오는가 · 휴대폰은 아래 시트인가 · 미등록 카드에 이름이 없는가.
+  const dexPrep = () => {
+    const R = window.RPD;
+    document.querySelectorAll('.modepick, .result, .help, .book').forEach(o => o.hidden = true);
+    R.Game.resetAll('NORMAL', 'NORMAL'); R.Game.startRun('NORMAL', 'NORMAL');
+    R.SaveManager.data.spells = {};
+    ['bulbasaur', 'charmander', 'squirtle', 'pikachu', 'raichu', 'clefairy', 'clefable', 'magnemite', 'magneton', 'charmeleon', 'charizard']
+      .forEach(id => { R.SaveManager.data.pokedex[id] = 1; });
+    R.Loop.setPaused(true);
+    document.getElementById('btnDex').click();
+    return document.getElementById('dexOverlay').hidden === false;
+  };
+  const dexCardShots = [];
+  for (const dev of ['PC', 'Galaxy S24', 'Galaxy S24 landscape']) {
+    const dctx = await browser.newContext(dev === 'PC' ? { viewport: { width: 1440, height: 900 } } : { ...devices[dev], defaultBrowserType: undefined });
+    const dp = await dctx.newPage();
+    await dp.goto(URL); await dp.waitForTimeout(1000);
+    await dp.evaluate(dexPrep);
+    for (const id of ['raichu', 'clefable', 'mewtwo']) {
+      const n = await dp.evaluate(id => window.RPD.PokemonData.list.findIndex(d => d.id === id), id);
+      await dp.evaluate(() => window.RPD.DexCard.close());
+      const cell = dp.locator('#dexGrid [data-dex-n="' + n + '"]');
+      await cell.scrollIntoViewIfNeeded();
+      await cell.click();                      // 실제 누르기로 연다
+      await dp.waitForTimeout(450);
+      const info = await dp.evaluate(() => {
+        const panel = document.getElementById('dexCardPanel'), r = panel.getBoundingClientRect();
+        return { open: !document.getElementById('dexCard').hidden, no: (panel.querySelector('.dc__no') || {}).textContent,
+          name: (panel.querySelector('.sc__name') || {}).textContent, inView: r.top >= -1 && r.bottom <= innerHeight + 1 && r.left >= -1 && r.right <= innerWidth + 1,
+          sheet: Math.abs(r.bottom - innerHeight) < 24 && r.width >= innerWidth - 2, w: Math.round(r.width), h: Math.round(r.height) };
+      });
+      const file = '12_dexcard_' + dev.replace(/ /g, '_') + '_' + id + '.png';
+      dexCardShots.push({ dev, id, ...info });
+      console.log('dexcard', dev, id, JSON.stringify(info));
+      await dp.screenshot({ path: require('path').join(__dirname, '..', 'dist', file) });
+    }
+    // 닫기 — Esc 는 카드만 닫고 도감은 남는다 · 바깥(어두운 곳) 누르기
+    await dp.keyboard.press('Escape');
+    const afterEsc = await dp.evaluate(() => ({ card: !document.getElementById('dexCard').hidden, dex: !document.getElementById('dexOverlay').hidden }));
+    await dp.locator('#dexGrid [data-dex-n="0"]').click();
+    const bb = await dp.locator('#dexCard').boundingBox();
+    await dp.mouse.click(bb.x + 6, bb.y + 6);          // 카드 바깥(어두운 곳)
+    const afterOutside = await dp.evaluate(() => !document.getElementById('dexCard').hidden);
+    console.log('dexcard close', dev, JSON.stringify({ afterEsc, afterOutside }));
+    await dctx.close();
+  }
+
   /* ---------- 모바일 ③ — 홈 화면 앱(세션 53) ----------
    * 설치 · 오프라인은 인터넷 주소에서만 되니, 원본 폴더(dist 아님)를 이 자리에서 작은 웹 서버로 띄워 연다(localhost 는 https 와 같게 친다).
    * 확인: 크롬이 "설치할 수 있다"고 보는가(설치 불가 사유 0) · 서비스 워커 · 오프라인 저장 · 인터넷을 끊고 다시 열어도 켜지고 처음 보는 그림이 나오는가 ·

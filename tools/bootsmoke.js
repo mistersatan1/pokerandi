@@ -993,6 +993,152 @@ check('창고에 자리가 있으면 필드가 차도 소환 버튼이 열려 �
   if (nodes.btnSummon.disabled) throw new Error('창고가 비었는데 소환이 잠겼다');
 });
 
+/* ---------- 도감 세부 카드 (세션 61) ---------- */
+console.log('\n도감 세부 카드');
+function dexNo(id) { return RPD.PokemonData.list.findIndex(d => d.id === id); }
+function dexCardHtml() { return panelHtml('dexCardPanel'); }
+function dexClick(sel, value) {
+  // 카드 안 클릭 — 가짜 DOM 이라 closest 를 흉내 낸다
+  const target = { closest: (q) => (q === sel ? { dataset: sel === '[data-dc-go]' ? { dcGo: String(value) } : {} } : null) };
+  (listeners.dexCard.click || []).forEach(fn => fn({ target }));
+}
+
+check('도감 칸을 누르면 카드가 열린다 — 칸은 id 가 아니라 도감 번호(data-dex-n)로 가리킨다', () => {
+  RPD.SaveManager.data.pokedex = { raichu: 1, clefable: 1, bulbasaur: 1 };
+  (listeners.btnDex.click || []).forEach(fn => fn({}));
+  const grid = panelHtml('dexGrid');
+  const n = dexNo('raichu');
+  if (grid.indexOf('data-dex-n="' + n + '"') < 0) throw new Error('라이츄 칸에 도감 번호가 없다');
+  const target = { closest: (q) => (q === '[data-dex-n]' ? { dataset: { dexN: String(n) } } : null) };
+  (listeners.dexGrid.click || []).forEach(fn => fn({ target }));
+  if (!RPD.DexCard.isOpen() || RPD.DexCard.n !== n) throw new Error('카드가 안 열렸다');
+  if (dexCardHtml().indexOf('라이츄') < 0) throw new Error('카드에 이름이 없다');
+});
+
+check('등록된 전설 카드 — 스킬 이름 · 쿨다운 · 패시브 · 특성 · 공격력 · 얻는 법 · 보정이 나온다', () => {
+  RPD.DexCard.openId('raichu');
+  const html = dexCardHtml(), def = RPD.PokemonData.get('raichu');
+  const u = RPD.UnitManager.baseStats('raichu');
+  const need = [u.skill.name, '쿨다운 ' + u.skill.cooldown + '초', RPD.SkillData.passiveForUnit(def).name,
+    RPD.TraitData.get('raichu').name, RPD.Utils.formatNumber(Math.round(u.attack)), RPD.Utils.formatNumber(Math.round(u.dps)),
+    '연쇄 딜러', '조합', RPD.CraftPower.labelOf(def), '역할 보정 피해 ×0.8', '장거리', '판 안 강화'];
+  const miss = need.filter(t => html.indexOf(t) < 0);
+  if (miss.length) throw new Error('빠진 것: ' + miss.join(', '));
+});
+
+check('등록된 버퍼 카드 — 주변 버프(auras.js) · 오라 역할 보정이 나온다', () => {
+  RPD.DexCard.openId('clefable');
+  const html = dexCardHtml(), a = RPD.AuraData.get('clefable');
+  const need = [a.icon, a.name, a.desc, '역할 보정 오라 ×1.4', '버퍼', '옆 칸 공격력'];
+  const miss = need.filter(t => html.indexOf(t) < 0);
+  if (miss.length) throw new Error('빠진 것: ' + miss.join(', '));
+});
+
+check('미등록 카드 — 이름 · id · 그림 경로 · 수치 · 스킬이 HTML 어디에도 없다("아직 만나지 못한 포켓몬"만)', () => {
+  const leaks = [];
+  ['mewtwo', 'pikachu', 'charizard', 'gengar', 'snorlax', 'mewtwo_transcend'].forEach(id => {
+    delete RPD.SaveManager.data.pokedex[id];
+    RPD.DexCard.openId(id);
+    const html = dexCardHtml(), def = RPD.PokemonData.get(id);
+    const u = RPD.UnitManager.baseStats(id);
+    const bad = [def.name, def.id, def.roleLabel, 'assets/pokemon', '공격력', 'DPS', RPD.Utils.formatNumber(Math.round(u.attack))]
+      .concat(u.skill ? [u.skill.name] : []).filter(t => html.indexOf(t) >= 0);
+    if (bad.length) leaks.push(id + ': ' + bad.join(' · '));
+    if (html.indexOf('아직 만나지 못한 포켓몬') < 0) leaks.push(id + ': 안내 문구 없음');
+  });
+  if (leaks.length) throw new Error(leaks.join(' / '));
+});
+
+check('도감 칸 — 미등록 칸 HTML 에도 이름 · id · 그림 경로가 없다(그림자)', () => {
+  RPD.SaveManager.data.pokedex = { bulbasaur: 1 };
+  (listeners.btnDex.click || []).forEach(fn => fn({}));
+  const grid = panelHtml('dexGrid');
+  const cells = [...grid.matchAll(/<button[^>]*class="dexcell is-locked"[\s\S]*?<\/button>/g)].map(m => m[0]);
+  if (cells.length !== RPD.PokemonData.list.length - 1) throw new Error('잠긴 칸 수가 다르다: ' + cells.length);
+  const leak = cells.find(c => /assets\/pokemon|data-def|<img/.test(c)) ||
+    cells.find(c => RPD.PokemonData.list.some(d => d.id !== 'bulbasaur' && (c.indexOf('"' + d.id + '"') >= 0 || c.indexOf('>' + d.name + '<') >= 0)));
+  if (leak) throw new Error('잠긴 칸에서 샌다: ' + leak.slice(0, 160));
+});
+
+check('카드 수치 = 필드에 혼자 올린 실제 개체의 recompute 값(강화 · 버프 없음) — 154종 전부', () => {
+  const F = RPD.FieldManager, bad = [];
+  RPD.GoldShopManager.reset(); RPD.SkillManager.reset(); RPD.GameManager.targetAll = null;
+  RPD.SaveManager.data.pokedex = { bulbasaur: 1 };            // 도감 보너스 0(10종 미만) — 전제
+  const t0 = RPD.DexBonus.totals();
+  if (t0.damage || t0.attackSpeed || t0.critRate) throw new Error('전제가 깨졌다 — 도감 보너스가 붙어 있다');
+  RPD.PokemonData.list.forEach(def => {
+    F.init(); RPD.StorageManager.reset();
+    const slot = F.slots.find(s => s.unlocked);
+    F.place(slot.index, RPD.UnitManager.create(def.id));
+    RPD.bus.emit('field:changed', {});                          // 실제 경로: 시너지 · 전설 패시브 · recomputeAll
+    const real = slot.unit, card = RPD.UnitManager.baseStats(def.id);
+    ['dps', 'attack', 'attackSpeed', 'range', 'critRate', 'critDamage', 'splash', 'chain', 'pierce'].forEach(k => {
+      if (Math.abs((real[k] || 0) - (card[k] || 0)) > 1e-6 * Math.max(1, Math.abs(real[k] || 0))) bad.push(def.id + '.' + k + ' ' + real[k] + ' ≠ ' + card[k]);
+    });
+  });
+  if (bad.length) throw new Error(bad.length + '건 — ' + bad.slice(0, 4).join(' / '));
+});
+
+check('카드 수치는 판 안 버프(시너지 · 골드 상점 · 스킬 버프)에 안 흔들리고, 그 버프 상태를 되돌려 놓는다', () => {
+  const before = RPD.UnitManager.baseStats('raichu').dps;
+  const SM = RPD.SynergyManager, SK = RPD.SkillManager, GS = RPD.GoldShopManager;
+  const bonus = SM.bonus; const fakeBonus = Object.assign(SM.baseBonus(), { attackSpeedMul: 2, critRateAdd: 0.5 });
+  SM.bonus = fakeBonus; SK.buff = { attackMul: 3, speedMul: 2, until: SK.clock + 99 };
+  const atk = GS.attackMul; GS.attackMul = () => 5;
+  const during = RPD.UnitManager.baseStats('raichu').dps;
+  const restored = SM.bonus === fakeBonus && SK.buff && SK.buff.attackMul === 3 && GS.attackMul() === 5;
+  SM.bonus = bonus; SK.buff = null; GS.attackMul = atk;
+  if (Math.abs(before - during) > 1e-6) throw new Error('버프에 흔들렸다: ' + before + ' → ' + during);
+  if (!restored) throw new Error('판 상태를 되돌려 놓지 않았다');
+});
+
+check('쓰이는 곳을 누르면 그 포켓몬 카드로 바뀐다 · 이전/다음은 도감 번호 순', () => {
+  RPD.SaveManager.data.pokedex = { bulbasaur: 1, ivysaur: 1 };
+  RPD.DexCard.openId('bulbasaur');
+  const html = dexCardHtml(), ivy = dexNo('ivysaur');
+  if (html.indexOf('data-dc-go="' + ivy + '"') < 0) throw new Error('쓰이는 곳에 이상해풀이 없다');
+  dexClick('[data-dc-go]', ivy);
+  if (RPD.DexCard.n !== ivy || dexCardHtml().indexOf('이상해풀') < 0) throw new Error('이상해풀 카드로 안 바뀌었다');
+  RPD.DexCard.step(1);
+  if (RPD.DexCard.n !== ivy + 1) throw new Error('다음이 도감 번호 순이 아니다');
+  RPD.DexCard.step(-2);
+  if (RPD.DexCard.n !== ivy - 1) throw new Error('이전이 도감 번호 순이 아니다');
+  RPD.DexCard.open(0); RPD.DexCard.step(-1);
+  if (RPD.DexCard.n !== RPD.PokemonData.list.length - 1) throw new Error('처음에서 이전 → 마지막으로 안 넘어간다');
+  dexClick('[data-dc-close]');
+  if (RPD.DexCard.isOpen()) throw new Error('× 로 안 닫힌다');
+});
+
+check('안 밝혀진 히든 — 재료 · 쓰이는 곳에서 그림자 + ❔, 이름 · id 가 안 새고 눌러도 이동 안 함', () => {
+  RPD.SaveManager.data.spells = {};
+  RPD.SaveManager.data.pokedex = { bulbasaur: 1, raichu: 1 };
+  const pika = RPD.PokemonData.get('pikachu'), pn = dexNo('pikachu');
+  const cases = [['bulbasaur', '쓰이는 곳'], ['raichu', '재료']];
+  cases.forEach(([id, where]) => {
+    RPD.DexCard.openId(id);
+    const html = dexCardHtml();
+    if (html.indexOf(pika.name) >= 0 || html.indexOf('pikachu') >= 0) throw new Error(where + '(' + id + ')에 피카츄 이름 · id 가 샜다');
+    if (html.indexOf('data-dc-go="' + pn + '"') >= 0) throw new Error(where + '(' + id + ')의 피카츄가 눌린다');
+    if (html.indexOf('❔') < 0 || html.indexOf('is-secret') < 0) throw new Error(where + '(' + id + ')에 그림자 + ❔ 가 없다');
+  });
+  // 밝히면 그때부터 이름이 보이고 눌린다
+  RPD.SaveManager.recordSpell(RPD.SpellData.forResult('pikachu').id);
+  RPD.DexCard.openId('raichu');
+  if (dexCardHtml().indexOf('data-dc-go="' + pn + '"') < 0) throw new Error('밝힌 뒤에도 피카츄가 안 눌린다');
+  RPD.SaveManager.data.spells = {};
+});
+
+check('도감 카드 HTML — class 값 안에 속성이 섞인 곳이 없다', () => {
+  RPD.SaveManager.data.pokedex = { raichu: 1, clefable: 1, bulbasaur: 1 };
+  ['raichu', 'clefable', 'bulbasaur', 'mewtwo'].forEach(id => {
+    RPD.DexCard.openId(id);
+    const bad = brokenClass(dexCardHtml());
+    if (bad.length) throw new Error(id + ': ' + bad[0]);
+  });
+  (listeners.btnDexClose.click || []).forEach(fn => fn({}));
+  if (RPD.DexCard.isOpen()) throw new Error('도감을 닫아도 카드가 남는다');
+});
+
 console.log(`\n────────────────────────────`);
 console.log(failures === 0 ? '부팅 경로 이상 없음' : `부팅 문제 ${failures}건`);
 process.exit(failures === 0 ? 0 : 1);

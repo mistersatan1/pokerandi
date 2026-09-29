@@ -47,6 +47,8 @@
     bonus: baseBonus()
   };
 
+  SynergyManager.baseBonus = baseBonus;   // 도감 카드의 "기본값" 계산(UnitManager.baseStats)이 시너지 없는 상태로 쓴다
+
   SynergyManager.reset = function () {
     this.counts = {};
     this.active = [];

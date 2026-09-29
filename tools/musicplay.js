@@ -5,7 +5,7 @@
  * 저장소에는 곡 파일이 없다. 그래서 짧은 소리(WAV, 이름만 .mp3)를 만들어
  *   A. 더블클릭(file://)  — 임시 폴더에 게임을 링크하고 assets/music/ 에 calm · battle 만 둔다
  *   B. 인터넷 주소(http) — 작은 웹 서버가 calm 만 준다
- *   C. 파일 없음          — 저장소 그대로(file://)
+ *   C. 파일 없음          — 임시 폴더, assets/music/ 비움(file://)
  *   D. 한 파일짜리 테스트판(dist)
  * 을 연다. 브라우저는 "누르기 전 재생 금지"(--autoplay-policy=user-gesture-required) — 휴대폰과 같은 조건.
  */
@@ -66,20 +66,30 @@ async function scenario(browser, name, url) {
 }
 
 (async () => {
-  // A. file:// — 임시 폴더에 게임을 링크하고 곡 두 개만
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'porandi-music-'));
-  fs.copyFileSync(path.join(ROOT, 'index.html'), path.join(tmp, 'index.html'));
-  for (const d of ['js', 'css']) fs.symlinkSync(path.join(ROOT, d), path.join(tmp, d));
-  fs.mkdirSync(path.join(tmp, 'assets'));
-  for (const d of fs.readdirSync(path.join(ROOT, 'assets'))) if (d !== 'music') fs.symlinkSync(path.join(ROOT, 'assets', d), path.join(tmp, 'assets', d));   // music 은 아래에서 따로(저장소 쪽엔 README 만)
-  fs.mkdirSync(path.join(tmp, 'assets', 'music'));
-  fs.writeFileSync(path.join(tmp, 'assets/music/calm.mp3'), wav(440));
-  fs.writeFileSync(path.join(tmp, 'assets/music/battle.mp3'), wav(660));
+  /* 임시 폴더에 게임을 링크하고 assets/music/ 만 따로 채운다. 저장소의 assets/music/ 에 실제 곡이 들어 있어도
+   * (세션 61 — 사용자가 calm · battle · boss 를 올렸다) 장면마다 "어떤 파일이 있는가"를 이 도구가 정한다. */
+  const tmps = [];
+  function gameCopy(files) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'porandi-music-'));
+    tmps.push(dir);
+    fs.copyFileSync(path.join(ROOT, 'index.html'), path.join(dir, 'index.html'));
+    for (const d of ['js', 'css']) fs.symlinkSync(path.join(ROOT, d), path.join(dir, d));
+    fs.mkdirSync(path.join(dir, 'assets'));
+    for (const d of fs.readdirSync(path.join(ROOT, 'assets'))) if (d !== 'music') fs.symlinkSync(path.join(ROOT, 'assets', d), path.join(dir, 'assets', d));
+    fs.mkdirSync(path.join(dir, 'assets', 'music'));
+    for (const [name, buf] of Object.entries(files)) fs.writeFileSync(path.join(dir, 'assets/music', name), buf);
+    return dir;
+  }
+  // A. file:// — 곡 두 개만
+  const tmp = gameCopy({ 'calm.mp3': wav(440), 'battle.mp3': wav(660) });
+  // C. file:// — 곡 없음
+  const tmpNone = gameCopy({});
 
   // B. http — calm 만
   const server = http.createServer((req, res) => {
     const rel = decodeURIComponent(req.url.split('?')[0]).replace(/^\/+/, '') || 'index.html';
     if (rel === 'assets/music/calm.mp3') { res.writeHead(200, { 'Content-Type': 'audio/wav' }); res.end(wav(440)); return; }
+    if (rel.indexOf('assets/music/') === 0) { res.writeHead(404); res.end(); return; }   // 저장소에 있는 실제 곡은 안 준다(calm 만 있는 장면)
     const file = path.join(ROOT, rel);
     if (!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); res.end(); return; }
     res.writeHead(200); fs.createReadStream(file).pipe(res);
@@ -90,12 +100,12 @@ async function scenario(browser, name, url) {
   const rows = [];
   rows.push(await scenario(browser, 'A. 더블클릭(file://) · calm · battle 파일 있음', 'file://' + path.join(tmp, 'index.html')));
   rows.push(await scenario(browser, 'B. 인터넷 주소(http) · calm 만 있음', `http://127.0.0.1:${server.address().port}/index.html`));
-  rows.push(await scenario(browser, 'C. 파일 없음(저장소 그대로 · file://)', 'file://' + path.join(ROOT, 'index.html')));
+  rows.push(await scenario(browser, 'C. 파일 없음(file://)', 'file://' + path.join(tmpNone, 'index.html')));
   const dist = path.join(ROOT, 'dist', '포켓몬랜덤디펜스_테스트.html');
   if (fs.existsSync(dist)) rows.push(await scenario(browser, 'D. 한 파일짜리 테스트판', 'file://' + dist));
   await browser.close();
   server.close();
-  fs.rmSync(tmp, { recursive: true, force: true });
+  tmps.forEach(d => fs.rmSync(d, { recursive: true, force: true }));
 
   // 판정
   const ok = (c, why) => ({ ok: !!c, why });

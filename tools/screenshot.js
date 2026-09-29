@@ -470,6 +470,52 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     await dctx.close();
   }
 
+  // ⑬ 화상 확률(burnChance, 세션 62) — 지속 피해 역할(불꽃 아닌 종 위주)을 올려 실제로 싸우게 한 뒤: 필드 · 도감 카드(뿔충이).
+  //    확인: 불꽃 타입이 아닌 개체가 건 화상(= 화상 확률로만 생긴다)이 적에게 실제로 붙는가.
+  {
+    const bctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const bp = await bctx.newPage();
+    await bp.goto(URL); await bp.waitForTimeout(1000);
+    await bp.evaluate(() => {
+      const R = window.RPD;
+      document.querySelectorAll('.modepick, .result, .help, .book').forEach(o => o.hidden = true);
+      R.Game.resetAll('NORMAL', 'NORMAL'); R.Game.startRun('NORMAL', 'NORMAL');
+      R.GameManager.setWave(14); R.WaveManager.startRound(14);
+      const F = R.FieldManager;
+      F.slots.forEach(s => { if (s.unit) F.remove(s.index); });
+      const ids = ['weedle', 'ekans', 'zubat', 'gloom', 'paras', 'venonat', 'bellsprout', 'grimer', 'tentacool', 'charmander'];
+      F.slots.filter(s => s.unlocked).slice(0, ids.length).forEach((s, i) => F.place(s.index, R.UnitManager.create(ids[i])));
+      R.GameManager.life = 999;
+      R.bus.emit('field:changed', {});
+      // 화상을 누가 걸었는지 센다(도구 쪽 관찰 — 게임 코드는 그대로)
+      const EM = R.EnemyManager, orig = EM.applyDot;
+      window.__burn = { procNonFire: 0, strong: 0 };
+      EM.applyDot = function (enemy, perSecond, duration, source, kind, maxStacks) {
+        if (kind === 'burn' && source && source.def && source.def.burnChance && !source.typeFlags.FIRE) window.__burn.procNonFire += 1;
+        return orig.apply(this, arguments);
+      };
+      R.Loop.setSpeed(2); R.Loop.setPaused(false);
+    });
+    await bp.waitForTimeout(9000);
+    const info = await bp.evaluate(() => {
+      const R = window.RPD, en = R.EnemyManager.enemies.filter(e => e.alive);
+      return { ...window.__burn, enemies: en.length,
+        burningNow: en.filter(e => e.effects.dots.some(d => d.kind === 'burn' && d.source && d.source.def && !d.source.typeFlags.FIRE)).length };
+    });
+    console.log('burn field', JSON.stringify(info));
+    await bp.evaluate(() => window.RPD.Loop.setPaused(true));
+    await bp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '13_burn_field_pc.png') });
+    await bp.evaluate(() => {
+      const R = window.RPD;
+      R.SaveManager.data.pokedex.weedle = 1;
+      document.getElementById('btnDex').click();
+      R.DexCard.openId('weedle');
+    });
+    await bp.waitForTimeout(400);
+    await bp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '13_burn_dexcard_pc.png') });
+    await bctx.close();
+  }
+
   /* ---------- 모바일 ③ — 홈 화면 앱(세션 53) ----------
    * 설치 · 오프라인은 인터넷 주소에서만 되니, 원본 폴더(dist 아님)를 이 자리에서 작은 웹 서버로 띄워 연다(localhost 는 https 와 같게 친다).
    * 확인: 크롬이 "설치할 수 있다"고 보는가(설치 불가 사유 0) · 서비스 워커 · 오프라인 저장 · 인터넷을 끊고 다시 열어도 켜지고 처음 보는 그림이 나오는가 ·

@@ -62,6 +62,7 @@
     var shred = def.armorShred || (f.STEEL ? P.armorShred : 0);
     if (shred) out.push('방어 깎기 ' + shred);
     if (f.FIRE) out.push('화상 — 준 피해의 ' + pct(P.burnRatio) + '를 ' + P.burnDuration + '초에 걸쳐');
+    if (def.burnChance) out.push('화상 확률 ' + pct(def.burnChance) + ' — 강한 화상(준 피해의 ' + pct(P.burnProcRatio) + '를 ' + P.burnDuration + '초)');
     if (f.POISON) out.push('독 — 준 피해의 ' + pct(P.poisonRatio) + '를 ' + P.poisonDuration + '초 · 최대 ' + P.poisonMaxStacks + '중첩');
     if (f.FIGHTING) out.push('보스에게 피해 ×' + P.bossDamageMul);
     if (def.bossDamage) out.push('보스에게 피해 +' + pct(def.bossDamage));

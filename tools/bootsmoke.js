@@ -1139,6 +1139,72 @@ check('도감 카드 HTML — class 값 안에 속성이 섞인 곳이 없다', 
   if (RPD.DexCard.isOpen()) throw new Error('도감을 닫아도 카드가 남는다');
 });
 
+/* ---------- 화상 확률 burnChance (세션 62) ---------- */
+console.log('\n화상 확률');
+/* 한 번 때려 보고 적에게 걸린 화상(초당 피해)과 이번 타격 피해를 돌려준다.
+ * proc: 화상 확률 주사위를 강제로(true 터짐 · false 안 터짐). 치명타 등 다른 주사위는 안 터지게. 특성 추가 타격은 잠깐 끈다. */
+function burnAfterHit(id, proc) {
+  const U = RPD.Utils, TM = RPD.TraitManager;
+  const def = RPD.PokemonData.get(id);
+  const chance = U.chance, after = TM.afterAttack;
+  RPD.EnemyManager.enemies.length = 0;
+  const e = RPD.EnemyManager.spawn('grunt', 10);
+  e.hp = e.maxHp = 1e12; e.armor = 0; e.shield = 0; e.isBoss = false;
+  const unit = RPD.UnitManager.baseStats(id);
+  unit.x = e.x; unit.y = e.y;
+  U.chance = (p) => (def.burnChance && p === def.burnChance ? proc : false);
+  TM.afterAttack = () => {};
+  try {
+    const before = unit.totalDamage;
+    RPD.CombatManager.fireOnce(unit, e);
+    const dealt = unit.totalDamage - before;
+    const burns = e.effects.dots.filter(d => d.kind === 'burn');
+    return { dealt, burn: burns.length ? burns[0].perSecond : 0, n: burns.length };
+  } finally { U.chance = chance; TM.afterAttack = after; RPD.EnemyManager.enemies.length = 0; }
+}
+const near = (a, b) => Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(b));
+
+check('burnChance 는 18종 · 전부 지속 피해 역할 · 값이 지워지지 않았다', () => {
+  const list = RPD.PokemonData.list.filter(d => d.burnChance);
+  if (list.length !== 18) throw new Error('burnChance 가 있는 종 ' + list.length + '개');
+  const bad = list.filter(d => d.role !== 'DOT' || !(d.burnChance > 0 && d.burnChance < 1));
+  if (bad.length) throw new Error('이상한 값: ' + bad.map(d => d.id).join(', '));
+});
+
+check('불꽃 아닌 종(뿔충이) — 화상 확률이 터지면 강한 화상(피해의 60%를 3초), 안 터지면 화상 없음', () => {
+  const P = RPD.TypeParams, mul = RPD.SynergyManager.bonus.burnMul;
+  const on = burnAfterHit('weedle', true), off = burnAfterHit('weedle', false);
+  if (!(on.dealt > 0)) throw new Error('타격이 안 들어갔다');
+  if (!near(on.burn, on.dealt * P.burnProcRatio * mul / P.burnDuration)) throw new Error('강한 화상 세기 다름: ' + on.burn + ' (타격 ' + on.dealt + ')');
+  if (off.n !== 0) throw new Error('안 터졌는데 화상이 걸렸다');
+});
+
+check('불꽃 종(파이리) — 평소엔 기본 화상(30%), 터지면 강한 화상(60%)으로 덮인다 · 화상은 하나만', () => {
+  const P = RPD.TypeParams, mul = RPD.SynergyManager.bonus.burnMul;
+  const off = burnAfterHit('charmander', false), on = burnAfterHit('charmander', true);
+  if (!near(off.burn, off.dealt * P.burnRatio * mul / P.burnDuration)) throw new Error('기본 화상 세기 다름');
+  if (!near(on.burn, on.dealt * P.burnProcRatio * mul / P.burnDuration)) throw new Error('강한 화상으로 안 덮였다');
+  if (on.n !== 1) throw new Error('화상이 ' + on.n + '개 — 하나여야 한다');
+});
+
+check('18종 전부 — 터지면 강한 화상이 실제로 걸린다 · burnChance 없는 종(구구)은 주사위가 터져도 화상 없음', () => {
+  const P = RPD.TypeParams, mul = RPD.SynergyManager.bonus.burnMul;
+  const bad = RPD.PokemonData.list.filter(d => d.burnChance).filter(d => {
+    const r = burnAfterHit(d.id, true);
+    return !(r.dealt > 0 && near(r.burn, r.dealt * P.burnProcRatio * mul / P.burnDuration));
+  }).map(d => d.id);
+  if (bad.length) throw new Error('안 걸린 종: ' + bad.join(', '));
+  if (burnAfterHit('pidgey', true).n !== 0) throw new Error('구구에게 화상이 붙었다');
+});
+
+check('도감 카드 — 화상 확률과 강한 화상 세기가 보인다', () => {
+  RPD.SaveManager.data.pokedex = { weedle: 1 };
+  RPD.DexCard.openId('weedle');
+  const html = panelHtml('dexCardPanel');
+  if (html.indexOf('화상 확률 18%') < 0 || html.indexOf('60%') < 0) throw new Error('카드에 화상 확률이 없다');
+  RPD.DexCard.close();
+});
+
 console.log(`\n────────────────────────────`);
 console.log(failures === 0 ? '부팅 경로 이상 없음' : `부팅 문제 ${failures}건`);
 process.exit(failures === 0 ? 0 : 1);

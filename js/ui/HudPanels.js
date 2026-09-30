@@ -84,6 +84,7 @@
     bindMobile();
 
     RPD.bus.on('game:wave', renderNextReward);
+    RPD.bus.on('game:wave', function () { if (el.help && !el.help.hidden) renderBossHelp(); });
     RPD.bus.on('game:reset', renderNextReward);
     RPD.bus.on('reward:granted', function (entry) { showReward(entry); renderNextReward(); });
     renderNextReward();
@@ -173,7 +174,48 @@
   function toggleHelp(open) {
     if (!el.help) return;
     el.help.hidden = open === undefined ? !el.help.hidden : !open;
+    if (!el.help.hidden) renderBossHelp();
   }
+
+  /* ---------- 설명서 "보스 보상" (세션 66) ----------
+   * 휴대폰은 필드 위 "다음 보스 보상" 칩을 숨겼다 — 대신 여기서(PC · 휴대폰 공용) 전부 본다.
+   * 표의 값은 문서에 적지 않고 RewardManager.table/beyond(보상) · EconomyManager.bossGoldPreview(처치 골드 — 모드 · 시너지 · 도감 보정까지)로 만든다. */
+  function renderBossHelp() {
+    var box = typeof document !== 'undefined' && document.getElementById ? document.getElementById('helpBoss') : null;
+    var RM = RPD.RewardManager, EM = RPD.EconomyManager;
+    if (!box || !RM) return '';
+    var mode = GM.mode || {};
+    var every = mode.bossEvery || 10;
+    var rewardEvery = every < 5 ? 10 : every;               // RewardManager.bossIndex 와 같은 규칙(보스 러시는 10라운드마다)
+    var final = mode.finalWave || 0;
+    var w = Math.max(1, GM.wave || 1);
+    var nextBoss = Math.ceil(w / every) * every;
+    var nextReward = RM.next(w).wave;
+    var gold = function (wave) { return EM ? RPD.Utils.formatNumber(EM.bossGoldPreview(wave)) + 'G' : '—'; };
+    var keys = Object.keys(RM.table).map(Number).sort(function (a, b) { return a - b; });
+    var rows = keys.map(function (n) {
+      var wave = n * rewardEvery;
+      var off = final && wave > final;
+      var tag = off ? ' <small>이 모드엔 없음</small>' : (final && wave === final ? ' <small>마지막 보스</small>' : '');
+      return '<tr class="bosshelp__row' + (off ? ' is-off' : '') + (wave === nextReward ? ' is-next' : '') + '" data-boss-n="' + n + '">' +
+        '<td>' + n + '번째 · <b>' + wave + 'R</b>' + tag + '</td>' +
+        '<td>' + gold(wave) + '</td><td>' + RM.describe(RM.table[n]) + '</td></tr>';
+    });
+    var after = keys[keys.length - 1] + 1;
+    rows.push('<tr class="bosshelp__row' + (final && after * rewardEvery > final ? ' is-off' : '') + '" data-boss-n="beyond">' +
+      '<td>' + after + '번째부터 · <b>' + (after * rewardEvery) + 'R~</b></td>' +
+      '<td>' + gold(after * rewardEvery) + '~</td><td>' + RM.describe(RM.beyond) + ' (되풀이)</td></tr>');
+    box.innerHTML =
+      '<h3>보스 보상 — ' + (mode.label || '') + ' 모드</h3>' +
+      '<p class="bosshelp__when">보스: <b>' + (every === 1 ? '매 라운드' : every + '라운드마다') + '</b>' +
+        (rewardEvery !== every ? ' · 보상은 <b>' + rewardEvery + '라운드마다</b>' : '') +
+        (final ? ' · 마지막 보스 <b>' + final + 'R</b>' : '') + '</p>' +
+      '<p class="bosshelp__next">다음 보스: <b>' + nextBoss + '라운드</b>' + (nextReward !== nextBoss ? ' · 다음 보상 보스: <b>' + nextReward + '라운드</b>' : '') + '</p>' +
+      '<table class="help__keys bosshelp"><thead><tr><th>보스</th><th>처치 골드</th><th>보상</th></tr></thead><tbody>' + rows.join('') + '</tbody></table>' +
+      '<p class="bosshelp__note">처치 골드는 지금 모드 · 시너지 · 도감 보너스를 반영한 값입니다. 유닛은 그 등급에서 조합에 필요한 쪽이 잘 나오고, 자리가 없으면 조각으로 바뀝니다.</p>';
+    return box.innerHTML;
+  }
+  HudPanels.renderBossHelp = renderBossHelp;
   HudPanels.toggleHelp = toggleHelp;
 
   function showHelpPage(page) {
@@ -237,6 +279,8 @@
     var on = open == null ? !hud.classList.contains('is-more-open') : !!open;
     hud.classList.toggle('is-more-open', on);
     if (btn && btn.setAttribute) btn.setAttribute('aria-expanded', String(on));
+    var tb = typeof document !== 'undefined' && document.getElementById ? document.getElementById('tbMore') : null;   // 휴대폰 툴바 [더보기]
+    if (tb && tb.setAttribute) tb.setAttribute('aria-expanded', String(on));
     return on;
   };
 
@@ -245,18 +289,21 @@
     if (el.mobileTabs && el.mobileTabs.addEventListener) {
       el.mobileTabs.addEventListener('click', function (e) {
         var b = e.target && e.target.closest ? e.target.closest('[data-mtab]') : null;
-        if (!b) return;
+        // 탭 줄 밖(= <body data-mtab="…">)까지 올라간 것은 탭이 아니다 — [조합] 을 길게 눌러 연 시트를 손 뗄 때 click 이 다시 닫던 버그(세션 68)
+        if (b && el.mobileTabs.contains && !el.mobileTabs.contains(b)) b = null;
+        if (!b || (b.hasAttribute && b.hasAttribute('data-tb'))) return;   // 툴바 버튼(세션 66)은 MobileToolbar 가 받는다
         var tab = b.getAttribute('data-mtab');
         if (tab === 'shop') { if (RPD.GoldShopUI) RPD.GoldShopUI.toggle(); return; }
         HudPanels.setDrawer(tab);
       });
     }
     if (el.moreBtn && el.moreBtn.addEventListener) el.moreBtn.addEventListener('click', function () { HudPanels.toggleMore(); });
-    // 메뉴 안 버튼을 누르면 닫는다(소리 설정은 작은 창이 따로 열리니 둔다) · 메뉴 밖을 누르면 닫는다
+    // 메뉴 안 버튼을 누르면 닫는다(소리 설정은 작은 창이 따로 열리니 둔다 · 진동 · 효과는 켬/끔이 바로 보이게 둔다 — 세션 68) · 메뉴 밖을 누르면 닫는다
     document.addEventListener('click', function (e) {
       var hud = document.querySelector('.hud');
       if (!hud || !hud.classList || !hud.classList.contains('is-more-open') || !e.target || !e.target.closest) return;
-      if (e.target.closest('#btnMore') || e.target.closest('.audio')) return;
+      if (e.target.closest('#btnMore') || e.target.closest('#tbMore') || e.target.closest('.audio') ||
+          e.target.closest('#btnHaptics') || e.target.closest('#btnFx') || e.target.closest('#btnWake')) return;
       if (e.target.closest('#hudMore .iconbtn') || !e.target.closest('#hudMore')) HudPanels.toggleMore(false);
     });
     bindLongPressTips();
@@ -298,14 +345,8 @@
       });
     }
     if (el.installBtn) {
-      el.installBtn.addEventListener('click', function () {
-        var P = RPD.Pwa;
-        if (!P || P.install()) return;
-        var r = el.installBtn.getBoundingClientRect ? el.installBtn.getBoundingClientRect() : null;
-        var msg = P.installHelp();
-        if (P.status === 'ready') msg += ' (오프라인 준비 끝 — 인터넷 없이도 켜집니다)';
-        HudPanels.showTip(msg, r);
-      });
+      // 설치 창(크롬) 또는 안내 시트(아이폰 · 창이 없을 때) — 세션 71 에 말풍선에서 시트로(AppUI)
+      el.installBtn.addEventListener('click', function () { if (RPD.AppUI) RPD.AppUI.install(); });
     }
     document.addEventListener('fullscreenchange', refreshAppButtons);
     document.addEventListener('webkitfullscreenchange', refreshAppButtons);
@@ -365,11 +406,13 @@
       if (e.stopPropagation) e.stopPropagation();
       if (e.preventDefault) e.preventDefault();
     }, true);
-    // 길게 누르기에 브라우저 기본 메뉴(복사 · 이미지 저장)가 뜨지 않게 — 입력칸은 둔다
+    // 길게 누르기에 브라우저 기본 메뉴(복사 · 이미지 저장)가 뜨지 않게 — 입력칸은 둔다.
+    // 필드 캔버스 · 포켓몬 그림은 마우스 오른쪽 단추로도 막는다(세션 68 — 그림 저장 메뉴가 끌기를 끊지 않게)
     document.addEventListener('contextmenu', function (e) {
-      var t = e.target && e.target.tagName;
+      var tg = e.target, t = tg && tg.tagName;
       if (t === 'INPUT' || t === 'TEXTAREA') return;
-      if (e.pointerType === 'touch' || (global.matchMedia && global.matchMedia('(pointer: coarse)').matches)) e.preventDefault();
+      var art = t === 'CANVAS' || t === 'IMG' || !!(tg && tg.closest && tg.closest('.spr, .infobar'));
+      if (art || e.pointerType === 'touch' || (global.matchMedia && global.matchMedia('(pointer: coarse)').matches)) e.preventDefault();
     });
   }
 
@@ -474,6 +517,8 @@
 
   var rewardTimer = null;
   function showReward(entry) {
+    // 휴대폰은 필드를 덮는 카드 대신 툴바 위 알림 줄로(모바일 ② · 세션 66)
+    if (RPD.MobileToolbar && RPD.MobileToolbar.rewardToast(entry)) return;
     if (!el.rewardPop || !entry || !entry.items.length) return;
     el.rewardPop.innerHTML =
       '<p class="rewardpop__kicker">' + entry.wave + '라운드 보스 처치</p>' +

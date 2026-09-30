@@ -167,7 +167,8 @@
       var threshold = (unit.typeFlags.DARK ? P.executeThreshold : 0) + syn.executeAdd;
       if (threshold > 0 && enemy.hp / enemy.maxHp <= threshold) {
         RPD.bus.emit('combat:execute', { unit: unit, enemy: enemy });
-        RPD.EnemyManager.damage(enemy, enemy.hp + 1, { ignoreArmor: true, source: unit });
+        // 처형 한 방도 누적 피해로 센다 — 들어간 만큼(보통 남은 체력)만(세션 64)
+        unit.totalDamage += RPD.EnemyManager.damage(enemy, enemy.hp + 1, { ignoreArmor: true, source: unit });
       }
     }
     return dealt;
@@ -227,6 +228,13 @@
       EM.applyDot(enemy,
         dealt * P.burnRatio * syn.burnMul / P.burnDuration,
         P.burnDuration, unit, 'burn');
+    }
+
+    // 화상 확률(pokemon.js 의 burnChance · 지속 피해 역할 18종, 세션 62) — 맞힌 순간 그 확률로 "강한 화상"(피해의 60%를 3초).
+    // 불꽃 타입이 아니어도 걸린다. 불꽃 타입은 위의 기본 화상(30%)이 늘 걸려 있으니 터질 때 더 센 화상으로 덮인다
+    // (적 한 마리의 화상은 하나 — applyDot 이 센 쪽을 남긴다). 화상 피해 시너지(burnMul)도 곱한다.
+    if (def.burnChance && dealt > 0 && enemy.alive && U.chance(def.burnChance)) {
+      EM.applyDot(enemy, dealt * P.burnProcRatio * syn.burnMul / P.burnDuration, P.burnDuration, unit, 'burn');
     }
 
     // 독 — 중첩되는 지속 피해

@@ -1,25 +1,21 @@
-/* Pwa.js — 홈 화면 앱 (모바일 ③ · 세션 53).
+/* Pwa.js — 홈 화면 앱 (세션 53 · 모바일 ④ 세션 71 에 다시 짰다).
  *
- * 1) 오프라인: 인터넷 주소(https · localhost)로 열면 서비스 워커(sw.js)를 등록하고, 게임을 켤 때 필요한 파일
- *    (HTML · CSS · JS · 매니페스트 · 아이콘 · 게임이 쓰는 그림 전부)을 한 번 받아 저장소에 넣는다.
- *    그림은 게임이 쓰는 순간에야 불러오므로(Assets.get) 미리 넣지 않으면 오프라인에서 처음 보는 포켓몬이 대체 그림으로 나온다.
- *    목록은 손으로 적지 않는다 — index.html 의 <script> · <link> 와 게임 데이터(RPD 안의 'assets/….png' 문자열 ·
- *    EnemySkins.allFiles)에서 모은다. 새 파일 · 새 포켓몬을 넣어도 따로 할 일이 없다.
- * 2) 설치: 안드로이드 크롬이 주는 설치 이벤트(beforeinstallprompt)를 들고 있다가 ☰ 메뉴 [앱 설치]로 띄운다.
- *    이벤트가 없는 곳(아이폰 사파리 · 이미 설치 · 조건 미달)에는 방법을 말풍선으로 알려 준다.
- * 3) 전체 화면: 브라우저로 열었을 때 ☰ 메뉴 [전체 화면]. 설치한 앱은 매니페스트(display: fullscreen)로 처음부터 전체 화면.
+ * 1) 오프라인: https · localhost 로 열면 서비스 워커(sw.js)를 등록한다. 무엇을 미리 받을지는 sw.js 가 pwa-precache.js 로 안다
+ *    (tools/build-pwa.js 가 js/ · css/ · assets/(음악 제외)를 훑어 만들고 커밋 — npm run check 가 실제 파일과 같은지 본다).
+ *    페이지는 "얼마나 받았나"만 묻는다(STATUS). 코드는 인터넷 먼저, 그림은 저장소 먼저, 음악은 서비스 워커를 거치지 않는다.
+ * 2) 새 버전: 새 서비스 워커가 기다리면 pwa:update — 화면(AppUI)이 "새 버전이 있어요 [새로고침]". 자동 새로고침은 없다(판 도중 사라짐).
+ * 3) 설치: 크롬이 주는 설치 이벤트(beforeinstallprompt)를 들고 있다가 [더보기] [앱으로 설치]로 띄운다. 아이폰은 설치 API 가 없어 안내 시트.
+ * 4) 전체 화면: 브라우저로 열었을 때 [전체 화면]. 설치한 앱은 매니페스트(display: fullscreen)로 처음부터 전체 화면.
+ * 5) 화면 켜짐(Wake Lock): 판이 진행 중일 때만 — 일시정지 · 앱 이탈이면 놓는다.
  *
- * 더블클릭(file://)과 테스트판 한 파일(RPD_INLINE)에서는 오프라인 · 설치를 하지 않는다 — 브라우저가 허락하지 않는다.
+ * 더블클릭(file://)과 테스트판 한 파일(RPD_INLINE)에서는 서비스 워커를 등록하지 않는다(시도도 안 한다 — 오류 없음).
  */
 (function (global) {
   'use strict';
   var RPD = global.RPD;
 
-  var CACHE = 'porandi-v1';      // sw.js 의 CACHE 와 같아야 한다(검사가 본다)
-  var PARALLEL = 4;              // 한꺼번에 받는 파일 수 — 휴대폰 회선을 다 막지 않게
 
   var Pwa = {
-    CACHE: CACHE,
     status: 'off',               // off(못 씀) · wait · saving · ready(오프라인 준비 끝) · error
     saved: 0, total: 0, missing: [],
     installEvent: null
@@ -30,8 +26,9 @@
   /* 오프라인 · 설치를 쓸 수 있는가 — 인터넷 주소 + 서비스 워커 + 한 파일 테스트판이 아님 */
   Pwa.supported = function () {
     var loc = global.location;
-    return !!(loc && /^https?:$/.test(loc.protocol) && global.navigator && global.navigator.serviceWorker &&
-      global.caches && !global.RPD_INLINE);
+    if (!loc || global.RPD_INLINE || !global.navigator || !global.navigator.serviceWorker || !global.caches) return false;
+    // https, 또는 이 컴퓨터(localhost) 의 http 만 — 서비스 워커는 안전한 주소에서만 돈다
+    return loc.protocol === 'https:' || (loc.protocol === 'http:' && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(loc.hostname || ''));
   };
 
   /* 설치한 앱으로 열렸는가(홈 화면 아이콘으로 실행) */
@@ -41,87 +38,139 @@
       (global.navigator && global.navigator.standalone === true));
   };
 
-  /* ---------- 저장할 파일 목록 ---------- */
-  function collectSprites(out) {
-    var seen = new Set();
-    (function walk(v, depth) {
-      if (typeof v === 'string') { if (/^assets\/[\w\/.-]+\.png$/.test(v)) out[v] = true; return; }
-      if (!v || typeof v !== 'object' || depth > 6 || seen.has(v)) return;
-      if (typeof Node !== 'undefined' && v instanceof Node) return;    // 화면 요소는 건너뛴다
-      seen.add(v);
-      for (var k in v) {
-        if (!Object.prototype.hasOwnProperty.call(v, k)) continue;
-        var x;
-        try { x = v[k]; } catch (e) { continue; }
-        if (typeof x !== 'function') walk(x, depth + 1);
-      }
-    })(RPD, 0);
-    if (RPD.EnemySkins && RPD.EnemySkins.allFiles) RPD.EnemySkins.allFiles().forEach(function (f) { out[f] = true; });
-  }
-
-  Pwa.files = function (doc) {
-    doc = doc || global.document;
-    var out = { './': true, 'index.html': true };
-    if (doc && doc.querySelectorAll) {
-      var nodes = doc.querySelectorAll('script[src], link[rel="stylesheet"][href], link[rel="manifest"][href], link[rel~="icon"][href], link[rel="apple-touch-icon"][href]');
-      for (var i = 0; i < nodes.length; i++) {
-        var u = nodes[i].getAttribute('src') || nodes[i].getAttribute('href');
-        if (u && !/^(https?:|data:|\/\/)/.test(u)) out[u] = true;
-      }
-      // 매니페스트 안의 아이콘(설치 화면)
-      ['assets/icons/icon-192.png', 'assets/icons/icon-512.png', 'assets/icons/icon-maskable-512.png'].forEach(function (f) { out[f] = true; });
-    }
-    collectSprites(out);
-    return Object.keys(out);
+  /* ---------- 오프라인 · 새 버전 (세션 71) ----------
+   * 무엇을 미리 받을지는 서비스 워커(sw.js)가 pwa-precache.js 로 안다 — 페이지는 "얼마나 됐나"만 묻는다(STATUS).
+   * 새 서비스 워커가 기다리면(waiting) pwa:update 를 낸다 — 화면이 "새 버전이 있어요 [새로고침]"을 띄운다. 자동 새로고침은 하지 않는다. */
+  Pwa.askStatus = function () {
+    var sw = global.navigator && global.navigator.serviceWorker;
+    var target = Pwa.reg && (Pwa.reg.active || Pwa.reg.waiting || Pwa.reg.installing);
+    if (!sw || !target || typeof global.MessageChannel !== 'function') return Promise.resolve(null);
+    return new Promise(function (resolve) {
+      var ch = new global.MessageChannel();
+      var t = setTimeout(function () { resolve(null); }, 5000);
+      ch.port1.onmessage = function (e) { clearTimeout(t); resolve(e.data); };
+      target.postMessage({ type: 'STATUS' }, [ch.port2]);
+    });
   };
 
-  /* 저장소에 없는 것만 받아 넣는다. 없는 파일(404)은 건너뛰고 missing 에 남긴다(게임은 대체 그림으로 그린다). */
-  Pwa.save = function () {
-    var list = Pwa.files();
-    Pwa.total = list.length; Pwa.saved = 0; Pwa.missing = [];
-    Pwa.status = 'saving'; emit();
-    return global.caches.open(CACHE).then(function (cache) {
-      var next = 0;
-      function one() {
-        if (next >= list.length) return Promise.resolve();
-        var url = list[next++];
-        return cache.match(url, { ignoreSearch: true }).then(function (hit) {
-          if (hit) return;
-          return global.fetch(url, { cache: 'no-cache' }).then(function (res) {
-            if (!res.ok) { Pwa.missing.push(url); return; }
-            return cache.put(url, res);
-          }, function () { Pwa.missing.push(url); });
-        }).then(function () { Pwa.saved += 1; }).then(one);
+  /* 설치(미리 받기)가 끝날 때까지 기다렸다가 저장 상태를 채운다 */
+  function waitActive(reg) {
+    return new Promise(function (resolve) {
+      function check() {
+        if (reg.active && !reg.installing) { resolve(reg); return true; }
+        return false;
       }
-      var workers = [];
-      for (var i = 0; i < PARALLEL; i++) workers.push(one());
-      return Promise.all(workers);
-    }).then(function () {
-      Pwa.status = 'ready'; emit();
-      return Pwa;
-    }, function (err) {
-      Pwa.status = 'error'; Pwa.error = String(err && err.message || err); emit();
-      return Pwa;
+      if (check()) return;
+      var w = reg.installing || reg.waiting;
+      if (w && w.addEventListener) w.addEventListener('statechange', function () { if (w.state === 'activated' || w.state === 'redundant') check() || resolve(reg); });
+      var n = 0, iv = setInterval(function () { if (check() || ++n > 120) { clearInterval(iv); resolve(reg); } }, 250);
     });
+  }
+
+  function watchUpdates(reg) {
+    var sw = global.navigator.serviceWorker;
+    function waitingNow() {
+      // 컨트롤러가 이미 있는데(= 예전 서비스 워커가 이 페이지를 돌린다) 새 것이 기다리면 새 버전
+      if (reg.waiting && sw.controller) { Pwa.waiting = reg.waiting; RPD.bus && RPD.bus.emit('pwa:update', Pwa); }
+    }
+    waitingNow();
+    reg.addEventListener && reg.addEventListener('updatefound', function () {
+      var w = reg.installing;
+      if (w && w.addEventListener) w.addEventListener('statechange', function () { if (w.state === 'installed') waitingNow(); });
+    });
+    sw.addEventListener && sw.addEventListener('controllerchange', function () {
+      if (Pwa._reloading && global.location && global.location.reload) global.location.reload();   // 사람이 [새로고침]을 누른 뒤에만
+    });
+  }
+
+  /* [새로고침] — 기다리는 서비스 워커를 켜고, 바뀌면 다시 연다 */
+  Pwa.applyUpdate = function () {
+    var w = Pwa.waiting || (Pwa.reg && Pwa.reg.waiting);
+    Pwa._reloading = true;
+    if (w) w.postMessage({ type: 'SKIP_WAITING' });
+    else if (global.location && global.location.reload) global.location.reload();
+    return true;
   };
 
   Pwa.start = function () {
     if (Pwa._started) return Pwa.ready;
     Pwa._started = true;
     if (global.addEventListener) {
-      global.addEventListener('beforeinstallprompt', function (e) { Pwa.installEvent = e; emit(); });
+      global.addEventListener('beforeinstallprompt', function (e) { if (e.preventDefault) e.preventDefault(); Pwa.installEvent = e; emit(); });   // 브라우저가 스스로 띄우지 않게 — 사람이 누를 때만
       global.addEventListener('appinstalled', function () { Pwa.installEvent = null; emit(); });
     }
+    Pwa.bindWakeLock();
     if (!Pwa.supported()) { Pwa.status = 'off'; Pwa.ready = Promise.resolve(Pwa); return Pwa.ready; }
     Pwa.status = 'wait'; emit();
-    // 게임 화면이 먼저 뜨고 나서 — 첫 그림 · 첫 소리와 회선을 다투지 않게
-    Pwa.ready = global.navigator.serviceWorker.register('sw.js').then(function () {
-      return new Promise(function (r) { setTimeout(r, 1500); });
-    }).then(Pwa.save, function (err) {
+    Pwa.ready = global.navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function (reg) {
+      Pwa.reg = reg;
+      watchUpdates(reg);
+      Pwa.status = 'saving'; emit();
+      return waitActive(reg);
+    }).then(function () {
+      return Pwa.askStatus();
+    }).then(function (st) {
+      if (st && !st.error) { Pwa.total = st.total; Pwa.saved = st.saved; Pwa.missing = st.missing || []; Pwa.hash = st.hash; }
+      Pwa.status = st && !st.error && st.saved === st.total ? 'ready' : 'error';
+      if (st && st.error) Pwa.error = st.error;
+      emit();
+      return Pwa;
+    }, function (err) {
       Pwa.status = 'error'; Pwa.error = String(err && err.message || err); emit();
       return Pwa;
     });
     return Pwa.ready;
+  };
+
+  Pwa.isIOS = function () {
+    var n = global.navigator || {};
+    return /iPhone|iPad|iPod/.test(n.userAgent || '') || (n.platform === 'MacIntel' && n.maxTouchPoints > 1);
+  };
+
+  /* ---------- 화면 켜짐(Screen Wake Lock · 세션 71) ----------
+   * 판이 진행 중일 때만(달리는 중 · 일시정지 아님 · 화면이 보임) 요청하고, 아니면 놓는다. [더보기] 에서 끈다(기본 켬 · 설정 wakeLock).
+   * 못 쓰는 기기(오래된 브라우저 · file://)면 조용히 넘어간다. */
+  var wake = { sentinel: null, pending: false };
+  Pwa.wakeSupported = function () { return !!(global.navigator && global.navigator.wakeLock && global.navigator.wakeLock.request); };
+  Pwa.wakeEnabled = function () {
+    var SM = RPD.SaveManager;
+    return !(SM && SM.data && SM.getSetting('wakeLock', true) === false);
+  };
+  Pwa.setWakeEnabled = function (on) {
+    if (RPD.SaveManager && RPD.SaveManager.data) RPD.SaveManager.setSetting('wakeLock', !!on);
+    Pwa.syncWake();
+    emit();
+  };
+  Pwa.wakeHeld = function () { return !!wake.sentinel; };
+  Pwa.wantWake = function () {
+    var GM = RPD.GameManager, S = RPD.GameState, d = global.document;
+    return Pwa.wakeEnabled() && !!GM && GM.state === S.RUNNING && !(RPD.Loop && RPD.Loop.paused) &&
+      !(d && (d.hidden || d.visibilityState === 'hidden'));
+  };
+  Pwa.syncWake = function () {
+    if (!Pwa.wakeSupported()) return;
+    var want = Pwa.wantWake();
+    if (want && !wake.sentinel && !wake.pending) {
+      wake.pending = true;
+      Promise.resolve().then(function () { return global.navigator.wakeLock.request('screen'); }).then(function (s) {
+        wake.pending = false;
+        if (!Pwa.wantWake()) { s.release && s.release(); return; }
+        wake.sentinel = s;
+        if (s.addEventListener) s.addEventListener('release', function () { if (wake.sentinel === s) wake.sentinel = null; });
+      }, function () { wake.pending = false; });   // 거절(배터리 절약 등) — 조용히
+    } else if (!want && wake.sentinel) {
+      var s = wake.sentinel;
+      wake.sentinel = null;
+      try { s.release(); } catch (e) { /* 이미 놓임 */ }
+    }
+  };
+  Pwa.bindWakeLock = function () {
+    if (Pwa._wakeBound || !RPD.bus) return;
+    Pwa._wakeBound = true;
+    ['game:state', 'loop:paused', 'game:reset', 'game:over', 'game:victory'].forEach(function (ev) { RPD.bus.on(ev, Pwa.syncWake); });
+    // 화면이 꺼졌다 켜지면 브라우저가 놓는다 — 다시 보이면 다시 청한다
+    var d = global.document;
+    if (d && d.addEventListener) d.addEventListener('visibilitychange', Pwa.syncWake);
   };
 
   /* ---------- 설치 ---------- */
@@ -129,7 +178,7 @@
     if (Pwa.isApp()) return '이미 앱으로 실행 중입니다.';
     if (!Pwa.supported()) return '홈 화면 앱은 인터넷 주소(https)로 열었을 때만 만들 수 있습니다. 파일을 바로 열었거나 테스트판 한 파일이면 브라우저가 허락하지 않습니다.';
     var ua = (global.navigator && global.navigator.userAgent) || '';
-    if (/iPhone|iPad|iPod/.test(ua)) return '사파리 아래쪽 공유 버튼(□↑) → [홈 화면에 추가]를 누르세요.';
+    if (/iPhone|iPad|iPod/.test(ua) || Pwa.isIOS()) return '사파리 아래쪽 공유 버튼(□↑) → [홈 화면에 추가]를 누르세요.';
     return '브라우저 메뉴(⋮) → [앱 설치] 또는 [홈 화면에 추가]를 누르세요.';
   };
 

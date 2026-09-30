@@ -4,7 +4,7 @@
   "description": "운으로 뽑지만, 조합식과 위치로 운을 뒤집는 랜덤 디펜스.",
   "lang": "ko",
   "id": "./",
-  "start_url": "./index.html",
+  "start_url": "./",
   "scope": "./",
   "display": "fullscreen",
   "display_override": ["fullscreen", "standalone"],

@@ -81,6 +81,22 @@
     emitPhase(this);
   };
 
+  /* 판 이어하기(RunSave · 세션 70) — 저장된 라운드를 처음부터 다시 연다.
+   * startRound 와 달리 라운드 시작 효과(game:wave → 특성 골드 · 보호막 다시 채우기 · 라운드 무료 지급 · 등급 해금 알림)는
+   * 안 낸다: 스냅샷이 그 효과가 끝난 뒤의 상태라 다시 내면 두 번 받는다. 스폰 계획만 새로 짠다. */
+  WaveManager.resumeRound = function (round) {
+    this.wave = round;
+    this.plan = RPD.WaveData.build(round, GM.mode);
+    this.phase = PHASE.SPAWNING;
+    this.timer = 0;
+    this.carryOver = 0;
+    this.spawnCursor = 0;
+    this.spawnedUnits = 0;
+    GM.setState(S.RUNNING);
+    RPD.bus.emit('wave:started', this.plan);
+    emitPhase(this);
+  };
+
   /* ---------- 갱신 ---------- */
 
   WaveManager.update = function (dt) {

@@ -84,6 +84,7 @@
             <dt>Enter</dt><dd>주문 입력</dd>
             <dt>H</dt><dd>설명서</dd>
             <dt>Esc</dt><dd>선택·창 닫기</dd>
+            <dt>Ctrl+Z</dt><dd>되돌리기 (배치 이동만 · 3번)</dd>
           </dl>
           <p class="keyhelp__tip">끌어서 옮기기: 보유 칸(창고) → 필드 칸 · 필드 포켓몬 → 보유 패널</p>
         </div>
@@ -96,8 +97,14 @@
     <button type="button" class="iconbtn iconbtn--elite" id="btnElite" title="정예 소환 (E)" aria-label="정예 소환">정예<br>소환</button>
     <button type="button" class="iconbtn" id="btnDex" title="도감" aria-label="도감"><span class="ico ico--book"></span></button>
     <!-- 휴대폰에서만(☰ 메뉴) — PC 는 F11 · 브라우저 설치 버튼이 있다 -->
+    <button type="button" class="iconbtn iconbtn--mobile" id="btnSynergy" title="타입 시너지" aria-label="시너지"><span class="ico ico--synergy"></span></button>
     <button type="button" class="iconbtn iconbtn--mobile" id="btnFullscreen" title="전체 화면" aria-label="전체 화면">⛶</button>
-    <button type="button" class="iconbtn iconbtn--mobile" id="btnInstall" title="홈 화면에 앱으로 설치" aria-label="앱 설치">📲</button>
+    <button type="button" class="iconbtn iconbtn--mobile" id="btnInstall" title="홈 화면에 앱으로 설치" aria-label="앱으로 설치">📲</button>
+    <button type="button" class="iconbtn iconbtn--mobile" id="btnWake" title="화면 켜짐 — 판 도중 화면이 꺼지지 않게(배터리를 더 씁니다)" aria-label="화면 켜짐" aria-pressed="true">🔆</button>
+    <button type="button" class="iconbtn iconbtn--mobile" id="btnRecords" title="기록 내보내기 · 가져오기(도감 · 칭호 옮기기)" aria-label="기록 옮기기">🔁</button>
+    <button type="button" class="iconbtn iconbtn--mobile" id="btnUpdate" title="새 버전으로 새로고침" aria-label="새 버전" hidden>🆕</button>
+    <button type="button" class="iconbtn iconbtn--mobile" id="btnHaptics" title="진동 켬" aria-label="진동 켬" aria-pressed="true">📳</button>
+    <button type="button" class="iconbtn iconbtn--mobile" id="btnFx" title="효과" aria-label="효과 보통">✨</button>
     <button type="button" class="iconbtn iconbtn--ghost" id="btnRestart" title="처음부터" aria-label="처음부터"><span class="ico ico--restart"></span></button>
     </div>
   </header>
@@ -136,6 +143,15 @@
         <p class="startpanel__hint" id="boardHint">칸마다 덮는 경로 길이가 다릅니다. 칸을 클릭해 확인하고 배치하세요.</p>
         <p class="trainerinfo" id="trainerInfo" hidden></p>
         <p class="startpanel__hint startpanel__hint--help">처음이라면 오른쪽 위 <b>?</b> (또는 <kbd>H</kbd>) — 단축키 · 조각 상점 설명</p>
+        <!-- 판 이어하기(세션 70) — 저장된 판이 있으면. 자동으로 이어하지 않는다 -->
+        <div class="resumecard" id="resumeCard" hidden>
+          <span class="resumecard__kicker">이어하기</span>
+          <span class="resumecard__info" id="resumeInfo"></span>
+          <span class="resumecard__acts">
+            <button type="button" class="btn btn--primary resumecard__go" id="btnResume">이어하기</button>
+            <button type="button" class="btn btn--ghost" id="btnNewRun">새 판</button>
+          </span>
+        </div>
         <button type="button" class="bigbtn bigbtn--gold" id="btnStart">
           <span class="bigbtn__name">게임 시작</span>
           <span class="bigbtn__sub" id="startMode">노멀</span>
@@ -235,6 +251,7 @@
             <div class="tabs" id="helpTabs">
               <button type="button" class="rf is-on" data-help="keys">단축키 · 조작</button>
               <button type="button" class="rf" data-help="shard">조각 상점</button>
+              <button type="button" class="rf" data-help="boss">보스 보상</button>
             </div>
             <button type="button" class="help__close" id="btnHelpClose" aria-label="닫기">×</button>
           </div>
@@ -269,6 +286,11 @@
               <li><b>조합식의 포켓몬 그림 클릭</b> — 그 포켓몬을 만드는 법. 재료를 누르면 한 단계씩 내려갑니다.</li>
               <li><b>보유 칸 클릭</b> — 필드에 배치 · 방출 · 들어가는 조합식.</li>
             </ul>
+          </section>
+
+          <!-- 보스 보상 — 표는 HudPanels.renderBossHelp 가 RewardManager.table/beyond · EconomyManager.bossGoldPreview 로 만든다(세션 66). 값을 여기 적지 않는다 -->
+          <section class="help__page" data-page="boss" hidden>
+            <div id="helpBoss"></div>
           </section>
 
           <section class="help__page" data-page="shard" hidden>
@@ -412,15 +434,24 @@
     </div>
   </main>
 
-  <!-- ============ 휴대폰 탭(서랍) — 1100px 미만에서만 보인다 ============
-       필드를 가리지 않게 패널은 기본으로 닫혀 있고, 탭을 누르면 서랍이 열리며 필드가 그만큼 줄어든다.
-       같은 탭을 다시 누르면 닫힌다. [상점]은 골드 상점 창을 연다(G 와 같다). -->
-  <nav class="mtabs" id="mobileTabs" aria-label="패널">
-    <button type="button" class="mtab" data-mtab="recipes" aria-pressed="false"><span class="ico ico--spark"></span>조합식<b class="mtab__badge" id="mtabCraft" hidden>0</b></button>
-    <button type="button" class="mtab" data-mtab="owned" aria-pressed="false"><span class="ico ico--box"></span>보유</button>
-    <button type="button" class="mtab" data-mtab="synergy" aria-pressed="false"><span class="ico ico--synergy"></span>시너지</button>
-    <button type="button" class="mtab" data-mtab="dex" aria-pressed="false"><span class="ico ico--book"></span>도감</button>
-    <button type="button" class="mtab mtab--shop" data-mtab="shop" aria-pressed="false">◎<span>상점</span></button>
+  <!-- ============ 휴대폰 정보 바 · 시트 손잡이 — 1100px 미만에서만 (세션 65 · js/ui/MobileSheet.js) ============
+       정보 바: 칸을 고르면 필드 위에 카드를 띄우는 대신 필드 밖 한 줄에 이름 · 등급 · DPS + [이동][창고로][사거리 강화][방출].
+       위로 밀거나 길게 누르면 자세한 정보(스킬 · 특성 · 버프 · 공격 대상)가 시트로 올라온다.
+       아무 칸도 안 골랐으면 "★ 조합 가능 · 이름" 버튼(세션 67 — 따로 있던 줄을 합쳤다), 보스 보상 지급 알림도 여기에 잠깐.
+       손잡이: 열린 시트(조합식 · 보유 · 시너지 · 도감 · 골드 상점 · 정예 · 조합 사전 · 자세한 정보)의 높이를 끌어서 조절. -->
+  <div class="infobar" id="infoBar" aria-live="polite"></div>
+  <div class="sheetgrip" id="sheetGrip" role="button" aria-label="시트 높이 — 끌어서 조절 · 누르면 접기/펴기" title="끌어서 높이 조절 · 누르면 접기/펴기">
+    <span class="sheetgrip__bar"></span><span class="sheetgrip__title" id="sheetGripTitle"></span>
+  </div>
+
+  <!-- ============ 휴대폰 하단 툴바 — 1100px 미만에서만 (세션 66) ============
+       [소환](.pane--action 의 #btnSummon 이 그대로 이 줄에 놓인다) · [조합] · [창고] · [더보기].
+       [조합]: 누르면 PC 의 조합 버튼(#btnCraft)과 같다 · 위로 밀거나 길게 누르면 조합식 시트.
+       [창고]: 보유 포켓몬 시트(필드 포켓몬을 끌어 여기에 놓으면 창고로). [더보기]: ☰ 메뉴(골드 상점 · 정예 · 조합 사전 · 도감 · 설명서 · 소리 · 처음부터 …). -->
+  <nav class="mtabs" id="mobileTabs" aria-label="휴대폰 툴바">
+    <button type="button" class="mtab tbtn tbtn--craft" id="tbCraft" data-tb="craft" title="조합 (C) — 위로 밀거나 길게 누르면 조합식" aria-disabled="true"><span class="ico ico--spark"></span>조합<b class="mtab__badge" id="mtabCraft" hidden>0</b></button>
+    <button type="button" class="mtab tbtn" id="tbOwned" data-tb="owned" data-mtab="owned" aria-pressed="false" title="창고 · 보유 포켓몬"><span class="ico ico--box"></span>창고<b class="mtab__badge mtab__badge--dim" id="tbOwnedBadge" hidden>0</b></button>
+    <button type="button" class="mtab tbtn" id="tbMore" data-tb="more" aria-expanded="false" title="더보기 — 골드 상점 · 정예 · 조합 사전 · 도감 · 설명서 · 소리 · 처음부터"><span class="tbtn__dots" aria-hidden="true">⋯</span>더보기<i class="tbtn__dot" id="tbMoreDot" hidden></i></button>
   </nav>
 
   <!-- ============ RIGHT: 시너지 / 도감 ============ -->
@@ -446,6 +477,68 @@
 
 </div>
 
+<!-- 판 이어하기(세션 70) — 새 판을 시작하면 저장된 판이 사라진다는 확인 · 한 줄 안내(버전 불일치 · 다른 탭) -->
+<div class="runconfirm" id="runConfirm" hidden role="dialog" aria-modal="true" aria-labelledby="runConfirmTitle">
+  <div class="runconfirm__card pane">
+    <h2 class="pane__title" id="runConfirmTitle">저장된 판이 사라집니다</h2>
+    <p class="runconfirm__text" id="runConfirmText"></p>
+    <div class="runconfirm__acts">
+      <button type="button" class="btn btn--danger" id="btnConfirmNew">새 판 시작</button>
+      <button type="button" class="btn btn--ghost" id="btnConfirmCancel">취소</button>
+    </div>
+  </div>
+</div>
+<div class="runnotice" id="runNotice" hidden role="status">
+  <span class="runnotice__text" id="runNoticeText"></span>
+  <button type="button" class="btn btn--ghost runnotice__ok" id="btnNoticeOk">확인</button>
+</div>
+
+<!-- 홈 화면 앱(모바일 ④ · 세션 71) — 설치 안내 시트 · 첫 게임 오버 뒤 한 번 배너 · 새 버전 토스트 · 기록 옮기기 -->
+<div class="appsheet" id="installSheet" hidden role="dialog" aria-modal="true" aria-labelledby="installTitle">
+  <div class="appsheet__card pane">
+    <h2 class="pane__title" id="installTitle">홈 화면에 앱으로 설치</h2>
+    <ol class="appsheet__steps" id="installSteps"></ol>
+    <p class="appsheet__note">설치하면 주소창 없이 전체 화면으로 · 인터넷이 없어도 켜집니다(한 번 인터넷으로 연 뒤).</p>
+    <div class="appsheet__acts"><button type="button" class="btn btn--ghost" id="btnInstallClose">닫기</button></div>
+  </div>
+</div>
+<div class="runnotice appbanner" id="installBanner" hidden role="status">
+  <span class="runnotice__text">📲 홈 화면에 앱으로 설치하면 주소창 없이 할 수 있어요</span>
+  <button type="button" class="btn btn--primary runnotice__ok" id="btnBannerInstall">설치</button>
+  <button type="button" class="btn btn--ghost runnotice__ok" id="btnBannerClose">닫기</button>
+</div>
+<div class="runnotice appbanner" id="updateToast" hidden role="status">
+  <span class="runnotice__text">🆕 새 버전이 있어요</span>
+  <button type="button" class="btn btn--primary runnotice__ok" id="btnUpdateNow">새로고침</button>
+  <button type="button" class="btn btn--ghost runnotice__ok" id="btnUpdateLater">나중에</button>
+</div>
+<div class="appsheet" id="recordSheet" hidden role="dialog" aria-modal="true" aria-labelledby="recordTitle">
+  <div class="appsheet__card pane">
+    <h2 class="pane__title" id="recordTitle">기록 옮기기</h2>
+    <p class="appsheet__note">도감 · 칭호 · 클리어 기록 · 발견한 주문을 글자로 옮깁니다(아이폰은 홈 화면 앱과 사파리가 기록을 따로 가질 수 있어요). 진행 중인 판은 옮기지 않습니다.</p>
+    <label class="appsheet__label" for="recordExport">내보내기 — 복사해서 다른 쪽에 붙여 넣으세요</label>
+    <textarea class="appsheet__text" id="recordExport" readonly rows="3"></textarea>
+    <div class="appsheet__acts"><span class="appsheet__msg" id="recordSummary"></span><button type="button" class="btn btn--primary" id="btnRecordCopy">복사</button></div>
+    <label class="appsheet__label" for="recordImport">가져오기 — 다른 쪽에서 복사한 글자를 붙여 넣으세요</label>
+    <textarea class="appsheet__text" id="recordImport" rows="3" placeholder="{&quot;app&quot;:&quot;porandi&quot;, …}"></textarea>
+    <div class="appsheet__confirm" id="recordConfirm" hidden>
+      <span id="recordConfirmText"></span>
+      <button type="button" class="btn btn--danger" id="btnRecordOverwrite">덮어쓰기</button>
+      <button type="button" class="btn btn--ghost" id="btnRecordCancel">취소</button>
+    </div>
+    <div class="appsheet__acts"><span class="appsheet__msg" id="recordMsg" role="status"></span>
+      <button type="button" class="btn btn--primary" id="btnRecordImport">가져오기</button>
+      <button type="button" class="btn btn--ghost" id="btnRecordClose">닫기</button></div>
+  </div>
+</div>
+
+<!-- 앱을 벗어났다 돌아오면(세션 68) — 저절로 이어가지 않는다. 누르면 계속 -->
+<button type="button" class="awaypause" id="awayOverlay" hidden aria-label="일시정지됨 — 눌러서 계속">
+  <span class="awaypause__ico">⏸</span>
+  <span class="awaypause__title">일시정지됨</span>
+  <span class="awaypause__sub">눌러서 계속</span>
+</button>
+
 <!-- 클래식 script 로드. ES 모듈을 쓰지 않는 이유는 index.html 을 더블클릭(file://)해도
      CORS 없이 바로 실행되게 하기 위해서다. 순서가 곧 의존성이다. -->
 <script src="js/core/RPD.js"></script>
@@ -457,6 +550,8 @@
 <script src="js/core/Loop.js"></script>
 <script src="js/core/MusicFiles.js"></script>
 <script src="js/core/AudioManager.js"></script>
+<script src="js/core/Haptics.js"></script>
+<script src="js/core/Effects.js"></script>
 
 <script src="js/data/types.js"></script>
 <script src="js/data/music.js"></script>
@@ -493,12 +588,14 @@
 <script src="js/systems/BossManager.js"></script>
 <script src="js/systems/RecipeManager.js"></script>
 <script src="js/systems/StorageManager.js"></script>
+<script src="js/systems/UndoManager.js"></script>
 <script src="js/systems/ShardManager.js"></script>
 <script src="js/systems/RewardManager.js"></script>
 <script src="js/systems/WaveManager.js"></script>
 <script src="js/systems/SaveManager.js"></script>
 <script src="js/systems/ProgressManager.js"></script>
 <script src="js/systems/SpellManager.js"></script>
+<script src="js/systems/RunSave.js"></script>
 
 <script src="js/render/SpriteFactory.js"></script>
 <script src="js/render/FramePacer.js"></script>
@@ -514,6 +611,11 @@
 <script src="js/ui/HudPanels.js"></script>
 <script src="js/ui/RecipeBook.js"></script>
 <script src="js/ui/DexCard.js"></script>
+<script src="js/ui/MobileSheet.js"></script>
+<script src="js/ui/MobileToolbar.js"></script>
+<script src="js/ui/Convenience.js"></script>
+<script src="js/ui/ResumeUI.js"></script>
+<script src="js/ui/AppUI.js"></script>
 <script src="js/ui/GoldShopUI.js"></script>
 <script src="js/ui/EliteUI.js"></script>
 <script src="js/ui/SpellUI.js"></script>

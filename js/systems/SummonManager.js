@@ -322,5 +322,15 @@
     });
   };
 
+  /* ---------- 판 이어하기(RunSave · 세션 70) — 라운드 시작 때의 상태만 ---------- */
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  SummonManager.saveState = function () {
+    return { count: this.count, tickets: this.tickets, sinceTier: clone(this.sinceTier), lastTier: this.lastTier };
+  };
+  SummonManager.loadState = function (s) {
+    this.count = s.count || 0; this.tickets = s.tickets || 0; this.sinceTier = clone(s.sinceTier || {}); this.lastTier = s.lastTier == null ? null : s.lastTier;
+    RPD.bus.emit('summon:stateChanged', this.state());
+  };
+
   RPD.SummonManager = SummonManager;
 })(typeof window !== 'undefined' ? window : globalThis);

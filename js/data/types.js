@@ -32,6 +32,7 @@
   RPD.TypeParams = {
     burnRatio: 0.30,        // 타격 피해의 30%를 3초에 걸쳐
     burnDuration: 3,
+    burnProcRatio: 0.60,    // 화상 확률(pokemon.js burnChance)이 터지면 "강한 화상" — 타격 피해의 60%를 3초(세션 62)
     poisonRatio: 0.14,      // 중첩되는 대신 한 스택이 약하다
     poisonDuration: 4,
     poisonMaxStacks: 5,

@@ -82,6 +82,7 @@ canvas:focus-visible { outline-offset: -2px; }
  * 하단 패널이 먼저 줄어든다 — 필드보다 UI 가 우선되지 않게. */
 .app {
   height: 100vh;
+  height: 100dvh;   /* 휴대폰 주소창이 들고 나도 맞게(세션 68) — 모르는 브라우저는 위 100vh */
   padding: var(--gap);
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--side-w);
@@ -119,6 +120,28 @@ canvas:focus-visible { outline-offset: -2px; }
 @media (max-height: 700px) {
   :root { --dock-h: 160px; }
 }
+
+/* 조작 방해 막기(모바일 ③ · 세션 68) — 어느 너비에서든.
+ *   당겨서 새로고침 · 끝에서 튕김 없음. 필드 캔버스 · 포켓몬 그림은 글자 고르기 · 길게 눌러 그림 메뉴가 안 뜬다(끌기를 끊지 않게).
+ *   손가락 기기(pointer: coarse — 1100px 이상 태블릿 포함)는 두 번 탭 확대만 막는다(manipulation — 두 손가락 확대 · 스크롤은 된다).
+ *   입력칸(주문 · 검색)은 글자 고르기 그대로. 휴대폰 너비의 세부 규칙(세션 52)은 mobile.css. */
+html, body { overscroll-behavior: none; }
+canvas, .spr, img { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+@media (pointer: coarse) {
+  body { touch-action: manipulation; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+  input, textarea, [contenteditable="true"] { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+}
+
+/* 자리 비움 일시정지 덮개(세션 68) — 앱을 벗어났다 돌아오면. 누르면 계속 */
+.awaypause {
+  position: fixed; inset: 0; z-index: 90; display: grid; place-content: center; justify-items: center; gap: 6px;
+  width: 100%; border: 0; padding: 0; background: rgba(4, 10, 24, .72); color: var(--text); font: inherit; cursor: pointer;
+  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); touch-action: manipulation;
+}
+.awaypause[hidden] { display: none; }
+.awaypause__ico { font-size: 44px; line-height: 1; }
+.awaypause__title { font-size: 22px; font-weight: 900; }
+.awaypause__sub { font-size: 14px; font-weight: 700; color: var(--gold-hi); }
 
 /* 1100px 미만(휴대폰) 레이아웃은 css/mobile.css — 마지막에 불러와 같은 무게의 ui.css 규칙을 덮는다. */
 

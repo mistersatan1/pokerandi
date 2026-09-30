@@ -97,7 +97,7 @@
     var unit = RPD.FieldManager.remove(fieldIndex);
     this.add(unit);
     RPD.UnitManager.recomputeAll();
-    RPD.bus.emit('storage:stored', { unit: unit });
+    RPD.bus.emit('storage:stored', { unit: unit, from: fieldIndex });
     return { ok: true, unit: unit };
   };
 
@@ -127,6 +127,17 @@
   /* 필드 + 창고를 합친 보유 현황 — 조합식이 이걸 본다 */
   StorageManager.allUnits = function () {
     return RPD.FieldManager.getUnits().concat(this.units);
+  };
+
+  /* ---------- 판 이어하기(RunSave · 세션 70) — 라운드 시작 때의 상태만 ---------- */
+  StorageManager.saveState = function () {
+    return { capacity: this.capacity, units: this.units.map(function (u) { return RPD.UnitManager.serialize(u); }) };
+  };
+  StorageManager.loadState = function (s) {
+    var self = this;
+    this.capacity = s.capacity || RPD.Config.storageBase;
+    (s.units || []).forEach(function (d) { var u = RPD.UnitManager.revive(d); if (u) self.add(u); });
+    RPD.bus.emit('storage:changed', this.units);
   };
 
   RPD.StorageManager = StorageManager;

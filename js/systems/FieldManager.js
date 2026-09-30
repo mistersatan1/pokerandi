@@ -205,6 +205,8 @@
     if (sa.unit) { sa.unit.slotIndex = a; sa.unit.x = sa.x; sa.unit.y = sa.y; }
     if (sb.unit) { sb.unit.slotIndex = b; sb.unit.x = sb.x; sb.unit.y = sb.y; }
 
+    // 되돌리기(UndoManager)가 듣는다 — a 에 있던 개체(moved)가 b 로, b 에 있던 개체(other · 없으면 null)가 a 로
+    RPD.bus.emit('field:swapped', { from: a, to: b, moved: sb.unit, other: sa.unit || null });
     RPD.bus.emit('field:changed');
     return true;
   };
@@ -226,6 +228,23 @@
   };
 
   FieldManager.cancelDrag = function () { this.dragFromIndex = -1; };
+
+  /* ---------- 판 이어하기(RunSave · 세션 70) — 라운드 시작 때의 상태만 ---------- */
+  /* 해금된 칸 · 칸별 유닛. 복원은 init(모드 칸 제한 포함) 뒤에 — reset 이 아니라 init 이 판 시작 경로다 */
+  FieldManager.saveState = function () {
+    return {
+      unlocked: this.slots.filter(function (s) { return s.unlocked; }).map(function (s) { return s.index; }),
+      units: this.slots.filter(function (s) { return s.unit; }).map(function (s) { return { slot: s.index, unit: RPD.UnitManager.serialize(s.unit) }; })
+    };
+  };
+  FieldManager.loadState = function (s) {
+    var self = this;
+    (s.unlocked || []).forEach(function (i) { var slot = self.get(i); if (slot && !slot.blocked) slot.unlocked = true; });
+    (s.units || []).forEach(function (e) {
+      var slot = self.get(e.slot), u = RPD.UnitManager.revive(e.unit);
+      if (slot && slot.unlocked && u) self.place(e.slot, u);
+    });
+  };
 
   RPD.FieldManager = FieldManager;
 })(typeof window !== 'undefined' ? window : globalThis);

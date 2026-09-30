@@ -143,5 +143,13 @@
     return n;
   };
 
+  /* ---------- 판 이어하기(RunSave · 세션 70) — 라운드 시작 때의 상태만 ---------- */
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  GoldShopManager.saveState = function () { return { typeLv: clone(this.typeLv), tierLv: clone(this.tierLv) }; };
+  GoldShopManager.loadState = function (s) {
+    this.typeLv = clone(s.typeLv || {}); this.tierLv = clone(s.tierLv || {});
+    RPD.bus.emit('goldshop:changed', {});
+  };
+
   RPD.GoldShopManager = GoldShopManager;
 })(typeof window !== 'undefined' ? window : globalThis);

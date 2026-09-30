@@ -130,5 +130,9 @@
     });
   };
 
+  /* ---------- 판 이어하기(RunSave · 세션 70) — 라운드 시작 때의 상태만 ---------- */
+  ShardManager.saveState = function () { return { shards: this.shards }; };
+  ShardManager.loadState = function (s) { this.shards = s.shards || 0; RPD.bus.emit('shard:changed', this.shards); };
+
   RPD.ShardManager = ShardManager;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -299,5 +299,14 @@
     RPD.bus.on('game:wave', function () { self.refresh(); });
   };
 
+  /* ---------- 판 이어하기(RunSave · 세션 70) — 라운드 시작 때의 상태만 ---------- */
+  /* 이 판에서 처음 만든 결과물(새 조합 발견! 알림 · 조합식 줄 표시) */
+  RecipeManager.saveState = function () { return { discovered: Object.keys(this.discovered) }; };
+  RecipeManager.loadState = function (s) {
+    var self = this;
+    this.discovered = {};
+    (s.discovered || []).forEach(function (id) { self.discovered[id] = true; });
+  };
+
   RPD.RecipeManager = RecipeManager;
 })(typeof window !== 'undefined' ? window : globalThis);

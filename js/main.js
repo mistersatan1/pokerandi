@@ -41,7 +41,10 @@
     RPD.SaveManager.init();
     RPD.ProgressManager.init();
     RPD.SpellManager.init();
+    if (RPD.RunSave) RPD.RunSave.init();
     RPD.AudioManager.init();
+    if (RPD.UndoManager) RPD.UndoManager.init();
+    if (RPD.Haptics) RPD.Haptics.init();
     RPD.FxRenderer.init();
     RPD.UnitRenderer.init();
     if (RPD.AttackFx) RPD.AttackFx.init();
@@ -56,6 +59,11 @@
     if (RPD.EliteUI) RPD.EliteUI.init();
     if (RPD.SpellUI) RPD.SpellUI.init();
     if (RPD.HudPanels) RPD.HudPanels.init();
+    if (RPD.MobileSheet) RPD.MobileSheet.init();
+    if (RPD.MobileToolbar) RPD.MobileToolbar.init();
+    if (RPD.Convenience) RPD.Convenience.init();
+    if (RPD.ResumeUI) RPD.ResumeUI.init();
+    if (RPD.AppUI) RPD.AppUI.init();
 
     registerLayers();
     registerUpdates();
@@ -116,7 +124,8 @@
     });
   }
 
-  Game.resetAll = function (modeId, diffId) {
+  /* opts.restore — 판 이어하기(RunSave)가 부를 때. 새 판 초기 지급(칭호 시작 보너스)을 건너뛴다(값은 저장본으로 덮는다) */
+  Game.resetAll = function (modeId, diffId, opts) {
     RPD.EnemyManager.reset();
     RPD.WaveManager.reset();
     RPD.EconomyManager.reset();
@@ -138,7 +147,7 @@
     RPD.Loop.setPaused(false);
     GM.reset(modeId, diffId);
     // 클리어 횟수에 따른 시작 보너스(칭호)
-    if (RPD.ProgressManager) RPD.ProgressManager.applyStartBonus();
+    if (RPD.ProgressManager && !(opts && opts.restore)) RPD.ProgressManager.applyStartBonus();
     RPD.UIManager.refreshAll();
   };
 
@@ -155,6 +164,7 @@
   };
 
   Game.restart = function () {
+    if (RPD.RunSave) RPD.RunSave.clear();   // [처음부터] — 저장된 판도 버린다(세션 70)
     Game.resetAll(GM.mode.id, GM.mode.difficulty);
   };
 

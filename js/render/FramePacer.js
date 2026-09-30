@@ -8,7 +8,8 @@
  * 그래서 여기서 정한다(게임 규칙 · 시간은 건드리지 않는다 — Loop 의 고정 시간 갱신은 그대로라 밸런스는 같다):
  *   전투        : 최대 60fps. 느리면 화질 사다리를 한 칸씩 내린다(해상도 2 → 1.5 → 1.25 → 1배, 마지막은 30fps 고정).
  *   쉬는 중     : 10fps(움직이는 게 거의 없다). 손을 대면(누르기 · 움직이기 · 키) 0.8초 동안 제속도.
- *   가려짐      : 휴대폰에서 전체 화면 창(상점 · 사전 · 도감 …)이 필드를 덮으면 15fps(뒤로 흐리게 보이기만 한다).
+ *   가려짐      : 휴대폰에서 전체 화면 창(설명서 · 도감 · 모드 · 결과)이 필드를 덮으면 15fps(뒤로 흐리게 보이기만 한다).
+ *                 상점 · 정예 · 조합 사전은 세션 65 부터 필드 일부만 덮는 시트라 가려짐으로 안 본다.
  * 화질은 내리기만 한다(오르내리며 깜박이지 않게). 새로 열면 다시 가장 곱게 시작한다.
  */
 (function (global) {
@@ -40,8 +41,15 @@
 
   FramePacer.deviceDpr = function () { return global.devicePixelRatio || 1; };
   /* Renderer.resize 가 쓰는 해상도 상한 */
-  FramePacer.maxDpr = function () { return LADDER[FramePacer.level].dpr; };
-  FramePacer.targetFps = function () { return LADDER[FramePacer.level].fps; };
+  // 효과 단계(Effects.js — 줄임 1.5 · 최소 1배 · 30fps)가 사다리보다 낮으면 그쪽을 따른다
+  FramePacer.maxDpr = function () {
+    var cap = RPD.Effects ? RPD.Effects.get().dprCap : 2;
+    return Math.min(LADDER[FramePacer.level].dpr, cap);
+  };
+  FramePacer.targetFps = function () {
+    var cap = RPD.Effects ? RPD.Effects.get().fpsCap : 60;
+    return Math.min(LADDER[FramePacer.level].fps, cap);
+  };
 
   FramePacer.wake = function () { FramePacer._wakeUntil = now() + WAKE_MS; };
 
@@ -51,7 +59,8 @@
   }
 
   /* 휴대폰에서 전체 화면 창이 필드를 덮었는가 — 매 프레임 DOM 을 뒤지지 않게 0.25초마다 */
-  var COVER_SEL = '.board > .book:not([hidden]), .board > .help:not([hidden]), .board > .dex:not([hidden]), ' +
+  // 조합 사전 · 골드 상점 · 정예(.book)는 세션 65 부터 휴대폰에서 필드 일부만 덮는 시트다 — 필드가 보이니 가려짐이 아니다
+  var COVER_SEL = '.board > .help:not([hidden]), .board > .dex:not([hidden]), ' +
     '.board > .modepick:not([hidden]), .board > .result:not([hidden])';
   function isCovered(t) {
     if (t - FramePacer._coverAt < 250) return FramePacer._covered;
@@ -64,11 +73,12 @@
   /* 화질 한 칸 내리기 — 이 휴대폰에서 실제로 달라지는 칸까지 건너뛴다(원래 1배 화면이면 해상도 칸은 의미가 없다) */
   FramePacer.stepDown = function () {
     var dev = FramePacer.deviceDpr();
-    var cur = LADDER[FramePacer.level];
-    var curDpr = Math.min(dev, cur.dpr);
+    var fx = RPD.Effects ? RPD.Effects.get() : { dprCap: 2, fpsCap: 60 };
+    var curDpr = Math.min(dev, FramePacer.maxDpr()), curFps = FramePacer.targetFps();
     for (var i = FramePacer.level + 1; i < LADDER.length; i++) {
       var L = LADDER[i];
-      if (Math.min(dev, L.dpr) < curDpr - 0.01 || L.fps < cur.fps) {
+      // 효과 단계가 이미 낮춰 둔 칸은 건너뛴다(줄임이면 2 → 1.5 는 달라지는 게 없다)
+      if (Math.min(dev, L.dpr, fx.dprCap) < curDpr - 0.01 || Math.min(L.fps, fx.fpsCap) < curFps) {
         FramePacer.level = i;
         if (RPD.Renderer && RPD.Renderer.canvas) RPD.Renderer.resize();
         if (RPD.bus) RPD.bus.emit('render:quality', { level: i, dpr: L.dpr, fps: L.fps });

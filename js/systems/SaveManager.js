@@ -92,6 +92,17 @@
     return data;
   }
 
+  /* 옮겨 온 · 읽은 기록을 지금 형식으로 — 빠진 필드는 기본값(부분 손상에 버틴다) */
+  function normalize(parsed) {
+    var merged = emptySave();
+    var migrated = migrate(parsed);
+    for (var key in merged) {
+      if (Object.prototype.hasOwnProperty.call(migrated, key)) merged[key] = migrated[key];
+    }
+    merged.version = CURRENT_VERSION;
+    return merged;
+  }
+
   /* ---------- 공개 API ---------- */
 
   SaveManager.load = function () {
@@ -115,15 +126,7 @@
       return this.data;
     }
 
-    var merged = emptySave();
-    var migrated = migrate(parsed);
-    // 필드가 빠져 있어도 기본값으로 메운다 — 부분 손상에 버티게 한다
-    for (var key in merged) {
-      if (Object.prototype.hasOwnProperty.call(migrated, key)) merged[key] = migrated[key];
-    }
-    merged.version = CURRENT_VERSION;
-
-    this.data = merged;
+    this.data = normalize(parsed);
     RPD.bus.emit('save:loaded', this.data);
     return this.data;
   };
@@ -223,6 +226,42 @@
 
   SaveManager.recordFor = function (modeId) {
     return this.data.records[modeId] || null;
+  };
+
+  /* ---------- 기록 옮기기(세션 71) ----------
+   * 아이폰은 홈 화면 앱과 사파리가 저장소를 따로 쓰는 일이 있다 — 도감 · 칭호가 갈라진다. 글자(JSON)로 복사해 붙여 넣어 옮긴다.
+   * 판 이어하기 저장(RunSave · 다른 키)은 옮기지 않는다 — 진행 기록만. */
+  var EXPORT_APP = 'porandi', EXPORT_KIND = 'progress';
+  SaveManager.exportText = function () {
+    return JSON.stringify({ app: EXPORT_APP, kind: EXPORT_KIND, version: CURRENT_VERSION, exportedAt: Date.now(), data: this.data });
+  };
+  SaveManager.summaryOf = function (d) {
+    var clears = 0, k;
+    for (k in (d.clearsBy || {})) clears += d.clearsBy[k] || 0;
+    return { dex: Object.keys(d.pokedex || {}).length, clears: clears, spells: Object.keys(d.spells || {}).length,
+             runs: (d.totals && d.totals.runs) || 0 };
+  };
+  /* 붙여 넣은 글자를 검사한다 — { ok, data, summary } · { ok:false, reason:'EMPTY'|'JSON'|'FORMAT'|'VERSION' }. 덮어쓰지는 않는다 */
+  SaveManager.parseImport = function (text) {
+    text = String(text == null ? '' : text).trim();
+    if (!text) return { ok: false, reason: 'EMPTY' };
+    var o;
+    try { o = JSON.parse(text); } catch (e) { return { ok: false, reason: 'JSON' }; }
+    if (!o || typeof o !== 'object' || o.app !== EXPORT_APP || o.kind !== EXPORT_KIND || !o.data || typeof o.data !== 'object') return { ok: false, reason: 'FORMAT' };
+    var d = o.data;
+    if (typeof d.version !== 'number' || typeof o.version !== 'number') return { ok: false, reason: 'FORMAT' };
+    if (d.version > CURRENT_VERSION) return { ok: false, reason: 'VERSION' };     // 더 새 게임에서 내보낸 것 — 덮어써서 망치지 않게
+    var objs = ['pokedex', 'records', 'clearsBy', 'spells'];
+    for (var i = 0; i < objs.length; i++) if (d[objs[i]] != null && (typeof d[objs[i]] !== 'object' || Array.isArray(d[objs[i]]))) return { ok: false, reason: 'FORMAT' };
+    var data = normalize(JSON.parse(JSON.stringify(d)));
+    return { ok: true, data: data, summary: this.summaryOf(data) };
+  };
+  /* 확인을 받은 뒤 — 지금 기록을 통째로 바꾼다 */
+  SaveManager.importData = function (data) {
+    this.data = normalize(JSON.parse(JSON.stringify(data)));
+    this.save();
+    RPD.bus.emit('save:loaded', this.data);
+    return true;
   };
 
   /* ---------- 설정 ---------- */

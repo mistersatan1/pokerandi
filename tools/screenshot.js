@@ -247,14 +247,15 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
       const b = n.getBoundingClientRect(); const cs = getComputedStyle(n);
       return b.width > 4 && b.height > 4 && cs.visibility !== 'hidden' && cs.display !== 'none' && b.right > 0 && b.bottom > 0 && b.left < innerWidth && b.top < innerHeight; }, sel);
     const reach = {};
-    for (const [k, sel] of [['Space 소환', '#btnSummon'], ['W 강화', '#btnUpgrade'], ['S 창고로', '#btnStore'], ['X 방출', '#btnSell'],
+    for (const [k, sel] of [['Space 소환', '#btnSummon'],
                             ['1·2·3 배속', '.speed__btn[data-speed="3"]'], ['P 일시정지', '#btnPause']]) reach[k] = await visible(sel);
-    await mp.tap('#btnMore'); await mp.waitForTimeout(200);
+    for (const [k, sel] of [['C 조합 (툴바)', '#tbCraft'], ['창고 (툴바)', '#tbOwned'], ['더보기 (툴바)', '#tbMore']]) reach[k] = await visible(sel);
+    await mp.tap('#tbMore'); await mp.waitForTimeout(200);
     for (const [k, sel] of [['H 설명서', '#btnHelp'], ['Enter 주문', '#btnChat'], ['R 조합 사전', '#btnBook'], ['G 골드 상점', '#btnGoldShop'],
                             ['E 정예 소환', '#btnElite'], ['도감', '#btnDex'], ['소리', '#btnAudio'], ['처음부터', '#btnRestart']]) reach[k + ' (☰)'] = await visible(sel);
     if (/portrait|Galaxy S24$|iPhone 15$/.test(dev) && !/landscape/.test(dev)) await mp.screenshot({ path: require('path').join(__dirname, '..', 'dist', 'm_' + tag + '_menu.png') });
-    await mp.tap('#btnMore'); await mp.waitForTimeout(200);
-    await mp.tap('.mtab[data-mtab="recipes"]'); await mp.waitForTimeout(400);
+    await mp.tap('#tbMore'); await mp.waitForTimeout(200);
+    await mp.evaluate(() => window.RPD.HudPanels.setDrawer('recipes'));   // 세션 66: [조합] 은 조합, 시트는 길게 누르기 — 여기선 시트만 await mp.waitForTimeout(400);
     reach['C 조합 (조합식 탭)'] = await visible('#btnCraft');
     await mp.screenshot({ path: require('path').join(__dirname, '..', 'dist', 'm_' + tag + '_drawer.png') });
     await mp.tap('.mtab[data-mtab="owned"]'); await mp.waitForTimeout(300);
@@ -262,6 +263,21 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     await mp.tap('.mtab[data-mtab="owned"]'); await mp.waitForTimeout(300);   // 서랍 닫기
     const t0 = targets.find(t => t.i === 0);
     await mp.touchscreen.tap(t0.x, t0.y); await mp.waitForTimeout(300);
+    // 강화 · 창고로 · 방출 — 세션 65 부터 정보 바에(원래 버튼은 숨어 있고 W · S · X 단축키는 그대로)
+    for (const [k, sel] of [['W 강화 (정보 바)', '#infoBar [data-ib="upgrade"]'], ['S 창고로 (정보 바)', '#infoBar [data-ib="store"]'],
+                            ['X 방출 (정보 바)', '#infoBar [data-ib="sell"]'], ['이동 (정보 바)', '#infoBar [data-ib="move"]']]) reach[k] = await visible(sel);
+    // 자세한 정보(스킬 · 특성 · 공격 대상)는 정보 바를 길게 눌러 여는 시트에 — 실제 손가락(CDP)으로 0.6초 누르기
+    {
+      const cdp0 = await mctx.newCDPSession(mp);
+      await mp.locator('#infoBar .ib__who').waitFor({ state: 'visible', timeout: 3000 });   // 칸을 누른 직후 바가 다시 그려지는 사이에 재면 가끔 비었다(세션 66)
+      // 바는 이벤트마다 innerHTML 로 다시 그려진다(세션 68 부터 되돌리기 기록에도) — 재는 순간 바뀌어 null 이면 다시 잰다
+      let bb = null;
+      for (let k = 0; k < 10 && !bb; k++) { bb = await mp.locator('#infoBar .ib__who').boundingBox(); if (!bb) await mp.waitForTimeout(100); }
+      await cdp0.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: bb.x + 8, y: bb.y + bb.height / 2 }] });
+      await mp.waitForTimeout(650);
+      await cdp0.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await mp.waitForTimeout(300);
+    }
     // 공격 대상 칩은 보이기만 하면 안 되고 실제로 눌려야 한다(카드 안을 스크롤해서라도)
     await mp.evaluate(() => { const c = document.querySelector('#slotCard [data-tgt="BOSS"]'); if (c) c.scrollIntoView({ block: 'nearest' }); });
     await mp.waitForTimeout(150);
@@ -271,7 +287,7 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
       reach['T 공격 대상 — 칩을 눌러 바뀜'] = await mp.evaluate(() => { const s = window.RPD.FieldManager.getSelected(); return !!(s && s.unit && s.unit.targeting === 'BOSS'); });
       if (/landscape/.test(dev)) await mp.screenshot({ path: require('path').join(__dirname, '..', 'dist', 'm_' + tag + '_card.png') });
     }
-    reach['Esc 닫기 (정보 카드 ×)'] = await visible('#btnSlotClose');
+    reach['Esc 닫기 (자세한 정보 시트 ×)'] = await visible('#btnSlotClose');
     const missing = Object.keys(reach).filter(k => !reach[k]);
 
     report.push({ device: dev, ...geo, slotPx: +(geo.slotCss * geo.dpr).toFixed(0), tapWrong: wrong, tapCount: targets.length, missing, errors: merr.slice(0, 3) });
@@ -376,7 +392,7 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     await tp.evaluate(() => document.querySelector('.mtab[data-mtab="owned"]').click());   // 서랍 닫기
     await hold(300);
     // ⑦ 길게 누르기 → 설명 말풍선 · 버튼은 안 눌림 (☰ 메뉴의 골드 상점)
-    await tp.evaluate(() => document.getElementById('btnMore').click()); await hold(200);
+    await tp.evaluate(() => document.getElementById('tbMore').click()); await hold(200);
     const gs = await tp.evaluate(() => { const b = document.getElementById('btnGoldShop').getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; });
     await T('touchStart', [[gs.x, gs.y]]); await hold(650);
     const tipTxt = await tp.evaluate(() => { const t = document.querySelector('.tipbubble'); return t && !t.hidden ? t.textContent : null; });
@@ -384,7 +400,7 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     await T('touchEnd', []); await hold(250);
     res['길게 누르기 → 설명 말풍선'] = tipTxt;
     res['말풍선을 띄운 뒤 버튼은 안 눌림'] = await tp.evaluate(() => document.getElementById('goldShopOverlay').hidden);
-    await tp.evaluate(() => { const h = document.querySelector('.hud'); if (h.classList.contains('is-more-open')) document.getElementById('btnMore').click(); });
+    await tp.evaluate(() => { const h = document.querySelector('.hud'); if (h.classList.contains('is-more-open')) document.getElementById('tbMore').click(); });
     // ⑧ 두 번 탭 확대 없음 · 필드는 브라우저 손버릇을 안 받는다
     const mid = S.find(s => !s.unit && !s.unlocked) || S[S.length - 1];
     await tapAt(mid.x + 40, mid.y + 40); await hold(60); await tapAt(mid.x + 40, mid.y + 40); await hold(300);
@@ -398,9 +414,9 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
       return r.width < 40 || r.height < 40;
     }).map(n => (n.id ? '#' + n.id : '.' + String(n.className).split(' ')[0]) + ' ' + Math.round(n.getBoundingClientRect().width) + 'x' + Math.round(n.getBoundingClientRect().height)))).forEach(x => smalls.add(x));
     await scan();
-    for (const t of ['recipes', 'owned', 'synergy', 'dex']) { await tp.evaluate(tt => document.querySelector('.mtab[data-mtab="' + tt + '"]').click(), t); await hold(200); await scan(); }
-    await tp.evaluate(() => document.querySelector('.mtab[data-mtab="dex"]').click());
-    await tp.evaluate(() => document.getElementById('btnMore').click()); await hold(150); await scan(); await tp.evaluate(() => document.getElementById('btnMore').click());
+    for (const t of ['recipes', 'owned', 'synergy', 'dex']) { await tp.evaluate(tt => window.RPD.HudPanels.setDrawer(tt), t); await hold(200); await scan(); }
+    await tp.evaluate(() => window.RPD.HudPanels.setDrawer('dex'));
+    await tp.evaluate(() => document.getElementById('tbMore').click()); await hold(150); await scan(); await tp.evaluate(() => document.getElementById('tbMore').click());
     await tp.evaluate(() => window.RPD.FieldManager.select(window.RPD.FieldManager.slots.find(s => s.unit).index)); await hold(200); await scan();
     res['누름 영역 40px 미만'] = [...smalls];
     touchReport.push({ device: dev, ...res, errors: terr.slice(0, 3) });
@@ -470,23 +486,731 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     await dctx.close();
   }
 
-  /* ---------- 모바일 ③ — 홈 화면 앱(세션 53) ----------
+  // ⑬ 화상 확률(burnChance, 세션 62) — 지속 피해 역할(불꽃 아닌 종 위주)을 올려 실제로 싸우게 한 뒤: 필드 · 도감 카드(뿔충이).
+  //    확인: 불꽃 타입이 아닌 개체가 건 화상(= 화상 확률로만 생긴다)이 적에게 실제로 붙는가.
+  {
+    const bctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const bp = await bctx.newPage();
+    await bp.goto(URL); await bp.waitForTimeout(1000);
+    await bp.evaluate(() => {
+      const R = window.RPD;
+      document.querySelectorAll('.modepick, .result, .help, .book').forEach(o => o.hidden = true);
+      R.Game.resetAll('NORMAL', 'NORMAL'); R.Game.startRun('NORMAL', 'NORMAL');
+      R.GameManager.setWave(14); R.WaveManager.startRound(14);
+      const F = R.FieldManager;
+      F.slots.forEach(s => { if (s.unit) F.remove(s.index); });
+      const ids = ['weedle', 'ekans', 'zubat', 'gloom', 'paras', 'venonat', 'bellsprout', 'grimer', 'tentacool', 'charmander'];
+      F.slots.filter(s => s.unlocked).slice(0, ids.length).forEach((s, i) => F.place(s.index, R.UnitManager.create(ids[i])));
+      R.GameManager.life = 999;
+      R.bus.emit('field:changed', {});
+      // 화상을 누가 걸었는지 센다(도구 쪽 관찰 — 게임 코드는 그대로)
+      const EM = R.EnemyManager, orig = EM.applyDot;
+      window.__burn = { procNonFire: 0 };
+      window.__dot = {};   // 개체별 지속 피해 합(적이 받은 피해 이벤트 중 지속 피해 틱만 — 틱은 opts 없이 source 만 온다)
+      R.bus.on('enemy:damaged', p => { if (p.source && p.source.uid && !p.crit && p.amount > 0 && window.__inTick) window.__dot[p.source.uid] = (window.__dot[p.source.uid] || 0) + p.amount; });
+      const upd = EM.update.bind(EM);
+      EM.update = function (dt) { window.__inTick = true; try { return upd(dt); } finally { window.__inTick = false; } };
+      EM.applyDot = function (enemy, perSecond, duration, source, kind, maxStacks) {
+        if (kind === 'burn' && source && source.def && source.def.burnChance && !source.typeFlags.FIRE) window.__burn.procNonFire += 1;
+        return orig.apply(this, arguments);
+      };
+      R.Loop.setSpeed(2); R.Loop.setPaused(false);
+    });
+    await bp.waitForTimeout(9000);
+    const info = await bp.evaluate(() => {
+      const R = window.RPD, en = R.EnemyManager.enemies.filter(e => e.alive);
+      return { ...window.__burn, enemies: en.length,
+        burningNow: en.filter(e => e.effects.dots.some(d => d.kind === 'burn' && d.source && d.source.def && !d.source.typeFlags.FIRE)).length };
+    });
+    console.log('burn field', JSON.stringify(info));
+    await bp.evaluate(() => window.RPD.Loop.setPaused(true));
+    await bp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '13_burn_field_pc.png') });
+    // 누적 피해에 지속 피해(세션 63) — 질퍽이(독 · 화상 확률) 칸 카드의 "누적"과, 그 개체가 건 지속 피해 몫
+    const slotInfo = await bp.evaluate(() => {
+      const R = window.RPD, F = R.FieldManager;
+      const s = F.slots.find(x => x.unit && x.unit.defId === 'grimer');
+      F.select(s.index);
+      return { total: Math.round(s.unit.totalDamage), dot: Math.round(window.__dot[s.unit.uid] || 0),
+        card: (document.querySelector('#slotBody .sc__dmg') || {}).textContent, top: R.UnitManager.topDamage().name };
+    });
+    console.log('dot total', JSON.stringify(slotInfo));
+    await bp.waitForTimeout(200);
+    await bp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '14_dot_total_slotcard_pc.png') });
+    await bp.evaluate(() => window.RPD.FieldManager.select(-1));
+    await bp.evaluate(() => {
+      const R = window.RPD;
+      R.SaveManager.data.pokedex.weedle = 1;
+      document.getElementById('btnDex').click();
+      R.DexCard.openId('weedle');
+    });
+    await bp.waitForTimeout(400);
+    await bp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '13_burn_dexcard_pc.png') });
+    await bctx.close();
+  }
+
+  // ⑮ 처형도 누적 피해에(세션 64) — 고스트 3마리(시너지 "체력 14% 이하 즉사")로 싸운 뒤 칸 카드 "누적"과 처형으로 들어간 몫.
+  {
+    const xctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const xp = await xctx.newPage();
+    await xp.goto(URL); await xp.waitForTimeout(1000);
+    await xp.evaluate(() => {
+      const R = window.RPD;
+      document.querySelectorAll('.modepick, .result, .help, .book').forEach(o => o.hidden = true);
+      R.Game.resetAll('NORMAL', 'NORMAL'); R.Game.startRun('NORMAL', 'NORMAL');
+      R.GameManager.setWave(14); R.WaveManager.startRound(14);
+      const F = R.FieldManager;
+      F.slots.forEach(s => { if (s.unit) F.remove(s.index); });
+      const ids = ['gastly', 'haunter', 'haunter', 'pidgeotto'];
+      F.slots.filter(s => s.unlocked).slice(0, ids.length).forEach((s, i) => F.place(s.index, R.UnitManager.create(ids[i])));
+      R.GameManager.life = 999;
+      R.bus.emit('field:changed', {});
+      // 처형으로 들어간 몫을 개체별로(도구 쪽 관찰) — 처형 알림 순간의 적 체력이 곧 처형 한 방
+      window.__exec = {};
+      R.bus.on('combat:execute', p => { window.__exec[p.unit.uid] = (window.__exec[p.unit.uid] || 0) + Math.max(0, p.enemy.hp); });
+      R.Loop.setSpeed(2); R.Loop.setPaused(false);
+    });
+    await xp.waitForTimeout(9000);
+    const xinfo = await xp.evaluate(() => {
+      const R = window.RPD, F = R.FieldManager;
+      R.Loop.setPaused(true);
+      const us = F.getUnits().filter(u => window.__exec[u.uid]).sort((a, b) => window.__exec[b.uid] - window.__exec[a.uid]);
+      const u = us[0] || F.getUnits().find(x => x.defId === 'haunter');
+      F.select(u.slotIndex);
+      return { synergy: (R.SynergyManager.active || []).filter(a => a.typeId === 'GHOST').map(a => a.label || a.count), unit: u.name,
+        total: Math.round(u.totalDamage), exec: Math.round(window.__exec[u.uid] || 0),
+        executes: Object.values(window.__exec).length, card: (document.querySelector('#slotBody .sc__dmg') || {}).textContent };
+    });
+    console.log('execute total', JSON.stringify(xinfo));
+    await xp.waitForTimeout(200);
+    await xp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '15_execute_total_slotcard_pc.png') });
+    await xctx.close();
+  }
+
+  /* ⑯ 모바일 재설계 ① — 필드 고정 · 시트 · 정보 바 · 이동 모드(세션 65). 갤럭시 S24 세로 · 가로, 실제 손가락(터치)으로.
+   * 검사(하나라도 어긋나면 이 도구가 실패로 끝난다):
+   *   캔버스 화면 크기(getBoundingClientRect)가 시트(탭 넷 × peek · 절반 · 전체 · 손잡이 끌기) · 창(상점 · 정예 · 조합 사전) · 자세한 정보 · 이동 모드에서 모두 같다
+   *   정보 바가 필드 칸(과 캔버스)과 겹치지 않는다 / 이동 모드에서 칸을 눌러 실제로 옮겨진다 / 칸 근처 빈 곳을 눌러도 가장 가까운 칸이 골라진다
+   * 캡처: (a) 칸 선택 + 정보 바 (b) 이동 모드 (c) 조합식 시트 절반 — 칸의 화면 크기(px)도 남긴다. */
+  const m1Problems = [];
+  for (const dev of ['Galaxy S24', 'Galaxy S24 landscape']) {
+    const gctx = await browser.newContext({ ...devices[dev], defaultBrowserType: undefined });
+    const gp = await gctx.newPage();
+    const gerr = [];
+    gp.on('pageerror', e => gerr.push(e.message));
+    await gp.goto(URL); await gp.waitForTimeout(1000);
+    await gp.evaluate(() => {
+      const R = window.RPD;
+      if (R.TutorialManager && R.TutorialManager.skip) R.TutorialManager.skip();
+      document.querySelectorAll('.modepick, .result, .help, .book').forEach(o => o.hidden = true);
+      R.Game.resetAll('NORMAL', 'NORMAL'); R.Game.startRun('NORMAL', 'NORMAL');
+      R.GameManager.setWave(23); R.WaveManager.startRound(23);
+      const F = R.FieldManager;
+      F.slots.forEach(x => { if (x.unit) F.remove(x.index); });
+      const open = F.slots.filter(x => x.unlocked && !x.blocked);
+      ['charizard', 'blastoise', 'venusaur', 'pikachu', 'gengar', 'alakazam'].forEach((id, i) => F.place(open[i].index, R.UnitManager.create(id)));
+      R.GameManager.life = 999; R.GameManager.gold = 0;
+      R.bus.emit('field:changed', {});
+    });
+    await gp.waitForTimeout(2600);                                   // 라운드 배너가 지나가게
+    await gp.evaluate(() => window.RPD.Loop.setPaused(true));
+    const tag = dev.replace(/ /g, '_');
+    const canvasRect = () => gp.evaluate(() => { const r = document.getElementById('gameCanvas').getBoundingClientRect(); return [r.left, r.top, r.width, r.height].map(v => Math.round(v * 10) / 10).join(','); });
+    const slots = () => gp.evaluate(() => {
+      const R = window.RPD.Renderer, F = window.RPD.FieldManager, c = document.getElementById('gameCanvas').getBoundingClientRect();
+      return F.slots.map(sl => { const p = R.toCanvasCss(sl.x, sl.y), h = sl.size / 2 * p.scale;
+        return { i: sl.index, x: c.left + p.x, y: c.top + p.y, h, unit: sl.unit ? sl.unit.defId : null, open: sl.unlocked && !sl.blocked }; });
+    });
+    const R0 = await canvasRect();
+    const bad = (what) => { m1Problems.push(dev + ': ' + what); };
+    const same = async (what) => { const r = await canvasRect(); if (r !== R0) bad('캔버스 크기가 바뀜 — ' + what + ' ' + R0 + ' → ' + r); };
+    const S = await slots();
+    const slotPx = +(S[0].h * 2).toFixed(1);
+
+    // (a) 칸 선택 — 실제 손가락으로 리자몽 칸
+    const A = S.find(x => x.unit === 'charizard');
+    await gp.touchscreen.tap(A.x, A.y); await gp.waitForTimeout(250);
+    if (await gp.evaluate(() => window.RPD.FieldManager.selectedIndex) !== A.i) bad('리자몽 칸이 안 골라짐');
+    const bar = await gp.evaluate(() => { const r = document.getElementById('infoBar').getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom, text: document.getElementById('infoBar').innerText.replace(/\s+/g, ' ') }; });
+    const cv = await gp.evaluate(() => { const r = document.getElementById('gameCanvas').getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom }; });
+    const overlap = (a, b) => a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;
+    const hitSlots = S.filter(x => overlap(bar, { l: x.x - x.h, t: x.y - x.h, r: x.x + x.h, b: x.y + x.h })).map(x => x.i);
+    if (hitSlots.length) bad('정보 바가 칸과 겹침: ' + hitSlots.join(','));
+    if (overlap(bar, cv)) bad('정보 바가 필드(캔버스)와 겹침');
+    if (!/리자몽/.test(bar.text) || !/DPS/.test(bar.text)) bad('정보 바에 이름 · DPS 가 없음: ' + bar.text);
+    if (await gp.evaluate(() => { const c = document.getElementById('slotCard'); return c && getComputedStyle(c).display !== 'none'; })) bad('필드 위에 정보 카드가 뜸');
+    await same('칸 선택');
+    await gp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '16_m1_' + tag + '_a_select.png') });
+
+    // (b) 이동 모드 — [이동] 누르고 빈 칸을 눌러 옮기기
+    await gp.tap('#infoBar [data-ib="move"]'); await gp.waitForTimeout(350);
+    if (await gp.evaluate(() => window.RPD.MobileSheet.moving) !== A.i) bad('[이동] 을 눌러도 이동 모드가 아님');
+    const moveBar = await gp.evaluate(() => document.getElementById('infoBar').innerText.replace(/\s+/g, ' '));
+    if (!/옮길 칸을 누르세요/.test(moveBar) || !/취소/.test(moveBar)) bad('이동 모드 정보 바 문구: ' + moveBar);
+    await same('이동 모드');
+    await gp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '16_m1_' + tag + '_b_move.png') });
+    const E = S.find(x => x.open && !x.unit && x.i !== A.i);
+    await gp.touchscreen.tap(E.x, E.y); await gp.waitForTimeout(300);
+    const moved = await gp.evaluate(([a, e]) => { const F = window.RPD.FieldManager; return { at: F.get(e).unit && F.get(e).unit.defId, left: !!F.get(a).unit, sel: F.selectedIndex, moving: window.RPD.MobileSheet.moving }; }, [A.i, E.i]);
+    if (moved.at !== 'charizard' || moved.left) bad('이동 모드에서 칸을 눌렀는데 안 옮겨짐: ' + JSON.stringify(moved));
+    if (moved.moving !== -1 || moved.sel !== E.i) bad('옮긴 뒤 정보 바로 안 돌아옴: ' + JSON.stringify(moved));
+
+    // 칸 근처 빈 곳 — 칸 가장자리 밖 14px(손가락 반지름 22px 안) · 다른 칸이 더 가깝지 않은 방향으로
+    const S2 = await slots();
+    let nearTest = null;
+    for (const x of S2) {
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const px = x.x + dx * (x.h + 14), py = x.y + dy * (x.h + 14);
+        const clash = S2.some(o => o.i !== x.i && Math.hypot(Math.max(0, Math.abs(px - o.x) - o.h), Math.max(0, Math.abs(py - o.y) - o.h)) <= 22);
+        if (!clash && px > cv.l + 2 && px < cv.r - 2 && py > cv.t + 2 && py < cv.b - 2) { nearTest = { i: x.i, x: px, y: py }; break; }
+      }
+      if (nearTest) break;
+    }
+    await gp.evaluate(() => window.RPD.FieldManager.select(-1));
+    await gp.touchscreen.tap(nearTest.x, nearTest.y); await gp.waitForTimeout(200);
+    const nearGot = await gp.evaluate(() => window.RPD.FieldManager.selectedIndex);
+    if (nearGot !== nearTest.i) bad('칸 근처 빈 곳(가장자리 밖 14px) → ' + nearGot + ' (기대 ' + nearTest.i + ')');
+    await gp.evaluate(() => window.RPD.FieldManager.select(-1));
+
+    // (c) 조합식 시트 절반
+    await gp.touchscreen.tap(A.x, A.y); await gp.waitForTimeout(100);        // 빈 칸 하나 골라 두기(정보 바가 보이게)
+    const B = S2.find(x => x.unit === 'charizard');
+    await gp.touchscreen.tap(B.x, B.y); await gp.waitForTimeout(150);
+    await gp.evaluate(() => window.RPD.HudPanels.setDrawer('recipes')); await gp.waitForTimeout(450);
+    const sheetInfo = await gp.evaluate(() => { const p = document.querySelector('.pane--recipes').getBoundingClientRect(); return { size: document.body.getAttribute('data-sheet'), w: Math.round(p.width), h: Math.round(p.height) }; });
+    if (sheetInfo.size !== 'half') bad('조합식 탭을 열었는데 절반 시트가 아님: ' + sheetInfo.size);
+    await same('조합식 시트 절반');
+    await gp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '16_m1_' + tag + '_c_recipes_half.png') });
+
+    // 필드를 누르면 peek 로 · 선택은 그대로
+    const selBefore = await gp.evaluate(() => window.RPD.FieldManager.selectedIndex);
+    await gp.touchscreen.tap(B.x, B.y); await gp.waitForTimeout(250);
+    const afterTap = await gp.evaluate(() => ({ size: document.body.getAttribute('data-sheet'), sel: window.RPD.FieldManager.selectedIndex }));
+    if (afterTap.size !== 'peek' || afterTap.sel !== selBefore) bad('필드를 누르면 peek + 선택 유지여야 하는데: ' + JSON.stringify(afterTap));
+
+    // 캔버스 크기 불변 — 탭 넷 × 세 크기 · 손잡이 끌기 · 창 셋 · 자세한 정보
+    for (const tab of ['recipes', 'owned', 'synergy', 'dex']) {
+      await gp.evaluate(t => { window.RPD.HudPanels.setDrawer(''); window.RPD.HudPanels.setDrawer(t); }, tab);
+      for (const size of ['peek', 'half', 'full']) {
+        await gp.evaluate(z => window.RPD.MobileSheet.setSize(z), size); await gp.waitForTimeout(120);
+        await same(tab + ' ' + size);
+      }
+    }
+    // 손잡이를 실제 손가락으로 끌기(세로: 위로 · 가로: 왼쪽으로) → 크기가 바뀌고 캔버스는 그대로
+    await gp.evaluate(() => window.RPD.MobileSheet.setSize('peek')); await gp.waitForTimeout(150);
+    const gb = await gp.locator('#sheetGrip').boundingBox();
+    const land = /landscape/.test(dev);
+    const cdp = await gctx.newCDPSession(gp);
+    const gx = gb.x + gb.width / 2, gy = gb.y + gb.height / 2;
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: gx, y: gy }] });
+    for (let k = 1; k <= 8; k++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: land ? gx - k * 30 : gx, y: land ? gy : gy - k * 30 }] }); await gp.waitForTimeout(16); }
+    await same('손잡이 끄는 중');
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await gp.waitForTimeout(200);
+    const dragged = await gp.evaluate(() => document.body.getAttribute('data-sheet'));
+    if (dragged === 'peek') bad('손잡이를 끌어도 시트 크기가 그대로 peek');
+    await same('손잡이 끈 뒤(' + dragged + ')');
+    await gp.evaluate(() => window.RPD.HudPanels.setDrawer(''));
+    for (const id of ['goldShopOverlay', 'eliteOverlay', 'bookOverlay']) {
+      await gp.evaluate(i => { document.getElementById(i).hidden = false; }, id); await gp.waitForTimeout(150);
+      await same(id);
+      await gp.evaluate(i => { document.getElementById(i).hidden = true; }, id);
+    }
+    await gp.touchscreen.tap(B.x, B.y); await gp.waitForTimeout(150);
+    await gp.evaluate(() => window.RPD.MobileSheet.openDetail()); await gp.waitForTimeout(200);
+    await same('자세한 정보 시트');
+    const detailShown = await gp.evaluate(() => getComputedStyle(document.getElementById('slotCard')).display !== 'none');
+    if (!detailShown) bad('자세한 정보 시트가 안 보임');
+    const info = { canvas: R0, slotCssPx: slotPx, bar: [Math.round(bar.l), Math.round(bar.t), Math.round(bar.r - bar.l), Math.round(bar.b - bar.t)], sheet: sheetInfo, dragged, errors: gerr.slice(0, 2) };
+    console.log('mobile1', dev, JSON.stringify(info));
+    report.push({ mobile1: dev, ...info });
+    await gctx.close();
+  }
+  console.log('mobile1 problems', JSON.stringify(m1Problems));
+  if (m1Problems.length) process.exitCode = 1;
+
+  /* ⑰ 모바일 ② — 하단 툴바 · "★ 조합 가능" 줄 · 보스 보상(세션 66). 갤럭시 S24 세로 · 가로 + PC.
+   * 검사(하나라도 어긋나면 이 도구가 실패로 끝난다):
+   *   툴바 버튼 높이 44px 이상 · 툴바가 캔버스와 안 겹침 / 시트([창고] · [조합] 길게 누르기) · [더보기] 를 열고 닫아도 캔버스 크기 그대로 /
+   *   [조합] 배지 = 완성 가능 개수 · "★ 조합 가능" 줄을 누르면 실제로 조합 / 소환 금지 중 [소환] "금지 NR" 잠김 /
+   *   휴대폰에서 보스 보상 칩이 getComputedStyle 로 안 보임 · PC 에서는 보임 / 설명서 보스 보상 표에 RewardManager.table 전부.
+   * 캡처: (a) 세로 기본 (b) 세로 조합 가능 (c) 세로 [더보기] (d) 세로 보스 라운드 (e) 세로 설명서 보스 보상 (f) 가로 (a)(d) (g) PC 보스 라운드 */
+  const m2Problems = [];
+  const m2Report = [];
+  const tbPrep = (opt) => {
+    const R = window.RPD;
+    if (R.TutorialManager && R.TutorialManager.skip) R.TutorialManager.skip();
+    document.querySelectorAll('.modepick, .result, .help, .book').forEach(o => o.hidden = true);
+    R.Game.resetAll('NORMAL', 'NORMAL'); R.Game.startRun('NORMAL', 'NORMAL');
+    R.GameManager.setWave(opt.wave); R.WaveManager.startRound(opt.wave);
+    const F = R.FieldManager;
+    F.slots.forEach(x => { if (x.unit) F.remove(x.index); });
+    const open = F.slots.filter(x => x.unlocked && !x.blocked);
+    ['charizard', 'blastoise', 'venusaur', 'pikachu', 'gengar'].forEach((id, i) => F.place(open[i].index, R.UnitManager.create(id)));
+    R.StorageManager.reset();
+    if (opt.ready) {   // 소환으로 나오는 재료만 쓰는 조합식 둘을 완성 가능하게
+      R.RecipeData.list.filter(x => x.materials.every(m => R.PokemonData.get(m).summon)).slice(0, 2)
+        .forEach(r => r.materials.forEach(m => R.StorageManager.add(R.UnitManager.create(m))));
+    }
+    R.GameManager.life = 999; R.GameManager.gold = 500;
+    R.bus.emit('field:changed', {});
+    R.bus.emit('economy:gold', { gold: 500, delta: 0 });
+  };
+  const rectOf = (pg, q) => pg.evaluate(sel => { const n = document.querySelector(sel); if (!n) return null; const r = n.getBoundingClientRect();
+    return { l: r.left, t: r.top, r: r.right, b: r.bottom, w: Math.round(r.width), h: Math.round(r.height) }; }, q);
+  for (const dev of ['Galaxy S24', 'Galaxy S24 landscape']) {
+    const tctx2 = await browser.newContext({ ...devices[dev], defaultBrowserType: undefined });
+    const tp2 = await tctx2.newPage();
+    const terr = [];
+    tp2.on('pageerror', e => terr.push(e.message));
+    await tp2.goto(URL); await tp2.waitForTimeout(1000);
+    const tag = dev.replace(/ /g, '_'), land = /landscape/.test(dev);
+    const bad = w => m2Problems.push(dev + ': ' + w);
+    const shot = name => tp2.screenshot({ path: require('path').join(__dirname, '..', 'dist', '17_m2_' + tag + '_' + name + '.png') });
+    const cvs = async () => { const r = await rectOf(tp2, '#gameCanvas'); return [r.l, r.t, r.w, r.h].map(Math.round).join(','); };
+
+    // (a) 기본 툴바
+    await tp2.evaluate(tbPrep, { wave: 7 });
+    await tp2.waitForTimeout(2600);
+    await tp2.evaluate(() => window.RPD.Loop.setPaused(true));
+    const C0 = await cvs();
+    const canvasR = await rectOf(tp2, '#gameCanvas');
+    const btns = {};
+    for (const q of ['#btnSummon', '#tbCraft', '#tbOwned', '#tbMore']) btns[q] = await rectOf(tp2, q);
+    const tbar = await rectOf(tp2, '#mobileTabs'), act = await rectOf(tp2, '.pane--action');
+    Object.entries(btns).forEach(([q, r]) => { if (!r || r.h < 44) bad(q + ' 높이 ' + (r && r.h) + 'px < 44'); });
+    const ov = (a, b) => a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;
+    if (ov(tbar, canvasR) || ov(act, canvasR)) bad('툴바가 캔버스와 겹침');
+    if (!land && Math.abs(tbar.b - (await tp2.evaluate(() => innerHeight))) > 12) bad('세로 툴바가 화면 맨 아래가 아님');
+    if (!(await shot('a_toolbar'), true)) {}
+
+    // (d) 보스 라운드 — 필드 위 보상 칩이 안 보여야
+    await tp2.evaluate(tbPrep, { wave: 10 });
+    await tp2.waitForTimeout(2600);
+    await tp2.evaluate(() => window.RPD.Loop.setPaused(true));
+    const chip = await tp2.evaluate(() => { const n = document.getElementById('nextReward'); return { display: getComputedStyle(n).display, text: n.textContent.length }; });
+    if (chip.display !== 'none') bad('휴대폰인데 보스 보상 칩이 보임(display ' + chip.display + ')');
+    const bossUp = await tp2.evaluate(() => window.RPD.EnemyManager.enemies.some(e => e.isBoss));
+    await shot('d_boss_round');
+    if (land) { m2Report.push({ dev, canvas: C0, toolbar: [tbar.w, tbar.h], summon: [btns['#btnSummon'].w, btns['#btnSummon'].h], bossUp, chip }); await tctx2.close(); continue; }
+
+    // (b) 조합 가능 — 배지 · 줄 · 누르면 조합
+    await tp2.evaluate(tbPrep, { wave: 7, ready: true });
+    await tp2.waitForTimeout(2600);
+    await tp2.evaluate(() => window.RPD.Loop.setPaused(true));
+    const rd = await tp2.evaluate(() => ({ n: window.RPD.RecipeManager.readyList().length, badge: document.getElementById('mtabCraft').textContent, badgeShown: !document.getElementById('mtabCraft').hidden,
+      strip: document.getElementById('infoBar').innerText.replace(/\s+/g, ' '), best: window.RPD.RecipeManager.readyList()[0].resultName }));
+    if (!rd.badgeShown || String(rd.n) !== rd.badge) bad('[조합] 배지 ' + rd.badge + ' ≠ 완성 가능 ' + rd.n);
+    if (!/★ 조합 가능/.test(rd.strip) || rd.strip.indexOf(rd.best) < 0) bad('조합 가능 줄: ' + rd.strip);
+    await shot('b_craft_ready');
+    const before = await tp2.evaluate(() => ({ n: window.RPD.RecipeManager.readyList().length, units: window.RPD.StorageManager.allUnits().map(u => u.defId).sort().join(',') }));
+    await tp2.tap('#infoBar [data-ib="craft"]'); await tp2.waitForTimeout(300);
+    const after = await tp2.evaluate(() => ({ n: window.RPD.RecipeManager.readyList().length, units: window.RPD.StorageManager.allUnits().map(u => u.defId).sort().join(','), badge: document.getElementById('mtabCraft').textContent }));
+    if (after.units === before.units || !(after.n < before.n)) bad('조합 가능 줄을 눌렀는데 조합이 안 됨: ' + JSON.stringify({ before, after }));
+    if (String(after.n) !== after.badge && after.n > 0) bad('조합 뒤 배지 ' + after.badge + ' ≠ ' + after.n);
+    await cvs() !== C0 && bad('조합 뒤 캔버스 크기 바뀜');
+
+    // 시트 — [창고] 누르기 · [조합] 길게 누르기(실제 손가락) → 캔버스 그대로
+    await tp2.tap('#tbOwned'); await tp2.waitForTimeout(300);
+    if (await tp2.evaluate(() => document.body.getAttribute('data-mtab')) !== 'owned') bad('[창고] 로 보유 시트가 안 열림');
+    if (await cvs() !== C0) bad('보유 시트를 열었더니 캔버스 크기 바뀜');
+    await tp2.tap('#tbOwned'); await tp2.waitForTimeout(200);
+    {
+      const cdp2 = await tctx2.newCDPSession(tp2);
+      const b = btns['#tbCraft'];
+      await cdp2.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: (b.l + b.r) / 2, y: (b.t + b.b) / 2 }] });
+      await tp2.waitForTimeout(600);
+      await cdp2.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await tp2.waitForTimeout(300);
+    }
+    const tabNow = await tp2.evaluate(() => document.body.getAttribute('data-mtab'));
+    if (tabNow !== 'recipes') bad('[조합] 길게 누르기로 조합식 시트가 안 열림(' + tabNow + ')');
+    if (await cvs() !== C0) bad('조합식 시트를 열었더니 캔버스 크기 바뀜');
+    await tp2.evaluate(() => window.RPD.HudPanels.setDrawer(''));
+
+    // (c) [더보기]
+    await tp2.tap('#tbMore'); await tp2.waitForTimeout(300);
+    const more = await tp2.evaluate(() => { const m = document.getElementById('hudMore'), r = m.getBoundingClientRect(), t = document.getElementById('mobileTabs').getBoundingClientRect();
+      const ids = ['btnGoldShop', 'btnElite', 'btnBook', 'btnDex', 'btnHelp', 'btnAudio', 'btnRestart', 'btnSynergy'];
+      const vis = ids.filter(id => { const b = document.getElementById(id).getBoundingClientRect(); return b.width > 4 && b.height > 4 && b.top >= 0 && b.bottom <= innerHeight; });
+      return { open: getComputedStyle(m).display !== 'none', aboveToolbar: r.bottom <= t.top + 1, vis, missing: ids.filter(i => vis.indexOf(i) < 0) }; });
+    if (!more.open || !more.aboveToolbar || more.missing.length) bad('[더보기] 메뉴: ' + JSON.stringify(more));
+    if (await cvs() !== C0) bad('[더보기] 를 열었더니 캔버스 크기 바뀜');
+    await shot('c_more');
+    await tp2.tap('#tbMore'); await tp2.waitForTimeout(200);
+    if (await cvs() !== C0) bad('[더보기] 를 닫았더니 캔버스 크기 바뀜');
+
+    // 소환 금지 — [소환] "금지 NR" 잠김 · [더보기] 점
+    const ban = await tp2.evaluate(() => { const R = window.RPD, E = R.EliteManager; E.banUntil = R.GameManager.wave + 3; R.bus.emit('elite:changed', {});
+      const b = document.getElementById('btnSummon'); const out = { disabled: b.disabled, text: document.getElementById('summonCost').textContent, dot: !document.getElementById('tbMoreDot').hidden, left: E.banRoundsLeft() };
+      E.banUntil = 0; R.bus.emit('elite:changed', {}); return out; });
+    if (!ban.disabled || ban.text !== '금지 ' + ban.left + 'R' || !ban.dot) bad('소환 금지 표시: ' + JSON.stringify(ban));
+
+    // 보상 지급 알림 — 툴바 위 줄에(필드 위 카드 없음)
+    const toast = await tp2.evaluate(() => { const R = window.RPD; R.bus.emit('reward:granted', { wave: 10, items: [{ kind: 'gold', amount: 550, paid: true }, { kind: 'ticket', count: 2 }] });
+      return { strip: document.getElementById('infoBar').innerText.replace(/\s+/g, ' '), pop: getComputedStyle(document.getElementById('rewardPop')).display }; });
+    if (!/10R 보스 처치/.test(toast.strip) || toast.pop !== 'none') bad('보상 알림: ' + JSON.stringify(toast));
+
+    // (e) 설명서 — 보스 보상 절
+    await tp2.evaluate(() => { window.RPD.HudPanels.toggleHelp(true); document.querySelector('#helpTabs [data-help="boss"]').click(); });
+    await tp2.waitForTimeout(300);
+    const help = await tp2.evaluate(() => { const RM = window.RPD.RewardManager, box = document.getElementById('helpBoss');
+      const keys = Object.keys(RM.table); const missing = keys.filter(k => !box.querySelector('[data-boss-n="' + k + '"]') || box.innerText.indexOf(RM.describe(RM.table[k])) < 0);
+      return { rows: box.querySelectorAll('[data-boss-n]').length, keys: keys.length, missing, next: /다음 보스/.test(box.innerText) }; });
+    if (help.missing.length || !help.next) bad('설명서 보스 보상: ' + JSON.stringify(help));
+    await shot('e_help_boss');
+    await tp2.evaluate(() => window.RPD.HudPanels.toggleHelp(false));
+    m2Report.push({ dev, canvas: C0, toolbar: [tbar.w, tbar.h], summon: [btns['#btnSummon'].w, btns['#btnSummon'].h], bossUp, chip, craft: { rd, after }, help, errors: terr.slice(0, 2) });
+    await tctx2.close();
+  }
+  // (g) PC 보스 라운드 — 보상 칩이 그대로 보여야
+  {
+    const pctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const pp = await pctx.newPage();
+    await pp.goto(URL); await pp.waitForTimeout(1000);
+    await pp.evaluate(tbPrep, { wave: 10 });
+    await pp.waitForTimeout(2600);
+    await pp.evaluate(() => window.RPD.Loop.setPaused(true));
+    const pchip = await pp.evaluate(() => { const n = document.getElementById('nextReward'), r = n.getBoundingClientRect();
+      return { display: getComputedStyle(n).display, hidden: n.hidden, w: Math.round(r.width), toolbar: getComputedStyle(document.getElementById('mobileTabs')).display, strip: getComputedStyle(document.getElementById('infoBar')).display }; });
+    if (pchip.display === 'none' || pchip.hidden || !(pchip.w > 0)) bad('PC 에서 보스 보상 칩이 안 보임: ' + JSON.stringify(pchip));
+    if (pchip.toolbar !== 'none' || pchip.strip !== 'none') bad('PC 에 휴대폰 툴바 · 조합 가능 줄이 보임: ' + JSON.stringify(pchip));
+    await pp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '17_m2_PC_g_boss_round.png') });
+    m2Report.push({ dev: 'PC', chip: pchip });
+    await pctx.close();
+  }
+  function bad(w) { m2Problems.push('PC: ' + w); }
+  m2Report.forEach(r => console.log('mobile2', JSON.stringify(r)));
+  console.log('mobile2 problems', JSON.stringify(m2Problems));
+  if (m2Problems.length) process.exitCode = 1;
+
+  /* ⑱ 모바일 ③ 편의 기능(세션 68) — 되돌리기 · 진동/효과 설정 · 자리 비움 일시정지 · 조작 방해 막기 · 효과 3단계 그리기 시간.
+   * 검사(하나라도 어긋나면 이 도구가 실패로 끝난다):
+   *   [되돌리기] 가 이동 뒤 켜지고(44px 가까이) 누르면 실제로 제자리 · 가로는 누구 줄 안 / [더보기] 에 진동 · 효과 /
+   *   hidden 이벤트 → 일시정지 + 덮개, 다시 보여도 그대로, 누르면 계속 / 계산된 스타일(overscroll · touch-action · user-select) · viewport-fit=cover /
+   *   효과 3단계에서 캔버스 해상도 · 파티클 상한이 바뀐다.
+   * 캡처: (a) 세로 [되돌리기] 켜짐 (b) 세로 [더보기] 진동 · 효과 (c) 세로 "일시정지됨 — 눌러서 계속" (d) 가로 (a) · 효과 단계별 같은 전투 장면 */
+  const m3Problems = [];
+  const m3Report = {};
+  for (const dev of ['Galaxy S24', 'Galaxy S24 landscape']) {
+    const c3 = await browser.newContext({ ...devices[dev], defaultBrowserType: undefined });
+    const p3 = await c3.newPage();
+    const e3 = [];
+    p3.on('pageerror', e => e3.push(e.message));
+    await p3.goto(URL); await p3.waitForTimeout(1000);
+    const tag = dev.replace(/ /g, '_'), land = /landscape/.test(dev);
+    const bad = w => m3Problems.push(dev + ': ' + w);
+    const shot = name => p3.screenshot({ path: require('path').join(__dirname, '..', 'dist', '18_m3_' + tag + '_' + name + '.png') });
+
+    // (a) 옮긴 뒤 [되돌리기] 켜짐 — 실제 정보 바 [이동] → 빈 칸
+    await p3.evaluate(tbPrep, { wave: 7 });
+    await p3.waitForTimeout(2600);
+    await p3.evaluate(() => window.RPD.Loop.setPaused(true));
+    const undoOff = await p3.evaluate(() => { const b = document.querySelector('#infoBar [data-ib="undo"]'); return b ? b.disabled : 'none'; });
+    if (undoOff !== true) bad('기록이 없는데 [되돌리기] 가 흐리지 않다(' + undoOff + ')');
+    const mv = await p3.evaluate(() => {
+      const R = window.RPD, F = R.FieldManager;
+      const from = F.slots.find(x => x.unit && x.unit.defId === 'charizard').index;
+      const to = F.slots.find(x => x.unlocked && !x.blocked && !x.unit).index;
+      F.select(from);
+      return { from, to };
+    });
+    await p3.tap('#infoBar [data-ib="move"]'); await p3.waitForTimeout(150);
+    await p3.evaluate(m => window.RPD.MobileSheet.moveTo(m.to), mv); await p3.waitForTimeout(200);
+    const ub = await p3.evaluate(() => {
+      const b = document.querySelector('#infoBar [data-ib="undo"]'), w = document.querySelector('#infoBar .ib__who'), bar = document.getElementById('infoBar');
+      const r = b.getBoundingClientRect(), wr = w.getBoundingClientRect(), br = bar.getBoundingClientRect();
+      return { disabled: b.disabled, count: b.textContent.replace(/\s+/g, ''), w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top), whoTop: Math.round(wr.top),
+        inside: r.left >= br.left - 1 && r.right <= br.right + 1 && r.top >= br.top - 1 && r.bottom <= br.bottom + 1, whoW: Math.round(wr.width) };
+    });
+    if (ub.disabled) bad('옮겼는데 [되돌리기] 가 흐리다');
+    if (ub.h < 40 || ub.w < 40) bad('[되돌리기] 크기 ' + ub.w + '×' + ub.h);
+    if (!ub.inside) bad('[되돌리기] 가 정보 바 밖으로 나갔다');
+    if (land && Math.abs(ub.top - ub.whoTop) > 12) bad('가로: [되돌리기] 가 누구 줄에 없다(' + ub.top + ' vs ' + ub.whoTop + ')');
+    await shot(land ? 'd_undo' : 'a_undo');
+    await p3.tap('#infoBar [data-ib="undo"]'); await p3.waitForTimeout(200);
+    const back = await p3.evaluate(m => { const F = window.RPD.FieldManager; return { from: F.get(m.from).unit && F.get(m.from).unit.defId, to: !!F.get(m.to).unit, left: window.RPD.UndoManager.count() }; }, mv);
+    if (back.from !== 'charizard' || back.to) bad('[되돌리기] 를 눌렀는데 제자리로 안 돌아감 ' + JSON.stringify(back));
+    m3Report[dev] = { undoBtn: ub, back };
+    // 정보 바 글이 안 잘리는가(세션 69 — [↶] 가 들어온 뒤 세로에서 DPS 가 "…"로 잘렸다) — 가장 긴 이름 · 긴 DPS 로
+    const cuts = await p3.evaluate(() => {
+      const R = window.RPD, F = R.FieldManager, idx = F.slots.find(x => x.unit && x.unit.defId === 'charizard').index;
+      const keep = F.get(idx).unit, out = [];
+      for (const [id, dps] of [['charizard_transcend', 9876543], ['vileplume', 99999], ['pikachu', 158]]) {
+        const u = R.UnitManager.create(id); F.remove(idx); F.place(idx, u); u.dps = dps; F.select(idx); R.MobileSheet.renderBar();
+        const cut = sel => { const n = document.querySelector('#infoBar ' + sel); return !n || n.scrollWidth > n.clientWidth + 1; };
+        const undo = document.querySelector('#infoBar [data-ib="undo"]').getBoundingClientRect(), who = document.querySelector('#infoBar .ib__who').getBoundingClientRect();
+        out.push({ id, name: cut('.ib__name'), meta: cut('.ib__meta'), text: document.querySelector('#infoBar .ib__txt').innerText.replace(/\s+/g, ' '), undoRow: Math.abs(undo.top - who.top) < 14  });
+      }
+      F.select(idx);
+      return { out, restore: (F.remove(idx), F.place(idx, keep), F.select(idx), R.MobileSheet.renderBar(), true) };
+    });
+    cuts.out.forEach(c => { if (c.name || c.meta) bad('정보 바 글이 잘림: ' + c.text + (c.name ? ' (이름)' : '') + (c.meta ? ' (등급 · DPS)' : '')); });
+    if (land) cuts.out.forEach(c => { if (!c.undoRow) bad('가로: 긴 글에 [↶] 가 다음 줄로 밀림 — ' + c.id); });
+    await p3.evaluate(() => { const R = window.RPD, F = R.FieldManager, u = R.UnitManager.create('charizard_transcend'); const i = F.selectedIndex; F.remove(i); F.place(i, u); u.dps = 9876543; F.select(i); R.MobileSheet.renderBar(); });
+    await shot(land ? 'd2_longtext' : 'a2_longtext');
+    await p3.evaluate(() => { const R = window.RPD, F = R.FieldManager, i = F.selectedIndex; F.remove(i); F.place(i, R.UnitManager.create('charizard')); F.select(i); R.MobileSheet.renderBar(); });
+    m3Report[dev].infoBarText = cuts.out;
+    if (land) { m3Report[dev].errors = e3.slice(0, 2); await c3.close(); continue; }
+
+    // 조작 방해 막기 — 계산된 스타일 · viewport
+    const st = await p3.evaluate(() => {
+      const cs = (n, p) => n ? getComputedStyle(n).getPropertyValue(p) : 'none';
+      const chat = document.getElementById('chatInput');
+      return {
+        viewport: document.querySelector('meta[name="viewport"]').content,
+        htmlOverscroll: cs(document.documentElement, 'overscroll-behavior-y'), bodyOverscroll: cs(document.body, 'overscroll-behavior-y'),
+        bodyTouch: cs(document.body, 'touch-action'), canvasTouch: cs(document.getElementById('gameCanvas'), 'touch-action'),
+        btnTouch: cs(document.getElementById('btnSummon'), 'touch-action'),
+        canvasSelect: cs(document.getElementById('gameCanvas'), 'user-select'), bodySelect: cs(document.body, 'user-select'),
+        inputSelect: chat ? cs(chat, 'user-select') : 'no-input', inputId: chat && chat.id,
+        appH: Math.round(document.querySelector('.app').getBoundingClientRect().height), innerH: innerHeight,
+        coarse: matchMedia('(pointer: coarse)').matches
+      };
+    });
+    if (!/viewport-fit=cover/.test(st.viewport)) bad('viewport-fit=cover 없음');
+    if (st.htmlOverscroll !== 'none' || st.bodyOverscroll !== 'none') bad('overscroll-behavior ' + st.htmlOverscroll + '/' + st.bodyOverscroll);
+    if (st.bodyTouch !== 'manipulation') bad('body touch-action ' + st.bodyTouch);
+    if (st.canvasTouch !== 'none') bad('캔버스 touch-action ' + st.canvasTouch + ' (끌기 · 길게 누르기는 게임이 받아야)');
+    if (st.canvasSelect !== 'none' || st.bodySelect !== 'none') bad('user-select ' + st.canvasSelect + '/' + st.bodySelect);
+    if (st.inputSelect !== 'text' && st.inputSelect !== 'auto') bad('입력칸 user-select ' + st.inputSelect);
+    if (Math.abs(st.appH - st.innerH) > 2) bad('.app 높이 ' + st.appH + ' ≠ 화면 ' + st.innerH + '(100dvh)');
+    m3Report.styles = st;
+    // 캔버스 길게 누르기 메뉴가 막히는가(contextmenu 가 취소되는가)
+    const ctxBlocked = await p3.evaluate(() => {
+      const ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+      document.getElementById('gameCanvas').dispatchEvent(ev);
+      const ev2 = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+      const inp = document.getElementById('chatInput'); if (inp) inp.dispatchEvent(ev2);
+      return { canvas: ev.defaultPrevented, input: inp ? ev2.defaultPrevented : null };
+    });
+    if (!ctxBlocked.canvas || ctxBlocked.input) bad('contextmenu 캔버스 ' + ctxBlocked.canvas + ' · 입력칸 ' + ctxBlocked.input);
+    m3Report.contextmenu = ctxBlocked;
+
+    // (b) [더보기] — 진동 · 효과
+    await p3.tap('#tbMore'); await p3.waitForTimeout(300);
+    const mb = await p3.evaluate(() => ['btnHaptics', 'btnFx'].map(id => { const n = document.getElementById(id), r = n.getBoundingClientRect();
+      return { id, shown: getComputedStyle(n).display !== 'none' && r.width > 0, label: n.getAttribute('aria-label'), w: Math.round(r.width), h: Math.round(r.height) }; }));
+    mb.forEach(b => { if (!b.shown) bad('[더보기] 에 ' + b.id + ' 가 안 보임'); if (b.h < 44) bad(b.id + ' 높이 ' + b.h); });
+    await p3.tap('#btnHaptics'); await p3.waitForTimeout(100);
+    const hOff = await p3.evaluate(() => ({ label: document.getElementById('btnHaptics').getAttribute('aria-label'), saved: window.RPD.SaveManager.getSetting('haptics', true) }));
+    if (hOff.saved !== false || hOff.label !== '진동 끔') bad('진동 끄기: ' + JSON.stringify(hOff));
+    await p3.tap('#btnHaptics'); await p3.waitForTimeout(100);
+    await shot('b_more_settings');
+    m3Report.more = { buttons: mb, hapticsOff: hOff, fxDefault: await p3.evaluate(() => window.RPD.Effects.levelId()) };
+    await p3.tap('#tbMore'); await p3.waitForTimeout(200);
+
+    // (c) 자리 비움 — 실제 visibilitychange(hidden) · 다시 visible · 덮개 누르기
+    await p3.evaluate(() => { window.RPD.Loop.setPaused(false); window.RPD.GameManager.setState(window.RPD.GameState.RUNNING); });
+    const setHidden = h => p3.evaluate(v => {
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => v });
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => (v ? 'hidden' : 'visible') });
+      document.dispatchEvent(new Event('visibilitychange'));
+    }, h);
+    await setHidden(true); await p3.waitForTimeout(150);
+    await setHidden(false); await p3.waitForTimeout(400);
+    const aw = await p3.evaluate(() => ({ paused: window.RPD.Loop.paused, state: window.RPD.GameManager.state, overlay: getComputedStyle(document.getElementById('awayOverlay')).display !== 'none',
+      text: document.getElementById('awayOverlay').innerText.replace(/\s+/g, ' ') }));
+    if (!aw.paused || aw.state !== 'PAUSED' || !aw.overlay) bad('hidden 뒤 일시정지 · 덮개: ' + JSON.stringify(aw));
+    await shot('c_away_paused');
+    await p3.tap('#awayOverlay'); await p3.waitForTimeout(200);
+    const aw2 = await p3.evaluate(() => ({ paused: window.RPD.Loop.paused, state: window.RPD.GameManager.state, overlay: !document.getElementById('awayOverlay').hidden }));
+    if (aw2.paused || aw2.state !== 'RUNNING' || aw2.overlay) bad('덮개를 눌렀는데 안 이어짐: ' + JSON.stringify(aw2));
+    m3Report.away = { hidden: aw, afterTap: aw2 };
+
+    // 효과 3단계 — 같은 전투 장면(47R — 보스 라운드가 아닌 적 무리 · 6마리)의 한 프레임 그리기 시간 · 해상도 · 파티클(CPU 4배 느리게)
+    const cdp3 = await c3.newCDPSession(p3);
+    const fxRes = {};
+    for (const lv of ['normal', 'reduced', 'minimal']) {
+      await p3.evaluate(() => {
+        const R = window.RPD;
+        document.querySelectorAll('.modepick, .result, .help, .book').forEach(o => o.hidden = true);
+        R.Game.resetAll('NORMAL', 'NORMAL'); R.Game.startRun('NORMAL', 'NORMAL');
+        R.GameManager.setWave(47); R.WaveManager.startRound(47);
+        const F = R.FieldManager;
+        F.slots.forEach(x => { if (!x.unlocked) x.unlocked = true; });
+        F.slots.forEach(x => { if (x.unit) F.remove(x.index); });
+        const ids = ['charizard', 'blastoise', 'venusaur', 'pikachu', 'gengar', 'alakazam', 'dragonite', 'gyarados', 'arcanine', 'lapras', 'jolteon', 'flareon', 'vaporeon', 'machamp', 'golem', 'raichu', 'ninetales', 'starmie', 'exeggutor', 'snorlax'];
+        // 6마리만 — 다 올리면 47R 적이 순식간에 녹아 재는 동안 필드가 빈다(적이 살아 있어야 연출 · 체력 막대가 그려진다)
+        F.slots.filter(x => x.unlocked && !x.blocked).slice(0, 6).forEach((x, i) => { const u = R.UnitManager.create(ids[i % ids.length]); if (u) F.place(x.index, u); });
+        R.GameManager.life = 9999; R.Loop.setSpeed(1);
+        R.bus.emit('field:changed', {});
+      });
+      // 화질 사다리(FramePacer)는 재는 동안 멈춘다 — 느린 CPU 흉내에서 사다리가 먼저 해상도를 내리면 단계 차이가 안 보인다
+      await p3.evaluate(l => { const P = window.RPD.FramePacer; P.reset(); P._stepDown = P._stepDown || P.stepDown; P.stepDown = () => false; window.RPD.Effects.force(l); }, lv);
+      await cdp3.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+      await p3.waitForTimeout(5000);   // 적이 들어오고 연출이 쌓일 때까지
+      const m = await p3.evaluate(() => new Promise(res => {
+        const R = window.RPD, times = [], parts = [];
+        let n = 0;
+        function frame() {
+          const t0 = performance.now();
+          R.Renderer.render(1 / 60);
+          times.push(performance.now() - t0);
+          parts.push(R.AttackFx.stats().particles);
+          if (++n < 90) requestAnimationFrame(frame); else res({ times, parts });
+        }
+        requestAnimationFrame(frame);
+      }));
+      await cdp3.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+      const sorted = m.times.slice().sort((a, b) => a - b);
+      const avg = m.times.reduce((a, b) => a + b, 0) / m.times.length;
+      const info = await p3.evaluate(() => ({ dpr: window.RPD.Renderer.dpr, canvas: window.RPD.Renderer.canvas.width + '×' + window.RPD.Renderer.canvas.height,
+        cap: window.RPD.AttackFx.stats().particleCap, fps: window.RPD.FramePacer.targetFps(), enemies: window.RPD.EnemyManager.enemies.filter(e => e.alive).length }));
+      // 1초에 그리기에 쓰는 시간 = 한 번 그리는 시간 × 1초에 그리는 횟수(최소는 30fps 라 절반만 그린다)
+      fxRes[lv] = { ...info, drawMsPerSec: Math.round(avg * info.fps), drawMsAvg: +avg.toFixed(2), drawMsMedian: +sorted[sorted.length >> 1].toFixed(2), drawMsP90: +sorted[Math.floor(sorted.length * 0.9)].toFixed(2),
+        particlesAvg: Math.round(m.parts.reduce((a, b) => a + b, 0) / m.parts.length) };
+      await p3.evaluate(() => window.RPD.Loop.setPaused(true));
+      await p3.screenshot({ path: require('path').join(__dirname, '..', 'dist', '18_m3_fx_' + lv + '.png') });
+      await p3.evaluate(() => window.RPD.Loop.setPaused(false));
+    }
+    await p3.evaluate(() => { const P = window.RPD.FramePacer; if (P._stepDown) P.stepDown = P._stepDown; window.RPD.Effects.force(null); });
+    if (!(fxRes.normal.dpr > fxRes.reduced.dpr && fxRes.reduced.dpr > fxRes.minimal.dpr)) bad('효과 단계별 해상도가 안 내려감 ' + [fxRes.normal.dpr, fxRes.reduced.dpr, fxRes.minimal.dpr]);
+    if (!(fxRes.normal.cap > fxRes.reduced.cap && fxRes.reduced.cap > fxRes.minimal.cap)) bad('효과 단계별 파티클 상한이 안 내려감');
+    m3Report.fx = fxRes;
+    m3Report[dev].errors = e3.slice(0, 2);
+    if (e3.length) bad('페이지 오류: ' + e3[0]);
+    await c3.close();
+  }
+  console.log('mobile3', JSON.stringify(m3Report, null, 1));
+  console.log('mobile3 problems', JSON.stringify(m3Problems));
+  report.push({ mobile3: m3Report });
+  if (m3Problems.length) process.exitCode = 1;
+
+  /* ⑲ 판 이어하기(세션 70) — 34라운드까지 진행 → 새로고침 → 이어하기 카드 → [이어하기] → "눌러서 계속" → 그 라운드가 다시 열린다.
+   * 새로고침 전(34라운드 시작 순간 = 저장 시점)과 이어한 뒤를 비교한다. 어긋나면 이 도구가 실패로 끝난다.
+   * 캡처: (a) 세로 시작 화면 이어하기 카드 (b) 이어한 직후 "눌러서 계속" (c) 버전 불일치 안내 (d) PC 이어하기 카드 */
+  const m4Problems = [], m4Report = {};
+  {
+    const bad = w => m4Problems.push(w);
+    const snap = () => {
+      const R = window.RPD, F = R.FieldManager, S = R.StorageManager, GM = R.GameManager, GS = R.GoldShopManager;
+      const lv = o => Object.keys(o).sort().map(k => k + o[k]).join(',');
+      return { round: GM.wave, gold: GM.gold, life: GM.life, fieldUnits: F.getUnits().length, storageUnits: S.units.length,
+        species: F.getUnits().concat(S.units).map(u => u.defId + '/' + (u.level || 0)).sort().join(' '),
+        tickets: R.SummonManager.tickets, shards: R.ShardManager.shards, shop: lv(GS.typeLv) + ' | ' + lv(GS.tierLv), eliteBan: R.EliteManager.banUntil,
+        mode: GM.mode.label };
+    };
+    const c4 = await browser.newContext({ ...devices['Galaxy S24'], defaultBrowserType: undefined });
+    const p4 = await c4.newPage();
+    const e4 = [];
+    p4.on('pageerror', e => e4.push(e.message));
+    await p4.goto(URL); await p4.waitForTimeout(1000);
+    // 34라운드까지 — 게임 로직(고정 60Hz 갱신)을 빨리 돌린다. 중간에 소환 · 골드 상점 · 창고도 쓴다
+    const progressed = await p4.evaluate(() => {
+      const R = window.RPD, GM = R.GameManager, F = R.FieldManager, S = R.GameState;
+      if (R.TutorialManager && R.TutorialManager.skip) R.TutorialManager.skip();
+      document.querySelectorAll('.modepick, .result, .help, .book').forEach(o => o.hidden = true);
+      R.RunSave.clear();
+      R.Game.startRun('NORMAL', 'NORMAL');
+      R.Loop.setPaused(true);   // 진짜 시간 대신 아래에서 갱신을 직접 돌린다
+      const open = F.slots.filter(x => x.unlocked && !x.blocked);
+      ['mewtwo', 'moltres', 'zapdos', 'articuno', 'dragonite', 'alakazam', 'gengar', 'charizard'].forEach((id, i) => {
+        if (open[i] && !open[i].unit) F.place(open[i].index, R.UnitManager.create(id));
+      });
+      R.bus.emit('field:changed', {});
+      let snapAt34 = null;
+      const onStart = () => { if (GM.wave === 34 && !snapAt34) snapAt34 = JSON.parse(localStorage.getItem(R.RunSave.KEY) || 'null'); };
+      R.bus.on('wave:started', onStart);
+      const step = R.Config.fixedStep;
+      let guard = 0;
+      while (!(GM.wave === 34 && snapAt34) && GM.state !== S.GAMEOVER && guard < 60 * 60 * 40) {
+        for (let k = 0; k < R.Loop._updateFns.length; k++) R.Loop._updateFns[k](step);
+        guard++;
+        if (guard % 600 === 0) {   // 10초마다 — 사람이 하듯 소환 · 상점
+          if (GM.gold > 400) R.SummonManager.summon();
+          if (GM.gold > 600) R.GoldShopManager.buy('type', 'PSYCHIC');
+          if (GM.wave === 20 && R.StorageManager.units.length < 2) R.StorageManager.add(R.UnitManager.create('bulbasaur'));
+        }
+      }
+      R.bus.off('wave:started', onStart);
+      return { wave: GM.wave, state: GM.state, gameSeconds: Math.round(guard * step), saved: !!snapAt34, savedWave: snapAt34 && snapAt34.summary.wave };
+    });
+    m4Report.progressed = progressed;
+    if (progressed.wave !== 34 || !progressed.saved) bad('34라운드 저장까지 못 갔다 ' + JSON.stringify(progressed));
+    const before = await p4.evaluate(() => {
+      // 저장 시점(34라운드 시작 직후)의 값 — 저장본에서 그대로 읽는다(그 뒤에 흐른 몇 프레임과 섞이지 않게)
+      const d = JSON.parse(localStorage.getItem(window.RPD.RunSave.KEY)), st = d.state;
+      const lv = o => Object.keys(o).sort().map(k => k + o[k]).join(',');
+      const units = st.FieldManager.units.map(e => e.unit).concat(st.StorageManager.units);
+      return { round: st.GameManager.wave, gold: st.GameManager.gold, life: st.GameManager.life, fieldUnits: st.FieldManager.units.length, storageUnits: st.StorageManager.units.length,
+        species: units.map(u => u.defId + '/' + (u.level || 0)).sort().join(' '), tickets: st.SummonManager.tickets, shards: st.ShardManager.shards,
+        shop: lv(st.GoldShopManager.typeLv) + ' | ' + lv(st.GoldShopManager.tierLv), eliteBan: st.EliteManager.banUntil, mode: d.summary.label };
+    });
+    // 새로고침(휴대폰이 탭을 닫았다 다시 연 것과 같다)
+    await p4.reload(); await p4.waitForTimeout(1200);
+    const card = await p4.evaluate(() => { const c = document.getElementById('resumeCard'); return { shown: !c.hidden && getComputedStyle(c).display !== 'none', text: document.getElementById('resumeInfo').textContent,
+      state: window.RPD.GameManager.state, wave: window.RPD.GameManager.wave }; });
+    if (!card.shown) bad('새로고침 뒤 이어하기 카드가 없다');
+    const inView = await p4.evaluate(() => ['resumeCard', 'btnResume', 'btnNewRun', 'btnStart'].map(id => { const r = document.getElementById(id).getBoundingClientRect();
+      return { id, ok: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight, r: [Math.round(r.left), Math.round(r.right)] }; }));
+    inView.forEach(v => { if (!v.ok) bad('세로 시작 화면에서 ' + v.id + ' 가 화면 밖 ' + JSON.stringify(v.r)); });
+    if (card.wave !== 0 || card.state !== 'READY') bad('새로고침 뒤 저절로 이어했다 ' + JSON.stringify(card));
+    ['34라운드', '라이프 ' + before.life, '골드 ' + String(before.gold).replace(/\B(?=(\d{3})+(?!\d))/g, ',')].forEach(w => { if (card.text.indexOf(w) < 0) bad('카드에 "' + w + '" 없음: ' + card.text); });
+    await p4.screenshot({ path: require('path').join(__dirname, '..', 'dist', '19_resume_a_card_portrait.png') });
+    await p4.tap('#btnResume'); await p4.waitForTimeout(400);
+    const after = await p4.evaluate(snap);
+    const gate = await p4.evaluate(() => ({ overlay: !document.getElementById('awayOverlay').hidden, paused: window.RPD.Loop.paused, phase: window.RPD.WaveManager.phase }));
+    if (!gate.overlay || !gate.paused || gate.phase !== 'IDLE') bad('이어한 직후 "눌러서 계속"이 아니다 ' + JSON.stringify(gate));
+    await p4.screenshot({ path: require('path').join(__dirname, '..', 'dist', '19_resume_b_tap_to_continue.png') });
+    Object.keys(before).forEach(k => { if (String(before[k]) !== String(after[k])) bad('이어한 뒤 ' + k + ' 다름: ' + before[k] + ' → ' + after[k]); });
+    await p4.tap('#awayOverlay'); await p4.waitForTimeout(1500);
+    const run = await p4.evaluate(() => ({ phase: window.RPD.WaveManager.phase, wave: window.RPD.WaveManager.wave, state: window.RPD.GameManager.state, spawned: window.RPD.WaveManager.spawnedUnits }));
+    if (run.wave !== 34 || run.state !== 'RUNNING' || !(run.spawned > 0)) bad('"눌러서 계속" 뒤 34라운드가 안 열렸다 ' + JSON.stringify(run));
+    m4Report.table = { before, after, run, card: card.text };
+    // (c) 버전 불일치 — 없는 포켓몬이 든 저장
+    await p4.evaluate(() => { const k = window.RPD.RunSave.KEY, d = JSON.parse(localStorage.getItem(k)); d.state.StorageManager.units.push({ defId: 'agumon', level: 0 }); localStorage.setItem(k, JSON.stringify(d)); });
+    await p4.reload(); await p4.waitForTimeout(1200);
+    const ver = await p4.evaluate(() => ({ notice: !document.getElementById('runNotice').hidden, text: document.getElementById('runNoticeText').textContent, card: !document.getElementById('resumeCard').hidden,
+      saved: localStorage.getItem(window.RPD.RunSave.KEY) != null }));
+    if (!ver.notice || ver.card || ver.saved) bad('버전 불일치 안내 · 저장 지움 ' + JSON.stringify(ver));
+    await p4.screenshot({ path: require('path').join(__dirname, '..', 'dist', '19_resume_c_version_mismatch.png') });
+    m4Report.version = ver;
+    m4Report.errors = e4.slice(0, 3);
+    if (e4.length) bad('페이지 오류: ' + e4[0]);
+    await c4.close();
+    // (d) PC — 같은 저장을 넣고 연다
+    const c5 = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+    const p5 = await c5.newPage();
+    await p5.goto(URL); await p5.waitForTimeout(800);
+    await p5.evaluate(() => {
+      const R = window.RPD;
+      R.Game.startRun('NORMAL', 'HARD'); R.Loop.setPaused(true);
+      const F = R.FieldManager, open = F.slots.filter(x => x.unlocked && !x.blocked);
+      ['charizard', 'pikachu', 'gengar'].forEach((id, i) => F.place(open[i].index, R.UnitManager.create(id)));
+      R.GameManager.setWave(22); R.GameManager.gold = 2380; R.GameManager.life = 37;
+      R.RunSave.save();
+      const d = JSON.parse(localStorage.getItem(R.RunSave.KEY)); d.savedAt = Date.now() - 7 * 60000; localStorage.setItem(R.RunSave.KEY, JSON.stringify(d));
+    });
+    await p5.reload(); await p5.waitForTimeout(1200);
+    const pc = await p5.evaluate(() => ({ shown: !document.getElementById('resumeCard').hidden, text: document.getElementById('resumeInfo').textContent }));
+    if (!pc.shown || pc.text.indexOf('7분 전') < 0) bad('PC 이어하기 카드 ' + JSON.stringify(pc));
+    await p5.screenshot({ path: require('path').join(__dirname, '..', 'dist', '19_resume_d_card_pc.png') });
+    m4Report.pc = pc;
+    await c5.close();
+  }
+  console.log('resume', JSON.stringify(m4Report, null, 1));
+  console.log('resume problems', JSON.stringify(m4Problems));
+  report.push({ resume: m4Report });
+  if (m4Problems.length) process.exitCode = 1;
+
+  /* ---------- 홈 화면 앱(세션 53 · 모바일 ④ 세션 71) ----------
    * 설치 · 오프라인은 인터넷 주소에서만 되니, 원본 폴더(dist 아님)를 이 자리에서 작은 웹 서버로 띄워 연다(localhost 는 https 와 같게 친다).
    * 확인: 크롬이 "설치할 수 있다"고 보는가(설치 불가 사유 0) · 서비스 워커 · 오프라인 저장 · 인터넷을 끊고 다시 열어도 켜지고 처음 보는 그림이 나오는가 ·
    *       ☰ [전체 화면] · [앱 설치] · 노치 화면 여백 · 앱으로 실행 중이면 두 버튼이 숨는가. */
   const http = require('http'), pathM = require('path'), ROOT = pathM.join(__dirname, '..');
   const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
-    '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.json': 'application/json' };
+    '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.json': 'application/json', '.mp3': 'audio/mpeg' };
+  const srv = { bump: 0 };   // 새 버전 흉내 — pwa-precache.js 끝에 한 줄을 붙여 새 서비스 워커를 만든다
   const server = http.createServer((req, res) => {
     const rel = decodeURIComponent(req.url.split('?')[0]).replace(/^\/+/, '') || 'index.html';
     const file = pathM.join(ROOT, rel);
     if (!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); res.end(); return; }
-    res.writeHead(200, { 'Content-Type': MIME[pathM.extname(file)] || 'application/octet-stream' });
+    res.writeHead(200, { 'Content-Type': MIME[pathM.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
+    if (rel === 'pwa-precache.js' && srv.bump) { res.end(fs.readFileSync(file, 'utf8') + '\n// bump ' + srv.bump + '\n'); return; }
     fs.createReadStream(file).pipe(res);
   });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
-  const APP = `http://127.0.0.1:${server.address().port}/index.html`;
-  const app = { url: APP.replace(/\d+\/index/, 'PORT/index') };
+  const APP = `http://localhost:${server.address().port}/`;
+  const app = { url: APP.replace(/:\d+\//, ':PORT/') };
   // 보통 창(시크릿 아님) — 크롬은 시크릿 창에서는 설치를 막는다
   const profile = fs.mkdtempSync(pathM.join(require('os').tmpdir(), 'porandi-app-'));
   const actx = await chromium.launchPersistentContext(profile, { ...devices['Galaxy S24'], defaultBrowserType: undefined, executablePath, args: ['--no-sandbox'] });
@@ -504,6 +1228,16 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
   app.manifestErrors = (man.errors || []).map(e => e.message);
   await ap.reload(); await ap.waitForTimeout(1200);
   app.controlled = await ap.evaluate(() => !!navigator.serviceWorker.controller);
+  // 어느 요청이 서비스 워커를 거쳤나 — 코드 · 그림은 거치고, 음악(assets/music)은 안 거친다
+  const viaSW = {};
+  const onResp = r => { const u = r.url(); if (/\/js\/main\.js|\/assets\/icons\/icon-192\.png|\/assets\/music\//.test(u)) viaSW[u.replace(/^.*\/\/[^/]+\//, '')] = r.fromServiceWorker(); };
+  ap.on('response', onResp);
+  const musicFile = fs.readdirSync(pathM.join(ROOT, 'assets/music')).find(f => f.endsWith('.mp3'));
+  await ap.evaluate(async (m) => { await fetch('js/main.js'); await fetch('assets/icons/icon-192.png'); if (m) await fetch('assets/music/' + m, { headers: { Range: 'bytes=0-99' } }); }, musicFile || null);
+  await ap.waitForTimeout(300);
+  ap.off('response', onResp);
+  app.viaServiceWorker = viaSW;
+  app.caches = await ap.evaluate(async () => (await caches.keys()).sort());
 
   // ☰ 메뉴 — 새 버튼 둘
   const prepAppPage = async (pg) => pg.evaluate(() => {
@@ -520,8 +1254,8 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     R.UnitManager.recomputeAll(); R.bus.emit('field:changed', {});
   });
   await prepAppPage(ap);
-  await ap.tap('#btnMore'); await ap.waitForTimeout(300);
-  app.menuButtons = await ap.evaluate(() => ['btnFullscreen', 'btnInstall'].map(id => {
+  await ap.tap('#tbMore'); await ap.waitForTimeout(300);
+  app.menuButtons = await ap.evaluate(() => ['btnFullscreen', 'btnInstall', 'btnWake', 'btnRecords'].map(id => {
     const b = document.getElementById(id), r = b.getBoundingClientRect();
     return { id, shown: !b.hidden && r.width > 0, size: [Math.round(r.width), Math.round(r.height)] };
   }));
@@ -535,12 +1269,18 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
   });
   await ap.tap('#btnInstall'); await ap.waitForTimeout(300);
   app.installPrompted = await ap.evaluate(() => window.__prompts === 1 && !window.RPD.Pwa.installEvent && !document.querySelector('.tipbubble:not([hidden])'));
-  await ap.tap('#btnMore'); await ap.waitForTimeout(200);
+  // 설치 창을 한 번 쓴 뒤(또는 크롬이 창을 안 줄 때)는 안내 시트
+  await ap.tap('#tbMore'); await ap.waitForTimeout(200);
   await ap.tap('#btnInstall'); await ap.waitForTimeout(300);
-  app.installTip = await ap.evaluate(() => { const b = document.querySelector('.tipbubble'); if (!b || b.hidden) return null;
-    const r = b.getBoundingClientRect(); return { text: b.textContent, inView: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight }; });
-  await ap.screenshot({ path: pathM.join(ROOT, 'dist', 'm_app_install_tip.png') });
-  await ap.tap('#btnMore'); await ap.waitForTimeout(200);
+  app.installSheet = await ap.evaluate(() => ({ shown: !document.getElementById('installSheet').hidden, steps: document.getElementById('installSteps').innerText.replace(/\s+/g, ' ') }));
+  await ap.tap('#btnInstallClose'); await ap.waitForTimeout(150);
+  // 기록 옮기기 창
+  await ap.tap('#tbMore'); await ap.waitForTimeout(200);
+  await ap.tap('#btnRecords'); await ap.waitForTimeout(300);
+  app.records = await ap.evaluate(() => ({ shown: !document.getElementById('recordSheet').hidden, exportLen: document.getElementById('recordExport').value.length, summary: document.getElementById('recordSummary').textContent }));
+  await ap.screenshot({ path: pathM.join(ROOT, 'dist', 'm_app_records.png') });
+  await ap.tap('#btnRecordClose'); await ap.waitForTimeout(150);
+  await ap.tap('#tbMore'); await ap.waitForTimeout(200);
   await ap.tap('#btnFullscreen'); await ap.waitForTimeout(500);
   app.fullscreen = await ap.evaluate(() => ({ on: !!document.fullscreenElement, title: document.getElementById('btnFullscreen').title }));
   if (app.fullscreen.on) await ap.evaluate(() => document.exitFullscreen());
@@ -558,6 +1298,28 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
   });
   await ap.screenshot({ path: pathM.join(ROOT, 'dist', 'm_app_offline.png') });
   await actx.setOffline(false);
+
+  // 새 버전 — 서버의 프리캐시 목록이 바뀌면 새 서비스 워커가 기다린다. 페이지는 토스트만 띄우고 스스로 새로고침하지 않는다
+  await ap.reload(); await ap.waitForTimeout(1500);
+  await ap.evaluate(() => { window.__sameDoc = 1; document.querySelectorAll('.modepick, .result, .help, .book').forEach(o => o.hidden = true); });
+  srv.bump = 1;
+  await ap.evaluate(() => navigator.serviceWorker.getRegistration().then(r => r && r.update()));
+  let upd = null;
+  for (let k = 0; k < 40 && !(upd && upd.toast); k++) {
+    await ap.waitForTimeout(250);
+    upd = await ap.evaluate(() => ({ toast: !document.getElementById('updateToast').hidden, sameDoc: window.__sameDoc === 1,
+      waiting: !!(window.RPD.Pwa.reg && window.RPD.Pwa.reg.waiting), menu: !document.getElementById('btnUpdate').hidden }));
+  }
+  await ap.waitForTimeout(1500);
+  upd.stillSameDoc = await ap.evaluate(() => window.__sameDoc === 1);   // 기다려도 저절로 새로고침하지 않는다
+  await ap.screenshot({ path: pathM.join(ROOT, 'dist', 'm_app_update_toast.png') });
+  const nav = ap.waitForNavigation({ timeout: 8000 }).then(() => true, () => false);
+  await ap.tap('#btnUpdateNow');
+  upd.reloadedOnTap = await nav;
+  await ap.waitForTimeout(800);
+  upd.afterTap = await ap.evaluate(() => ({ sameDoc: window.__sameDoc === 1, waiting: !!(window.RPD.Pwa.reg && window.RPD.Pwa.reg.waiting) }));
+  app.update = upd;
+  srv.bump = 0;
 
   // 앱으로 실행 중(display-mode: fullscreen)이면 [전체 화면] · [앱 설치] 는 필요 없으니 숨는다
   // (크로미움 흉내 도구가 display-mode 를 못 바꿔서, 페이지의 matchMedia 만 "앱으로 실행 중"이라고 답하게 바꿔 본다)
@@ -588,7 +1350,50 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     await np.screenshot({ path: pathM.join(ROOT, 'dist', 'm_app_notch_landscape.png') });
   } catch (e) { app.notch = '흉내 불가: ' + e.message; }
   await nctx.close();
+
+  // 아이폰 사파리 — 설치 API 가 없어 [앱으로 설치] 는 안내 시트("공유(□↑) → 홈 화면에 추가")
+  const ictx = await browser.newContext({ ...devices['iPhone 15'], defaultBrowserType: undefined });
+  const ip = await ictx.newPage();
+  await ip.goto(APP); await ip.waitForTimeout(1200);
+  await prepAppPage(ip); await ip.waitForTimeout(600);
+  await ip.evaluate(() => window.RPD.Loop.setPaused(true));
+  await ip.tap('#tbMore'); await ip.waitForTimeout(300);
+  await ip.screenshot({ path: pathM.join(ROOT, 'dist', 'm_app_menu_iphone.png') });
+  await ip.tap('#btnInstall'); await ip.waitForTimeout(300);
+  app.iosSheet = await ip.evaluate(() => ({ shown: !document.getElementById('installSheet').hidden, steps: document.getElementById('installSteps').innerText.replace(/\s+/g, ' ') }));
+  await ip.screenshot({ path: pathM.join(ROOT, 'dist', 'm_app_install_ios_sheet.png') });
+  await ictx.close();
+
+  // 한 파일 테스트판(file://) — 서비스 워커를 등록하려 하지도 않고 오류도 없다
+  const tctx3 = await browser.newContext({ ...devices['Galaxy S24'], defaultBrowserType: undefined });
+  const tp3 = await tctx3.newPage();
+  const terr3 = []; tp3.on('pageerror', e => terr3.push(e.message)); tp3.on('console', m => { if (m.type() === 'error') terr3.push(m.text()); });
+  await tp3.goto(URL); await tp3.waitForTimeout(1200);
+  // file:// 에서는 getRegistration 자체가 막힌다(SecurityError) — 막혔으면 등록도 없는 것
+  app.tester = await tp3.evaluate(() => (navigator.serviceWorker ? navigator.serviceWorker.getRegistration().then(r => !!r, () => false) : Promise.resolve(false))
+    .then(reg => ({ reg, status: window.RPD.Pwa.status })));
+  app.tester.errors = terr3.slice(0, 2);
+  await tctx3.close();
   server.close();
+
+  // 이 장면의 검사 — 어긋나면 도구가 실패로 끝난다
+  const appProblems = [];
+  const bad4 = w => appProblems.push(w);
+  if (app.installErrors.length) bad4('크롬 설치 불가 사유: ' + app.installErrors.join(','));
+  if (!app.controlled) bad4('서비스 워커가 페이지를 안 잡았다');
+  if (app.saved.status !== 'ready' || app.saved.saved !== app.saved.total) bad4('미리 받기 ' + JSON.stringify(app.saved));
+  if (!app.offline.booted || app.offline.online !== false) bad4('오프라인 새로고침에 게임이 안 뜸 ' + JSON.stringify(app.offline));
+  const vs = app.viaServiceWorker, musicKey = Object.keys(vs).find(k => /assets\/music/.test(k));
+  if (vs['js/main.js'] !== true || vs['assets/icons/icon-192.png'] !== true) bad4('코드 · 그림이 서비스 워커를 안 거침 ' + JSON.stringify(vs));
+  if (musicKey && vs[musicKey] !== false) bad4('음악이 서비스 워커를 거쳤다 ' + musicKey);
+  if (!app.update || !app.update.toast || !app.update.stillSameDoc || !app.update.menu || !app.update.reloadedOnTap) bad4('새 버전 흐름 ' + JSON.stringify(app.update));
+  if (!app.iosSheet.shown || !/공유/.test(app.iosSheet.steps) || !/홈 화면에 추가/.test(app.iosSheet.steps)) bad4('아이폰 안내 시트 ' + JSON.stringify(app.iosSheet));
+  if (!app.records.shown || !(app.records.exportLen > 50)) bad4('기록 옮기기 창 ' + JSON.stringify(app.records));
+  if (app.tester.reg || app.tester.status !== 'off' || app.tester.errors.length) bad4('테스트판이 서비스 워커를 건드렸다 ' + JSON.stringify(app.tester));
+  if (app.errors.length) bad4('페이지 오류 ' + app.errors[0]);
+  app.problems = appProblems;
+  console.log('app problems', JSON.stringify(appProblems));
+  if (appProblems.length) process.exitCode = 1;
   // ---------- 모바일 ④ — 화질 사다리(세션 54): 같은 장면을 가장 고운 칸(해상도 2배)과 가장 낮은 칸(1배 · 30fps)으로 ----------
   const qctx = await browser.newContext({ ...devices['Galaxy S24'], defaultBrowserType: undefined });
   const qp = await qctx.newPage();

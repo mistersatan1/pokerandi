@@ -43,6 +43,7 @@ function boot() {
     vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), sandbox, { filename: f });
   }
   const R = sandbox.RPD;
+  R.Config.autosave = false;   // 판 이어하기 자동 저장 끔(세션 70) — 봇 측정이 저장 기능에 안 흔들리게(RunSave.init 도 안 부른다)
   R.EconomyManager.init(); R.GoldShopManager.init(); R.EliteManager.init(); R.StatsManager.init(); R.UnitManager.init();
   R.SummonManager.init(); R.CombatManager.init(); R.RecipeManager.init();
   R.ShardManager.init(); R.BossManager.init(); R.SaveManager.init();
@@ -116,8 +117,16 @@ let gameNo = 0;
 process.on('exit', () => {
   if (!SPECIES_LOG) return;
   const out = {};
-  for (const id in SPECIES) out[id] = { dmg: SPECIES[id].dmg, time: SPECIES[id].time, games: SPECIES[id].games.size };
+  for (const id in SPECIES) out[id] = { dmg: SPECIES[id].dmg, dmgAll: SPECIES[id].dmgAll || 0, time: SPECIES[id].time, games: SPECIES[id].games.size };
   require('fs').writeFileSync(SPECIES_LOG, JSON.stringify(out));
+});
+/* dmgAll — 적이 받은 피해 이벤트를 준 개체의 종으로 모은 것(실드에 막힌 몫 · 악 타입 처형 포함).
+ * dmg(= totalDamage 차이)는 세션 62 까지 지속 피해(화상 · 독)가 빠져 있었고, 세션 63 부터 들어간다. */
+if (SPECIES_LOG) R.bus.on('enemy:damaged', (p) => {
+  const src = p && p.source;
+  if (!src || !src.defId || !(p.amount > 0)) return;
+  const rec = SPECIES[src.defId] || (SPECIES[src.defId] = { dmg: 0, time: 0, games: new Set() });
+  rec.dmgAll = (rec.dmgAll || 0) + p.amount;
 });
 const IMM_MATS = new Set();
 function immortalMats() {

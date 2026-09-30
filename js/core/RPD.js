@@ -18,6 +18,7 @@
     fixedStep: 1 / 60,      // 초. 모든 게임 로직은 이 간격으로만 갱신된다.
     maxStepsPerFrame: 12,   // 탭 복귀 시 따라잡기 폭주 방지
     maxFrameDelta: 0.1,     // 초. dt 클램프
+    autosave: true,         // 판 이어하기 자동 저장(RunSave · 세션 70). 자동 플레이 · 검사는 false — 측정이 저장 기능 때문에 달라지면 안 된다
     speedOptions: [1, 2, 3],
 
     // --- 플레이어 ---

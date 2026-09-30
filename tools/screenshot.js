@@ -1192,23 +1192,25 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
   report.push({ resume: m4Report });
   if (m4Problems.length) process.exitCode = 1;
 
-  /* ---------- 모바일 ③ — 홈 화면 앱(세션 53) ----------
+  /* ---------- 홈 화면 앱(세션 53 · 모바일 ④ 세션 71) ----------
    * 설치 · 오프라인은 인터넷 주소에서만 되니, 원본 폴더(dist 아님)를 이 자리에서 작은 웹 서버로 띄워 연다(localhost 는 https 와 같게 친다).
    * 확인: 크롬이 "설치할 수 있다"고 보는가(설치 불가 사유 0) · 서비스 워커 · 오프라인 저장 · 인터넷을 끊고 다시 열어도 켜지고 처음 보는 그림이 나오는가 ·
    *       ☰ [전체 화면] · [앱 설치] · 노치 화면 여백 · 앱으로 실행 중이면 두 버튼이 숨는가. */
   const http = require('http'), pathM = require('path'), ROOT = pathM.join(__dirname, '..');
   const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
-    '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.json': 'application/json' };
+    '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.json': 'application/json', '.mp3': 'audio/mpeg' };
+  const srv = { bump: 0 };   // 새 버전 흉내 — pwa-precache.js 끝에 한 줄을 붙여 새 서비스 워커를 만든다
   const server = http.createServer((req, res) => {
     const rel = decodeURIComponent(req.url.split('?')[0]).replace(/^\/+/, '') || 'index.html';
     const file = pathM.join(ROOT, rel);
     if (!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); res.end(); return; }
-    res.writeHead(200, { 'Content-Type': MIME[pathM.extname(file)] || 'application/octet-stream' });
+    res.writeHead(200, { 'Content-Type': MIME[pathM.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
+    if (rel === 'pwa-precache.js' && srv.bump) { res.end(fs.readFileSync(file, 'utf8') + '\n// bump ' + srv.bump + '\n'); return; }
     fs.createReadStream(file).pipe(res);
   });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
-  const APP = `http://127.0.0.1:${server.address().port}/index.html`;
-  const app = { url: APP.replace(/\d+\/index/, 'PORT/index') };
+  const APP = `http://localhost:${server.address().port}/`;
+  const app = { url: APP.replace(/:\d+\//, ':PORT/') };
   // 보통 창(시크릿 아님) — 크롬은 시크릿 창에서는 설치를 막는다
   const profile = fs.mkdtempSync(pathM.join(require('os').tmpdir(), 'porandi-app-'));
   const actx = await chromium.launchPersistentContext(profile, { ...devices['Galaxy S24'], defaultBrowserType: undefined, executablePath, args: ['--no-sandbox'] });
@@ -1226,6 +1228,16 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
   app.manifestErrors = (man.errors || []).map(e => e.message);
   await ap.reload(); await ap.waitForTimeout(1200);
   app.controlled = await ap.evaluate(() => !!navigator.serviceWorker.controller);
+  // 어느 요청이 서비스 워커를 거쳤나 — 코드 · 그림은 거치고, 음악(assets/music)은 안 거친다
+  const viaSW = {};
+  const onResp = r => { const u = r.url(); if (/\/js\/main\.js|\/assets\/icons\/icon-192\.png|\/assets\/music\//.test(u)) viaSW[u.replace(/^.*\/\/[^/]+\//, '')] = r.fromServiceWorker(); };
+  ap.on('response', onResp);
+  const musicFile = fs.readdirSync(pathM.join(ROOT, 'assets/music')).find(f => f.endsWith('.mp3'));
+  await ap.evaluate(async (m) => { await fetch('js/main.js'); await fetch('assets/icons/icon-192.png'); if (m) await fetch('assets/music/' + m, { headers: { Range: 'bytes=0-99' } }); }, musicFile || null);
+  await ap.waitForTimeout(300);
+  ap.off('response', onResp);
+  app.viaServiceWorker = viaSW;
+  app.caches = await ap.evaluate(async () => (await caches.keys()).sort());
 
   // ☰ 메뉴 — 새 버튼 둘
   const prepAppPage = async (pg) => pg.evaluate(() => {
@@ -1243,7 +1255,7 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
   });
   await prepAppPage(ap);
   await ap.tap('#tbMore'); await ap.waitForTimeout(300);
-  app.menuButtons = await ap.evaluate(() => ['btnFullscreen', 'btnInstall'].map(id => {
+  app.menuButtons = await ap.evaluate(() => ['btnFullscreen', 'btnInstall', 'btnWake', 'btnRecords'].map(id => {
     const b = document.getElementById(id), r = b.getBoundingClientRect();
     return { id, shown: !b.hidden && r.width > 0, size: [Math.round(r.width), Math.round(r.height)] };
   }));
@@ -1257,11 +1269,17 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
   });
   await ap.tap('#btnInstall'); await ap.waitForTimeout(300);
   app.installPrompted = await ap.evaluate(() => window.__prompts === 1 && !window.RPD.Pwa.installEvent && !document.querySelector('.tipbubble:not([hidden])'));
+  // 설치 창을 한 번 쓴 뒤(또는 크롬이 창을 안 줄 때)는 안내 시트
   await ap.tap('#tbMore'); await ap.waitForTimeout(200);
   await ap.tap('#btnInstall'); await ap.waitForTimeout(300);
-  app.installTip = await ap.evaluate(() => { const b = document.querySelector('.tipbubble'); if (!b || b.hidden) return null;
-    const r = b.getBoundingClientRect(); return { text: b.textContent, inView: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight }; });
-  await ap.screenshot({ path: pathM.join(ROOT, 'dist', 'm_app_install_tip.png') });
+  app.installSheet = await ap.evaluate(() => ({ shown: !document.getElementById('installSheet').hidden, steps: document.getElementById('installSteps').innerText.replace(/\s+/g, ' ') }));
+  await ap.tap('#btnInstallClose'); await ap.waitForTimeout(150);
+  // 기록 옮기기 창
+  await ap.tap('#tbMore'); await ap.waitForTimeout(200);
+  await ap.tap('#btnRecords'); await ap.waitForTimeout(300);
+  app.records = await ap.evaluate(() => ({ shown: !document.getElementById('recordSheet').hidden, exportLen: document.getElementById('recordExport').value.length, summary: document.getElementById('recordSummary').textContent }));
+  await ap.screenshot({ path: pathM.join(ROOT, 'dist', 'm_app_records.png') });
+  await ap.tap('#btnRecordClose'); await ap.waitForTimeout(150);
   await ap.tap('#tbMore'); await ap.waitForTimeout(200);
   await ap.tap('#btnFullscreen'); await ap.waitForTimeout(500);
   app.fullscreen = await ap.evaluate(() => ({ on: !!document.fullscreenElement, title: document.getElementById('btnFullscreen').title }));
@@ -1280,6 +1298,28 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
   });
   await ap.screenshot({ path: pathM.join(ROOT, 'dist', 'm_app_offline.png') });
   await actx.setOffline(false);
+
+  // 새 버전 — 서버의 프리캐시 목록이 바뀌면 새 서비스 워커가 기다린다. 페이지는 토스트만 띄우고 스스로 새로고침하지 않는다
+  await ap.reload(); await ap.waitForTimeout(1500);
+  await ap.evaluate(() => { window.__sameDoc = 1; document.querySelectorAll('.modepick, .result, .help, .book').forEach(o => o.hidden = true); });
+  srv.bump = 1;
+  await ap.evaluate(() => navigator.serviceWorker.getRegistration().then(r => r && r.update()));
+  let upd = null;
+  for (let k = 0; k < 40 && !(upd && upd.toast); k++) {
+    await ap.waitForTimeout(250);
+    upd = await ap.evaluate(() => ({ toast: !document.getElementById('updateToast').hidden, sameDoc: window.__sameDoc === 1,
+      waiting: !!(window.RPD.Pwa.reg && window.RPD.Pwa.reg.waiting), menu: !document.getElementById('btnUpdate').hidden }));
+  }
+  await ap.waitForTimeout(1500);
+  upd.stillSameDoc = await ap.evaluate(() => window.__sameDoc === 1);   // 기다려도 저절로 새로고침하지 않는다
+  await ap.screenshot({ path: pathM.join(ROOT, 'dist', 'm_app_update_toast.png') });
+  const nav = ap.waitForNavigation({ timeout: 8000 }).then(() => true, () => false);
+  await ap.tap('#btnUpdateNow');
+  upd.reloadedOnTap = await nav;
+  await ap.waitForTimeout(800);
+  upd.afterTap = await ap.evaluate(() => ({ sameDoc: window.__sameDoc === 1, waiting: !!(window.RPD.Pwa.reg && window.RPD.Pwa.reg.waiting) }));
+  app.update = upd;
+  srv.bump = 0;
 
   // 앱으로 실행 중(display-mode: fullscreen)이면 [전체 화면] · [앱 설치] 는 필요 없으니 숨는다
   // (크로미움 흉내 도구가 display-mode 를 못 바꿔서, 페이지의 matchMedia 만 "앱으로 실행 중"이라고 답하게 바꿔 본다)
@@ -1310,7 +1350,50 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     await np.screenshot({ path: pathM.join(ROOT, 'dist', 'm_app_notch_landscape.png') });
   } catch (e) { app.notch = '흉내 불가: ' + e.message; }
   await nctx.close();
+
+  // 아이폰 사파리 — 설치 API 가 없어 [앱으로 설치] 는 안내 시트("공유(□↑) → 홈 화면에 추가")
+  const ictx = await browser.newContext({ ...devices['iPhone 15'], defaultBrowserType: undefined });
+  const ip = await ictx.newPage();
+  await ip.goto(APP); await ip.waitForTimeout(1200);
+  await prepAppPage(ip); await ip.waitForTimeout(600);
+  await ip.evaluate(() => window.RPD.Loop.setPaused(true));
+  await ip.tap('#tbMore'); await ip.waitForTimeout(300);
+  await ip.screenshot({ path: pathM.join(ROOT, 'dist', 'm_app_menu_iphone.png') });
+  await ip.tap('#btnInstall'); await ip.waitForTimeout(300);
+  app.iosSheet = await ip.evaluate(() => ({ shown: !document.getElementById('installSheet').hidden, steps: document.getElementById('installSteps').innerText.replace(/\s+/g, ' ') }));
+  await ip.screenshot({ path: pathM.join(ROOT, 'dist', 'm_app_install_ios_sheet.png') });
+  await ictx.close();
+
+  // 한 파일 테스트판(file://) — 서비스 워커를 등록하려 하지도 않고 오류도 없다
+  const tctx3 = await browser.newContext({ ...devices['Galaxy S24'], defaultBrowserType: undefined });
+  const tp3 = await tctx3.newPage();
+  const terr3 = []; tp3.on('pageerror', e => terr3.push(e.message)); tp3.on('console', m => { if (m.type() === 'error') terr3.push(m.text()); });
+  await tp3.goto(URL); await tp3.waitForTimeout(1200);
+  // file:// 에서는 getRegistration 자체가 막힌다(SecurityError) — 막혔으면 등록도 없는 것
+  app.tester = await tp3.evaluate(() => (navigator.serviceWorker ? navigator.serviceWorker.getRegistration().then(r => !!r, () => false) : Promise.resolve(false))
+    .then(reg => ({ reg, status: window.RPD.Pwa.status })));
+  app.tester.errors = terr3.slice(0, 2);
+  await tctx3.close();
   server.close();
+
+  // 이 장면의 검사 — 어긋나면 도구가 실패로 끝난다
+  const appProblems = [];
+  const bad4 = w => appProblems.push(w);
+  if (app.installErrors.length) bad4('크롬 설치 불가 사유: ' + app.installErrors.join(','));
+  if (!app.controlled) bad4('서비스 워커가 페이지를 안 잡았다');
+  if (app.saved.status !== 'ready' || app.saved.saved !== app.saved.total) bad4('미리 받기 ' + JSON.stringify(app.saved));
+  if (!app.offline.booted || app.offline.online !== false) bad4('오프라인 새로고침에 게임이 안 뜸 ' + JSON.stringify(app.offline));
+  const vs = app.viaServiceWorker, musicKey = Object.keys(vs).find(k => /assets\/music/.test(k));
+  if (vs['js/main.js'] !== true || vs['assets/icons/icon-192.png'] !== true) bad4('코드 · 그림이 서비스 워커를 안 거침 ' + JSON.stringify(vs));
+  if (musicKey && vs[musicKey] !== false) bad4('음악이 서비스 워커를 거쳤다 ' + musicKey);
+  if (!app.update || !app.update.toast || !app.update.stillSameDoc || !app.update.menu || !app.update.reloadedOnTap) bad4('새 버전 흐름 ' + JSON.stringify(app.update));
+  if (!app.iosSheet.shown || !/공유/.test(app.iosSheet.steps) || !/홈 화면에 추가/.test(app.iosSheet.steps)) bad4('아이폰 안내 시트 ' + JSON.stringify(app.iosSheet));
+  if (!app.records.shown || !(app.records.exportLen > 50)) bad4('기록 옮기기 창 ' + JSON.stringify(app.records));
+  if (app.tester.reg || app.tester.status !== 'off' || app.tester.errors.length) bad4('테스트판이 서비스 워커를 건드렸다 ' + JSON.stringify(app.tester));
+  if (app.errors.length) bad4('페이지 오류 ' + app.errors[0]);
+  app.problems = appProblems;
+  console.log('app problems', JSON.stringify(appProblems));
+  if (appProblems.length) process.exitCode = 1;
   // ---------- 모바일 ④ — 화질 사다리(세션 54): 같은 장면을 가장 고운 칸(해상도 2배)과 가장 낮은 칸(1배 · 30fps)으로 ----------
   const qctx = await browser.newContext({ ...devices['Galaxy S24'], defaultBrowserType: undefined });
   const qp = await qctx.newPage();

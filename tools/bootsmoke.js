@@ -1984,6 +1984,165 @@ check('판 상태를 가진 매니저(RPD 의 *Manager 중 reset/init 있는 것
   if (notListed.length) throw new Error('saveState 가 있는데 RunSave.ORDER 에 없다: ' + notListed.join(', '));
 });
 
-console.log(`\n────────────────────────────`);
-console.log(failures === 0 ? '부팅 경로 이상 없음' : `부팅 문제 ${failures}건`);
-process.exit(failures === 0 ? 0 : 1);
+/* ---------- 홈 화면 앱(모바일 ④ · 세션 71) ---------- */
+console.log('\n홈 화면 앱 — 설치 · 새 버전 · 화면 켜짐 · 기록 옮기기');
+const AUI = RPD.AppUI, PW = RPD.Pwa;
+function withEnv(env, fn) {
+  const was = { nav: sandbox.navigator, loc: sandbox.location, caches: sandbox.caches, mm: sandbox.matchMedia };
+  Object.assign(sandbox, env);
+  try { return fn(); } finally { Object.assign(sandbox, { navigator: was.nav, location: was.loc, caches: was.caches, matchMedia: was.mm }); }
+}
+const HTTPS = { location: { protocol: 'https:', hostname: 'x.github.io' }, caches: {}, matchMedia: () => ({ matches: false }) };
+
+check('[앱으로 설치] — 크롬은 들고 있던 설치 창(prompt) · 아이폰은 "공유(□↑) → 홈 화면에 추가" 안내 시트 · 앱으로 실행 중이면 버튼 숨김', () => {
+  let prompted = 0;
+  const r1 = withEnv(Object.assign({ navigator: { serviceWorker: {}, userAgent: 'Android Chrome' } }, HTTPS), () => {
+    PW.installEvent = { prompt() { prompted += 1; } };
+    return AUI.install();
+  });
+  if (r1 !== 'prompt' || prompted !== 1 || PW.installEvent) throw new Error('크롬 설치 창: ' + r1);
+  nodes.installSheet.hidden = true;
+  const r2 = withEnv(Object.assign({ navigator: { serviceWorker: {}, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Safari' } }, HTTPS), () => AUI.install());
+  const steps = String(nodes.installSteps.innerHTML);
+  if (r2 !== 'sheet' || nodes.installSheet.hidden || steps.indexOf('공유') < 0 || steps.indexOf('□↑') < 0 || steps.indexOf('홈 화면에 추가') < 0) throw new Error('아이폰 안내 시트: ' + steps.slice(0, 120));
+  (listeners.btnInstallClose.click || []).forEach(fn => fn({}));
+  if (!nodes.installSheet.hidden) throw new Error('닫기');
+  withEnv(Object.assign({ navigator: { serviceWorker: {} }, matchMedia: q => ({ matches: /standalone/.test(q) }) }, { location: HTTPS.location, caches: {} }), () => {
+    RPD.bus.emit('pwa:status', PW);
+    if (!nodes.btnInstall.hidden) throw new Error('앱으로 실행 중인데 [앱으로 설치] 가 보인다');
+  });
+  RPD.bus.emit('pwa:status', PW);
+});
+
+check('설치 안내는 스스로 안 띄운다 — 첫 게임 오버 뒤 한 번만 작은 배너(두 번째 게임 오버엔 없음 · 앱 실행 중 · file:// 이면 없음)', () => {
+  const SM = RPD.SaveManager;
+  delete SM.data.settings.installNudged;
+  nodes.installBanner.hidden = true;
+  withEnv(Object.assign({ navigator: { serviceWorker: {} } }, HTTPS), () => {
+    if (!nodes.installBanner.hidden) throw new Error('게임 오버 전에 배너');
+    const over = w => { RPD.GameManager.setState(RPD.GameState.GAMEOVER); RPD.bus.emit('game:over', { wave: w }); };   // 실제 게임처럼 상태부터
+    over(3);
+    if (nodes.installBanner.hidden) throw new Error('첫 게임 오버에 배너가 없다');
+    (listeners.btnBannerClose.click || []).forEach(fn => fn({}));
+    over(4);
+    if (!nodes.installBanner.hidden) throw new Error('두 번째에도 떴다');
+  });
+  delete SM.data.settings.installNudged;
+  withEnv({ navigator: { serviceWorker: {} }, location: { protocol: 'file:', hostname: '' }, caches: {}, matchMedia: () => ({ matches: false }) }, () => {
+    RPD.GameManager.setState(RPD.GameState.GAMEOVER); RPD.bus.emit('game:over', { wave: 3 });
+    if (!nodes.installBanner.hidden) throw new Error('file:// 인데 배너');
+  });
+  SM.data.settings.installNudged = true;
+});
+
+check('새 버전 — "새 버전이 있어요 [새로고침]" · 판 도중이면 판이 끝날 때까지 미룬다 · 누르면 기다리던 서비스 워커에 SKIP_WAITING(자동 새로고침 없음)', () => {
+  const GM = RPD.GameManager, S = RPD.GameState;
+  nodes.updateToast.hidden = true; nodes.btnUpdate.hidden = true;
+  RPD.Game.restart(); RPD.Game.startRun('NORMAL', 'NORMAL');
+  if (GM.state !== S.RUNNING) throw new Error('전제');
+  RPD.bus.emit('pwa:update', PW);
+  if (!nodes.updateToast.hidden) throw new Error('판 도중에 토스트가 떴다');
+  if (nodes.btnUpdate.hidden) throw new Error('[더보기] 에 새 버전 버튼이 없다');
+  GM.setState(S.GAMEOVER); RPD.bus.emit('game:over', { wave: 5 });
+  if (nodes.updateToast.hidden) throw new Error('판이 끝났는데 토스트가 없다');
+  const posted = [];
+  PW.waiting = { postMessage: m => posted.push(m) };
+  (listeners.btnUpdateNow.click || []).forEach(fn => fn({}));
+  if (!posted.length || posted[0].type !== 'SKIP_WAITING' || !PW._reloading) throw new Error('SKIP_WAITING: ' + JSON.stringify(posted));
+  PW._reloading = false; PW.waiting = null;
+  const src = fs.readFileSync(path.join(ROOT, 'js/core/Pwa.js'), 'utf8');
+  if (!/controllerchange[\s\S]{0,120}_reloading/.test(src)) throw new Error('새로고침은 사람이 누른 뒤에만이어야');
+  nodes.updateToast.hidden = true;
+});
+
+{
+  // 비동기(요청이 Promise) — 결과를 모아 다음 검사에서 본다
+  const GM = RPD.GameManager, S = RPD.GameState;
+  const log = [];
+  const sentinel = () => { const s = { released: false, fns: [], addEventListener(t, f) { s.fns.push(f); }, release() { s.released = true; log.push('release'); s.fns.forEach(f => f()); return Promise.resolve(); } }; return s; };
+  const nav = { serviceWorker: {}, wakeLock: { request: t => { log.push('request:' + t); return Promise.resolve(sentinel()); } } };
+  const was = sandbox.navigator;
+  sandbox.navigator = nav;
+  RPD.SaveManager.setSetting('wakeLock', true);
+  RPD.Game.restart(); RPD.Loop.setPaused(false); RPD.Game.startRun('NORMAL', 'NORMAL');
+  PW.syncWake();
+  setImmediate(() => {
+    const held1 = PW.wakeHeld();
+    RPD.Loop.setPaused(true); GM.setState(S.PAUSED);
+    const afterPause = PW.wakeHeld();
+    RPD.Loop.setPaused(false); GM.setState(S.RUNNING);
+    setImmediate(() => {
+      const held2 = PW.wakeHeld();
+      sandbox.document.hidden = true; ((listeners.__document || {}).visibilitychange || []).forEach(fn => fn({}));
+      const afterHide = PW.wakeHeld();
+      sandbox.document.hidden = false;
+      PW.syncWake();
+      setImmediate(() => {
+        (listeners.btnWake.click || []).forEach(fn => fn({}));   // 끄기
+        const afterOff = PW.wakeHeld(), savedOff = RPD.SaveManager.getSetting('wakeLock', true);
+        (listeners.btnWake.click || []).forEach(fn => fn({}));   // 다시 켬
+        sandbox.navigator = { serviceWorker: {} };                // 못 쓰는 기기
+        let quiet = true; try { PW.syncWake(); } catch (e) { quiet = false; }
+        sandbox.navigator = was;
+        RPD.Loop.setPaused(true); GM.setState(S.PAUSED);
+        check('화면 켜짐(Wake Lock) — 진행 중 청함 · 일시정지에 놓음 · 다시 진행에 청함 · 앱 이탈에 놓음 · [화면 켜짐] 끄면 놓고 저장 · 못 쓰는 기기는 조용히', () => {
+          const bad = [];
+          if (!held1) bad.push('진행 중인데 안 청함');
+          if (afterPause) bad.push('일시정지인데 들고 있다');
+          if (!held2) bad.push('다시 진행인데 안 청함');
+          if (afterHide) bad.push('앱 이탈인데 들고 있다');
+          if (afterOff || savedOff !== false) bad.push('끄기');
+          if (!quiet) bad.push('못 쓰는 기기에서 오류');
+          if (bad.length) throw new Error(bad.join(', ') + ' — ' + log.join(' '));
+        });
+        wakeDone();
+      });
+    });
+  });
+}
+let wakeDone;
+const wakePromise = new Promise(r => { wakeDone = r; });
+
+check('기록 내보내기 → 다른 곳에서 가져오기 — 도감 · 칭호(클리어) · 발견한 주문이 옮겨진다 · 덮어쓰기 전에 확인', () => {
+  const SM = RPD.SaveManager;
+  SM.data.pokedex = { mew: { seen: true, best: 1 }, pikachu: { seen: true, best: 2 } };
+  SM.data.clearsBy = { 'NORMAL:HARD': 3 }; SM.data.spells = { mewtwo_spell: 111 };
+  (listeners.btnRecords.click || []).forEach(fn => fn({}));
+  if (nodes.recordSheet.hidden) throw new Error('창이 안 열렸다');
+  const text = nodes.recordExport.value;
+  if (String(nodes.recordSummary.textContent).indexOf('도감 2종') < 0) throw new Error('요약: ' + nodes.recordSummary.textContent);
+  // 다른 기기(빈 기록)에서 가져온다고 치자
+  SM.data = JSON.parse(JSON.stringify(SM.data)); SM.data.pokedex = {}; SM.data.clearsBy = {}; SM.data.spells = {};
+  nodes.recordImport.value = text;
+  (listeners.btnRecordImport.click || []).forEach(fn => fn({}));
+  if (nodes.recordConfirm.hidden || String(nodes.recordConfirmText.textContent).indexOf('덮어씁니다') < 0) throw new Error('확인이 없다');
+  if (Object.keys(SM.data.pokedex).length) throw new Error('확인 전에 덮어썼다');
+  (listeners.btnRecordCancel.click || []).forEach(fn => fn({}));
+  if (Object.keys(SM.data.pokedex).length) throw new Error('취소했는데 바뀌었다');
+  (listeners.btnRecordImport.click || []).forEach(fn => fn({}));
+  (listeners.btnRecordOverwrite.click || []).forEach(fn => fn({}));
+  if (!SM.data.pokedex.mew || SM.data.clearsBy['NORMAL:HARD'] !== 3 || SM.data.spells.mewtwo_spell !== 111) throw new Error('옮겨지지 않았다');
+  if (JSON.parse(sandbox.localStorage.getItem(RPD.SAVE_KEY)).clearsBy['NORMAL:HARD'] !== 3) throw new Error('저장소에 안 남았다');
+  (listeners.btnRecordClose.click || []).forEach(fn => fn({}));
+});
+
+check('기록 가져오기 검증 — 빈 글자 · 깨진 JSON · 다른 앱 · 더 새 버전 · 잘못된 형식은 거절하고 기록은 그대로', () => {
+  const SM = RPD.SaveManager, before = JSON.stringify(SM.data);
+  const cases = { EMPTY: '', JSON: '{"app":"porandi",', FORMAT: JSON.stringify({ app: 'other', kind: 'progress', version: 2, data: { version: 2 } }),
+    VERSION: JSON.stringify({ app: 'porandi', kind: 'progress', version: 99, data: { version: 99 } }),
+    FORMAT2: JSON.stringify({ app: 'porandi', kind: 'progress', version: 2, data: { version: 2, pokedex: [1, 2] } }) };
+  const bad = Object.keys(cases).filter(k => { const r = SM.parseImport(cases[k]); return r.ok || r.reason !== k.replace(/\d$/, ''); });
+  if (bad.length) throw new Error('못 거른 것: ' + bad.join(', '));
+  nodes.recordImport.value = cases.VERSION; nodes.recordConfirm.hidden = true;
+  (listeners.btnRecordImport.click || []).forEach(fn => fn({}));
+  if (!nodes.recordConfirm.hidden || String(nodes.recordMsg.textContent).indexOf('더 새 게임') < 0) throw new Error('안내: ' + nodes.recordMsg.textContent);
+  if (JSON.stringify(SM.data) !== before) throw new Error('거절했는데 기록이 바뀌었다');
+  const old = SM.parseImport(JSON.stringify({ app: 'porandi', kind: 'progress', version: 1, data: { version: 1, pokedex: { mew: { seen: true } } } }));
+  if (!old.ok || !old.data.totals || old.data.version !== 2) throw new Error('옛 버전(v1) 기록을 지금 형식으로 못 바꿨다');
+});
+
+wakePromise.then(() => {
+  console.log(`\n────────────────────────────`);
+  console.log(failures === 0 ? '부팅 경로 이상 없음' : `부팅 문제 ${failures}건`);
+  process.exit(failures === 0 ? 0 : 1);
+});

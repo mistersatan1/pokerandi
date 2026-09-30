@@ -1,5 +1,59 @@
 # v2-redesign (진행 중)
 
+## 세션 71 — 모바일 ④: 홈 화면에 설치하는 앱
+
+**왜**: 사용자 계획 ④. 세션 53 에 앱화(매니페스트 · 아이콘 · 서비스 워커 · 설치 · 전체 화면)를 해 두었다 — 먼저 그것을 읽고 요청과 다른 점만 고쳤다.
+최우선은 "옛 버전이 계속 뜨는 문제를 만들지 않기".
+
+**세션 53 과 달라진 것**
+- A. 매니페스트 `start_url` "./index.html" → **"./"**(scope · id 도 "./" — 모든 경로 상대). 이름 · 짧은 이름 · ko · fullscreen(후보 fullscreen → standalone) · orientation any · #07122b 는 이미 맞았다.
+  아이콘: 피카츄 그림(크로미움 캔버스 · `tools/icons.js`) → **HUD 몬스터볼 마크**(css `.ball` 과 같은 색 · 비율)를 **sharp** 로(`tools/make-icons.js` · `npm run icons`).
+  192 · 512(둥근 판) · maskable 512(공이 지름 80% 안전 영역 안 — 픽셀 검사) · apple-touch 180 · 탭 32. PNG 는 assets/icons 에 커밋. `sharp` 를 devDependencies 에 더했다.
+  `<head>` 의 manifest · theme-color · apple-mobile-web-app-* · apple-touch-icon · viewport-fit=cover 는 세션 53 · 68 에 이미 있었다(검사로 고정).
+- B. 서비스 워커(`sw.js` 다시 짬)
+  - 코드(HTML · JS · CSS · 매니페스트): 인터넷 먼저 — 응답 대기 4초 → **3초**. 저장소 `porandi-code`(이름 고정 — 코드를 올려도 안 바꾼다).
+  - 그림: 저장소 먼저. 저장소 이름 `porandi-img-<그림 경로+내용 해시>` — 그림이 바뀌면 새 서비스 워커 → 새 저장소, 켜질 때 예전 것을 지운다.
+    (세션 53 은 저장소 하나 + 뒤에서 새로 받기였다.)
+  - **assets/music 은 가로채지 않는다**(세션 53 은 음악도 인터넷 먼저로 가로챘다 — 사파리 Range 요청 문제 · 용량).
+  - **프리캐시 목록을 커밋**: `tools/build-pwa.js`(`npm run pwa`)가 js/ · css/ · assets/(음악 제외)를 훑어 `pwa-precache.js` 를 만들고, sw.js 가 importScripts 로 읽어 설치 때 받는다.
+    `npm run check` 첫 단계가 "커밋된 목록 = 지금 파일"을 본다 — 파일을 더하거나 빼고 안 만들면 실패(이번에도 js/ui/AppUI.js 를 더하자 실제로 막혔다).
+    (세션 53 은 페이지가 실행 중에 RPD 를 훑어 목록을 모았다 — 그 코드는 지웠다.)
+  - **새 버전은 스스로 끼어들지 않는다**(세션 53 은 install 에서 skipWaiting — 곧바로 바뀌었다). 기다리는 서비스 워커가 있으면 "새 버전이 있어요 [새로고침]" 토스트만,
+    판 도중이면 판이 끝날 때까지 미루고 [더보기] 에 🆕. [새로고침] 을 눌러야 SKIP_WAITING → 바뀌면 다시 연다.
+  - 등록: https · localhost 만(세션 53 은 아무 http 도 받았다). file:// · 한 파일 테스트판은 시도도 안 한다.
+- C. [더보기] [앱으로 설치](이름 "앱 설치" → "앱으로 설치"): 크롬은 들고 있던 설치 창(beforeinstallprompt — 브라우저가 스스로 띄우지 않게 preventDefault).
+  창이 없거나 아이폰이면 말풍선 대신 **안내 시트**("공유(□↑) → 홈 화면에 추가 → 추가"). 앱으로 실행 중이면 버튼 숨김.
+  **첫 게임 오버 뒤에 한 번만** 작은 배너(설정 installNudged · 앱 실행 중 · file:// 이면 없음).
+- D. [전체 화면]은 세션 53 그대로(못 쓰는 기기 · 앱 실행 중이면 숨김). **화면 켜짐(Screen Wake Lock)** 새로 — 판이 진행 중일 때만 청하고 일시정지 · 앱 이탈 · 끝나면 놓는다.
+  [더보기] 🔆 켬/끔(기본 켬 · "배터리를 더 씁니다" — 설정 wakeLock). 못 쓰는 기기면 버튼이 없고 오류도 없다.
+  주소창 없는 설치 앱의 높이: `.app` 은 세션 68 부터 100dvh.
+- E. **기록 옮기기** — SaveManager 에 export/import 가 없어 새로: `exportText()` · `parseImport(text)`(앱 · 종류 · 버전 · 형식 검사, 옛 v1 은 지금 형식으로) · `importData()`.
+  [더보기] 🔁 창: 내보내기(복사) · 가져오기(붙여 넣기 → 검사 → "지금 기록을 덮어씁니다" 확인 → 덮어쓰기). 진행 중인 판(RunSave)은 옮기지 않는다.
+
+**요청 밖 변경 · 짚을 것**
+1. `package.json` 에 `sharp`(devDependencies) · 스크립트 `icons` · `pwa` 를 더하고 `check` 에 `build-pwa.js --check` 를 넣었다. `tools/icons.js` 는 지웠다.
+2. [더보기] 안 [화면 켜짐] 은 눌러도 메뉴가 안 닫힌다(진동 · 효과와 같게).
+3. [화면 켜짐] · [기록 옮기기] · [앱으로 설치] 는 휴대폰 [더보기] 에만(PC HUD 에는 버튼 없음 — 진동 · 효과와 같은 결정 대기).
+
+**측정 · 확인 — Playwright(실제 크로미움 · http://localhost 정적 서버 · 갤럭시 S24)**
+
+| 확인 | 결과 |
+|---|---|
+| 크롬 설치 불가 사유 · 매니페스트 오류 | 0 · 0 |
+| 서비스 워커가 페이지를 잡음 · 미리 받기 | 예 · 288/288(코드 82 + 그림 206) |
+| 저장소 | porandi-code · porandi-img-93915d5e1e |
+| 서비스 워커를 거친 요청 | js/main.js 예 · 아이콘 예 · **assets/music/battle.mp3 아니오** |
+| `context.setOffline(true)` 뒤 새로고침 | 게임이 뜬다 · 처음 그리는 포켓몬 10/10 그림 |
+| 새 버전(서버의 프리캐시 목록을 바꿈) | 기다림 → 토스트 · [더보기] 🆕 · 1.5초 더 기다려도 새로고침 안 함 · [새로고침] 누르면 그때 다시 열림 |
+| 아이폰 흉내 [앱으로 설치] | 안내 시트 "공유(□↑) … 홈 화면에 추가 … 추가" |
+| 한 파일 테스트판(file://) | 등록 없음 · 상태 off · 오류 0 |
+
+어긋나면 screenshot 이 실패로 끝난다. bootsmoke "홈 화면 앱"(설치 창 · 시트 · 배너 한 번 · 새 버전 미루기 · Wake Lock 청함/놓음 · 기록 옮기기 · 가져오기 검증) ·
+uicheck(매니페스트 · 상대 경로 · head · 목록 = 파일 · 음악 없음 · file:// 등록 안 함 · 서비스 워커 규칙 13 · maskable 픽셀) · `npm run check` 통과.
+
+**아직 못 한 것** — 실기기(안드로이드 크롬 · 아이폰 사파리) 확인. 특히 아이폰에서 홈 화면 앱과 사파리가 저장소를 따로 쓰는지(그래서 기록 옮기기를 넣었다).
+캡처: `dist/icons_preview.png` · `m_app_offline` · `m_app_menu_iphone` · `m_app_install_ios_sheet` · `m_app_records` · `m_app_update_toast`.
+
 ## 세션 70 — 판 이어하기(자동 저장)
 
 **왜**: 휴대폰은 앱을 바꾸거나 전화가 오면 브라우저가 뒤로 간 탭을 닫는다 — 15~20분짜리 판이 처음부터였다(사용자 요청).

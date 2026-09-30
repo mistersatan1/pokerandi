@@ -63,6 +63,7 @@
     if (RPD.MobileToolbar) RPD.MobileToolbar.init();
     if (RPD.Convenience) RPD.Convenience.init();
     if (RPD.ResumeUI) RPD.ResumeUI.init();
+    if (RPD.AppUI) RPD.AppUI.init();
 
     registerLayers();
     registerUpdates();

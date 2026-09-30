@@ -1738,9 +1738,15 @@ const pngSize = f => { const b = fs.readFileSync(path.join(ROOT, f)); return b.s
   let man = null;
   run('manifest.webmanifest 이 JSON 으로 읽힌다', () => { man = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.webmanifest'), 'utf8')); });
   man = man || {};
-  check('매니페스트: 이름 · 짧은 이름 · 시작 주소 · 범위(폴더째 옮겨도 되게 상대 주소) · 전체 화면',
-    man.name && man.short_name && man.start_url === './index.html' && man.scope === './' && man.display === 'fullscreen',
-    JSON.stringify({ start: man.start_url, scope: man.scope, display: man.display }));
+  check('매니페스트: 이름 "포켓몬 랜덤 디펜스" · 짧은 이름 "포랜디" · ko · 전체 화면(후보 fullscreen → standalone) · 가로 세로 둘 다 · 색 #07122b',
+    man.name === '포켓몬 랜덤 디펜스' && man.short_name === '포랜디' && man.lang === 'ko' && man.display === 'fullscreen' &&
+    JSON.stringify(man.display_override) === JSON.stringify(['fullscreen', 'standalone']) && man.orientation === 'any' &&
+    man.background_color === '#07122b' && man.theme_color === '#07122b',
+    JSON.stringify({ name: man.name, short: man.short_name, lang: man.lang, display: man.display, over: man.display_override, ori: man.orientation, bg: man.background_color, theme: man.theme_color }));
+  const relOk = u => typeof u === 'string' && !/^(\/|https?:|\/\/)/.test(u);
+  const manPaths = [man.start_url, man.scope, man.id].concat((man.icons || []).map(i => i.src));
+  check('매니페스트의 모든 경로가 상대 경로(GitHub Pages 의 /저장소이름/ 아래에서도) · start_url · scope 는 "./"',
+    man.start_url === './' && man.scope === './' && manPaths.every(relOk), manPaths.filter(u => !relOk(u)).join(' · '));
   const icons = man.icons || [];
   const iconBad = icons.filter(i => !fs.existsSync(path.join(ROOT, i.src)) || pngSize(i.src) !== i.sizes).map(i => i.src + ':' + (fs.existsSync(path.join(ROOT, i.src)) ? pngSize(i.src) : '없음'));
   check('매니페스트 아이콘 파일이 전부 있고 적힌 크기와 같다', icons.length >= 3 && iconBad.length === 0, iconBad.join(' · '));
@@ -1748,43 +1754,51 @@ const pngSize = f => { const b = fs.readFileSync(path.join(ROOT, f)); return b.s
     icons.some(i => i.sizes === '192x192') && icons.some(i => i.sizes === '512x512' && i.purpose === 'any') &&
     icons.some(i => i.sizes === '512x512' && i.purpose === 'maskable'));
   const headLinks = [...INDEX.matchAll(/<link rel="(manifest|icon|apple-touch-icon)"[^>]*href="([^"]+)"/g)].map(m => ({ rel: m[1], href: m[2] }));
-  check('index.html 이 매니페스트 · 탭 아이콘 · 아이폰 아이콘을 걸고 파일이 있다',
-    ['manifest', 'icon', 'apple-touch-icon'].every(r => headLinks.some(l => l.rel === r && fs.existsSync(path.join(ROOT, l.href)))) &&
+  check('index.html 이 매니페스트 · 탭 아이콘 · 아이폰 아이콘(180)을 상대 경로로 걸고 파일이 있다',
+    ['manifest', 'icon', 'apple-touch-icon'].every(r => headLinks.some(l => l.rel === r && relOk(l.href) && fs.existsSync(path.join(ROOT, l.href)))) &&
     pngSize((headLinks.find(l => l.rel === 'apple-touch-icon') || {}).href || 'index.html') === '180x180',
     JSON.stringify(headLinks));
-  check('화면 끝까지 쓰기(viewport-fit=cover) + 노치 자리 비우기(safe-area)',
-    /viewport-fit=cover/.test(INDEX) && /safe-area-inset-left/.test(fs.readFileSync(path.join(ROOT, 'css/mobile.css'), 'utf8')));
+  const meta = n => { const m = INDEX.match(new RegExp('<meta name="' + n + '" content="([^"]*)"')); return m ? m[1] : null; };
+  check('index.html <head>: theme-color #07122b · apple-mobile-web-app-capable yes · 상태 막대 black-translucent · 앱 제목 포랜디',
+    meta('theme-color') === '#07122b' && meta('apple-mobile-web-app-capable') === 'yes' &&
+    meta('apple-mobile-web-app-status-bar-style') === 'black-translucent' && meta('apple-mobile-web-app-title') === '포랜디',
+    JSON.stringify(['theme-color', 'apple-mobile-web-app-capable', 'apple-mobile-web-app-status-bar-style', 'apple-mobile-web-app-title'].map(meta)));
+  check('화면 끝까지 쓰기(viewport-fit=cover) + 노치 자리 비우기(safe-area) + 주소창이 없어도 맞는 높이(100dvh)',
+    /viewport-fit=cover/.test(INDEX) && /safe-area-inset-left/.test(fs.readFileSync(path.join(ROOT, 'css/mobile.css'), 'utf8')) &&
+    /100dvh/.test(fs.readFileSync(path.join(ROOT, 'css/main.css'), 'utf8')));
 
   const P = RPD.Pwa;
-  const SW = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
-  check('페이지(Pwa.js)와 서비스 워커(sw.js)가 같은 저장소 이름을 쓴다', (SW.match(/var CACHE = '([^']+)'/) || [])[1] === P.CACHE);
-  check('더블클릭(file://) · 테스트판 한 파일에서는 서비스 워커를 쓰지 않는다', (() => {
+  check('더블클릭(file://) · 테스트판 한 파일 · 인터넷의 http 에서는 서비스 워커를 쓰지 않는다(https · localhost 만)', (() => {
     const was = { loc: sandbox.location, nav: sandbox.navigator, caches: sandbox.caches, inl: sandbox.RPD_INLINE };
-    const nav = { serviceWorker: {} };
-    sandbox.navigator = nav; sandbox.caches = {};
-    sandbox.location = { protocol: 'file:' }; const file = P.supported();
-    sandbox.location = { protocol: 'https:' }; const https = P.supported();
-    sandbox.RPD_INLINE = {}; const inline = P.supported();
+    sandbox.navigator = { serviceWorker: {} }; sandbox.caches = {};
+    const at = (protocol, hostname) => { sandbox.location = { protocol, hostname }; return P.supported(); };
+    const r = { file: at('file:', ''), https: at('https:', 'x.github.io'), local: at('http:', 'localhost'), lan: at('http:', '192.168.0.9') };
+    sandbox.location = { protocol: 'https:', hostname: 'x.github.io' }; sandbox.RPD_INLINE = {}; r.inline = P.supported();
     Object.assign(sandbox, { location: was.loc, navigator: was.nav, caches: was.caches, RPD_INLINE: was.inl });
-    return !file && https && !inline;
+    return !r.file && r.https && r.local && !r.lan && !r.inline;
+  })());
+  check('file:// 로 열면 등록을 시도조차 하지 않고 오류도 없다', (() => {
+    const was = { loc: sandbox.location, nav: sandbox.navigator, caches: sandbox.caches, st: P._started, ready: P.ready };
+    let tried = 0;
+    sandbox.navigator = { serviceWorker: { register: () => { tried += 1; return Promise.resolve({}); } } }; sandbox.caches = {};
+    sandbox.location = { protocol: 'file:', hostname: '' }; P._started = false;
+    let err = null;
+    try { P.start(); } catch (e) { err = e; }
+    const st = P.status;
+    Object.assign(sandbox, { location: was.loc, navigator: was.nav, caches: was.caches }); P._started = was.st; P.ready = was.ready;
+    return tried === 0 && !err && st === 'off';
   })());
 
-  // 저장 목록 — index.html 을 흉내 낸 문서로
-  const fakeDoc = { querySelectorAll: () => [...INDEX.matchAll(/<(script) src="([^"]+)"|<link rel="([^"]+)"[^>]*href="([^"]+)"/g)].map(m => ({
-    getAttribute: a => (a === 'src' ? (m[1] ? m[2] : null) : (m[1] ? null : m[4])) })) };
-  const list = P.files(fakeDoc);
-  const want = [
-    ...[...INDEX.matchAll(/<script src="([^"]+)"/g)].map(m => m[1]),
-    ...[...INDEX.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map(m => m[1]),
-    'manifest.webmanifest', './', 'index.html', ...icons.map(i => i.src),
-    ...RPD.PokemonData.all().map(d => d.sprite).filter(f => f && fs.existsSync(path.join(ROOT, f))),
-    ...RPD.EnemySkins.allFiles()
-  ];
-  const lack = [...new Set(want)].filter(f => !list.includes(f));
-  check(`오프라인 목록(${list.length}개)에 게임 파일 · 매니페스트 · 아이콘 · 포켓몬 그림 · 적 그림이 전부 있다`, lack.length === 0, lack.slice(0, 6).join(' · '));
-  const onDisk = list.filter(f => f === './' || fs.existsSync(path.join(ROOT, f)));
-  const gone = list.filter(f => !onDisk.includes(f));
-  check('목록에서 파일이 없는 것은 원래 그림이 없는 기본 적 그림뿐(대체 그림으로 그린다)', gone.every(f => /^assets\/enemies\/[a-z_]+\.png$/.test(f)), gone.slice(0, 5).join(' · '));
+  // 프리캐시 목록 = 실제 파일(npm run check 의 build-pwa --check 와 같은 것을 여기서도 — 음악은 빠진다)
+  const B = require('./build-pwa.js').build();
+  const committed = fs.readFileSync(path.join(ROOT, 'pwa-precache.js'), 'utf8');
+  check(`프리캐시 목록(pwa-precache.js)이 지금 파일과 같다 — 코드 ${B.code.length} · 그림 ${B.images.length}`, committed === B.text);
+  const want = [...INDEX.matchAll(/<script src="([^"]+)"/g)].map(m => m[1]).concat([...INDEX.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map(m => m[1]), ['manifest.webmanifest', './', 'index.html']);
+  const lackCode = want.filter(f => !B.code.includes(f));
+  const sprites = RPD.PokemonData.all().map(d => d.sprite).filter(f => f && fs.existsSync(path.join(ROOT, f)));
+  const lackImg = sprites.concat(RPD.EnemySkins.allFiles().filter(f => fs.existsSync(path.join(ROOT, f))), icons.map(i => i.src)).filter(f => !B.images.includes(f));
+  check('목록에 index.html 이 싣는 코드 · 매니페스트 · 아이콘 · 포켓몬 · 적 그림이 전부 있다', lackCode.length === 0 && lackImg.length === 0, lackCode.concat(lackImg).slice(0, 6).join(' · '));
+  check('목록에 음악(assets/music)은 없다 · 모든 경로가 상대 경로', !B.code.concat(B.images).some(f => /assets\/music|\.mp3$/.test(f)) && B.code.concat(B.images).every(relOk));
 }
 
 /* ---------- 모바일 ④ — 그리기 조절 FramePacer (세션 54) ---------- */
@@ -1854,18 +1868,19 @@ async function swChecks() {
   };
   const net = { online: true, hang: false, body: 'net', calls: 0 };
   const handlers = {};
+  let skipped = 0;
   const sw = {
-    self: null, URL, Response, Promise, setTimeout, clearTimeout, console,
-    caches: {
-      open: async n => openStore(n), keys: async () => [...stores.keys()],
-      delete: async n => stores.delete(n)
-    },
-    fetch: req => { net.calls += 1; if (net.hang) return new Promise(() => {}); return net.online ? Promise.resolve(new Response(net.body + ':' + (req.url || req), { status: 200 })) : Promise.reject(new TypeError('offline')); }
+    self: null, URL, Response, Request, Promise, setTimeout, clearTimeout, console,
+    caches: { open: async n => openStore(n), keys: async () => [...stores.keys()], delete: async n => stores.delete(n) },
+    fetch: req => { net.calls += 1; if (net.hang) return new Promise(() => {}); return net.online ? Promise.resolve(new Response(net.body + ':' + (req.url || req), { status: 200 })) : Promise.reject(new TypeError('offline')); },
+    importScripts: f => vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), sw, { filename: f })
   };
-  sw.self = { location: new URL('sw.js', ORIGIN), addEventListener: (t, f) => { handlers[t] = f; }, skipWaiting: () => {}, clients: { claim: async () => {} } };
+  sw.self = { location: new URL('sw.js', ORIGIN), addEventListener: (t, f) => { handlers[t] = f; }, skipWaiting: () => { skipped += 1; }, clients: { claim: async () => {} } };
   vm.createContext(sw);
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8'), sw, { filename: 'sw.js' });
-  sw.NETWORK_TIMEOUT_MS = 60;   // 검사는 4초를 기다리지 않는다
+  sw.NETWORK_TIMEOUT_MS = 60;   // 검사는 3초를 기다리지 않는다
+  const PRE = sw.self.PRECACHE;
+  const IMG = 'porandi-img-' + PRE.hash, CODE = 'porandi-code';
 
   const ask = async (url, opt) => {
     const req = Object.assign({ url: new URL(url, ORIGIN).href, method: 'GET', mode: 'cors', destination: '' }, opt);
@@ -1877,34 +1892,70 @@ async function swChecks() {
     await Promise.all(bg).catch(() => {});
     return { handled: true, text: res ? await res.text() : null, err };
   };
-  const cached = async url => { const r = await openStore('porandi-v1').match(new URL(url, ORIGIN).href); return r ? r.text() : null; };
+  const cached = async (store, url) => { const r = await openStore(store).match(new URL(url, ORIGIN).href); return r ? r.text() : null; };
+
+  // 설치 — 목록을 미리 받는다 · 스스로 끼어들지 않는다(skipWaiting 없음)
+  let inst = null; handlers.install({ waitUntil: p => { inst = p; } }); await inst;
+  check(`설치 때 목록을 미리 받는다 — 코드 ${PRE.code.length}개는 ${CODE} · 그림 ${PRE.images.length}개는 ${IMG}(그림 해시가 이름에)`,
+    stores.get(CODE).size === PRE.code.length && stores.get(IMG).size === PRE.images.length && /^[0-9a-f]{10}$/.test(PRE.hash));
+  check('새 서비스 워커는 스스로 끼어들지 않는다(설치 때 skipWaiting 없음 — 판 도중 사라지지 않게)', skipped === 0);
+  handlers.message({ data: { type: 'SKIP_WAITING' }, ports: [] });
+  check('사람이 [새로고침]을 누르면(SKIP_WAITING) 그때 바뀐다', skipped === 1);
+  const status = await new Promise(r => handlers.message({ data: { type: 'STATUS' }, ports: [{ postMessage: r }] }));
+  check('페이지가 물으면(STATUS) 얼마나 받았는지 답한다', status.total === PRE.code.length + PRE.images.length && status.saved === status.total && status.hash === PRE.hash, JSON.stringify({ t: status.total, s: status.saved }));
 
   const r1 = await ask('js/main.js');
-  check('인터넷이 되면 코드는 인터넷에서 받고 저장소도 새것으로', r1.text === 'net:' + ORIGIN + 'js/main.js' && await cached('js/main.js') === r1.text);
+  check('인터넷이 되면 코드는 인터넷에서 받고 저장소도 새것으로', r1.text === 'net:' + ORIGIN + 'js/main.js' && await cached(CODE, 'js/main.js') === r1.text);
   net.body = 'net2';
   const r2 = await ask('js/main.js');
-  check('코드가 바뀌면 다음 열 때 바로 새 판(저장소 것을 먼저 주지 않는다)', r2.text.startsWith('net2:'));
+  check('코드가 바뀌면 다음 열 때 바로 새 판(저장소 것을 먼저 주지 않는다 — 저장소 이름을 안 올려도 된다)', r2.text.startsWith('net2:'));
   net.online = false;
   const r3 = await ask('js/main.js');
   check('오프라인이면 저장해 둔 코드', r3.text === 'net2:' + ORIGIN + 'js/main.js');
   net.online = true; await ask('index.html', { mode: 'navigate' }); net.online = false;
   const r4 = await ask('?from=homescreen', { mode: 'navigate' });
-  check('오프라인에서 주소를 조금 다르게 열어도(?…) 게임 화면', r4.text === 'net2:' + ORIGIN + 'index.html', r4.text || String(r4.err));
+  // "./" 와 "index.html" 은 같은 게임 화면 — 어느 쪽 저장본으로 줘도 된다
+  check('오프라인에서 주소를 조금 다르게 열어도(?… · 홈 화면 아이콘) 게임 화면', [await cached(CODE, './'), await cached(CODE, 'index.html')].includes(r4.text), r4.text || String(r4.err));
   const r5 = await ask('js/never.js');
   check('오프라인 + 저장 안 된 파일은 실패로(가짜 응답을 만들지 않는다)', !!r5.err);
-  net.online = true; net.body = 'img1'; await ask('assets/pokemon/mew.png', { destination: 'image' });
-  net.body = 'img2'; const calls = net.calls;
-  const r6 = await ask('assets/pokemon/mew.png', { destination: 'image' });
-  check('그림은 저장소 것을 먼저(빠르게) · 뒤에서 새것을 받아 저장소만 바꾼다', r6.text.startsWith('img1:') && net.calls === calls + 1 && (await cached('assets/pokemon/mew.png')).startsWith('img2:'));
+  net.online = true; net.body = 'img-new';
+  const calls = net.calls;
+  const r6 = await ask(PRE.images[0], { destination: 'image' });
+  check('그림은 저장소 먼저 — 미리 받은 것을 주고 인터넷에 묻지 않는다(바뀌면 해시가 바뀌어 새 저장소)', r6.text.startsWith('net:') && net.calls === calls);
   net.hang = true;
   const t0 = Date.now(); const r7 = await Promise.race([ask('js/main.js'), new Promise(r => setTimeout(() => r({ text: 'TIMEOUT' }), 1500))]);
-  check('인터넷이 응답 없이 늘어지면(약한 신호) 기다리다 저장소 것으로', r7.text && r7.text.startsWith('net2:') && Date.now() - t0 < 1000, r7.text);
+  check('인터넷이 응답 없이 늘어지면(약한 신호) 3초 뒤 저장소 것으로', r7.text && r7.text.startsWith('net2:') && Date.now() - t0 < 1000, r7.text);
   net.hang = false;
   check('다른 주소(글꼴 등) · GET 이 아닌 요청은 손대지 않는다',
     !(await ask('https://fonts.example/a.css')).handled && !(await ask('js/main.js', { method: 'POST' })).handled);
-  stores.set('porandi-v0', new Map()); stores.set('other-app', new Map());
+  const music = await ask('assets/music/battle.mp3', { destination: 'audio', headers: { Range: 'bytes=0-' } });
+  check('음악(assets/music)은 서비스 워커를 그대로 지나간다(가로채지 않는다 — 사파리 Range 요청 · 용량)', !music.handled);
+  const SWSRC = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
+  check('sw.js 에 설치 때 skipWaiting 이 없다(메시지로만)', !/addEventListener\('install'[\s\S]{0,200}skipWaiting/.test(SWSRC));
+  stores.set('porandi-v1', new Map()); stores.set('porandi-img-0000000000', new Map()); stores.set('other-app', new Map());
   let act = null; handlers.activate({ waitUntil: p => { act = p; } }); await act;
-  check('새 서비스 워커가 켜지면 예전 저장소(porandi-*)만 지운다', !stores.has('porandi-v0') && stores.has('other-app') && stores.has('porandi-v1'));
+  check('새 서비스 워커가 켜지면 예전 저장소(porandi-v1 · 예전 그림 해시)만 지우고 지금 것 · 다른 앱은 둔다',
+    !stores.has('porandi-v1') && !stores.has('porandi-img-0000000000') && stores.has('other-app') && stores.has(CODE) && stores.has(IMG));
+}
+
+/* maskable 아이콘 — 원 · 물방울로 잘려도 공이 안 잘리게: 지름 80% 원 밖은 배경색뿐(sharp 로 픽셀을 읽는다) */
+async function iconChecks() {
+  console.log('\n홈 화면 앱 — maskable 아이콘 안전 영역');
+  let sharp = null;
+  try { sharp = require('sharp'); } catch (e) { console.log('  SKIP  sharp 가 없어 픽셀 검사는 건너뜀(npm install)'); return; }
+  const { data, info } = await sharp(path.join(ROOT, 'assets/icons/icon-maskable-512.png')).raw().toBuffer({ resolveWithObject: true });
+  const W = info.width, ch = info.channels, c = W / 2, R = W * 0.4;
+  const bg = [0x07, 0x12, 0x2b];
+  let outside = 0, bad = 0, ballInside = 0;
+  for (let y = 0; y < W; y++) for (let x = 0; x < W; x++) {
+    const i = (y * W + x) * ch, d = Math.hypot(x + 0.5 - c, y + 0.5 - c);
+    const diff = Math.max(Math.abs(data[i] - bg[0]), Math.abs(data[i + 1] - bg[1]), Math.abs(data[i + 2] - bg[2]));
+    if (d > R) { outside += 1; if (diff > 40) bad += 1; }
+    else if (data[i] > 200) ballInside += 1;   // 빨강 · 흰 공
+  }
+  check('maskable 512: 지름 80% 안전 영역 밖은 배경색(#07122b 근처)뿐 · 공은 안쪽에', bad === 0 && ballInside > W * W * 0.15, `밖에서 배경이 아닌 점 ${bad}/${outside} · 안쪽 공 점 ${ballInside}`);
+  const opaque = async f => (await sharp(path.join(ROOT, f)).metadata()).hasAlpha === false;
+  check('maskable · 아이폰 아이콘은 투명이 없다(꽉 채움)', await opaque('assets/icons/icon-maskable-512.png') && await opaque('assets/icons/apple-touch-icon.png'));
 }
 
 /* ---------- 배경음악 파일 (세션 55) ----------
@@ -2037,7 +2088,7 @@ async function musicChecks() {
   check('테스트판 빌드는 음악 파일을 넣지 않는다(그림 PNG 만 안으로)', /\\.png\$\/i\.test\(name\)/.test(build) && !/mp3|assets\/music/.test(build));
 }
 
-swChecks().then(musicChecks).catch(e => { failures += 1; console.log('  FAIL  비동기 검사가 멈췄다  → ' + e.stack); }).then(() => {
+swChecks().then(iconChecks).then(musicChecks).catch(e => { failures += 1; console.log('  FAIL  비동기 검사가 멈췄다  → ' + e.stack); }).then(() => {
   console.log(`\n────────────────────────────`);
   console.log(failures === 0 ? 'UI·연출 이상 없음' : `UI·연출 문제 ${failures}건`);
   process.exit(failures === 0 ? 0 : 1);

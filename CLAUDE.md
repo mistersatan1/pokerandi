@@ -15,6 +15,8 @@ npm run autoplay     # 자동 플레이 20판 (노멀)
 npm run tierpower    # 등급·얻는 법·역할별 강함 표
 npm run build        # 테스터용 단일 HTML → dist/포켓몬랜덤디펜스_테스트.html
 npm run screenshot   # 빌드 후 실제 크로미움으로 장면 캡처 → dist/*.png
+npm run pwa          # 서비스 워커 프리캐시 목록(pwa-precache.js) 다시 만들기 — 파일을 더하거나 빼면(커밋할 것)
+npm run icons        # 홈 화면 앱 아이콘(assets/icons) 다시 만들기 — sharp
 node tools/perf.js 4  # 휴대폰 성능 — CPU 4배 느린 갤럭시 흉내로 fps · 메인 스레드 바쁨% (PERF_EXP=nopacer 로 적용 전 비교)
 ```
 
@@ -44,7 +46,7 @@ node tools/perf.js 4  # 휴대폰 성능 — CPU 4배 느린 갤럭시 흉내로
 | `js/systems/UndoManager.js` | 배치 이동 되돌리기(세션 68) — 이동 · 교체 · 창고로 · 필드로만, 최대 3. 소환 · 조합 · 방출 · 강화 · 상점 · 정예는 안 되돌린다. 화면은 `js/ui/Convenience.js`(Ctrl+Z · 알림) · 정보 바 [되돌리기] |
 | `js/core/Haptics.js` · `js/core/Effects.js` | 진동 무늬(설정 `haptics`) · 효과 3단계(보통 · 줄임 · 최소 — 설정 `fx`, 파티클 · 피해 숫자 · 흔들림 · 해상도 · 그리기 fps). **연출 전용 난수 `Effects.rand`** — 연출이 `Math.random` 을 쓰면 게임 난수가 밀린다. `js/systems/` 는 Effects 를 읽지 않는다(검사) |
 | `js/systems/RunSave.js` · `js/ui/ResumeUI.js` | 판 이어하기(세션 70) — 라운드 시작마다 `RPD.SAVE_KEY + ':run'` 에 한 장(진행 기록과 다른 키). 매니저마다 `saveState/loadState`, 저장 안 하면 `RunSave.NOT_SAVED` 에 이유(**새 매니저도 둘 중 하나 — 검사가 막는다**). 이어하면 저장된 라운드를 처음부터(`WaveManager.resumeRound` — 라운드 시작 효과 없이). `RPD.Config.autosave=false` 면 안 씀(autoplay) |
-| `js/core/Pwa.js` · `sw.js` · `manifest.webmanifest` | 홈 화면 앱 — 오프라인 저장 목록(자동으로 모음) · 설치 · 전체 화면. https·localhost 에서만(file:// · 테스트판은 끔). 아이콘은 `node tools/icons.js` |
+| `js/core/Pwa.js` · `sw.js` · `manifest.webmanifest` · `js/ui/AppUI.js` | 홈 화면 앱(세션 53 · 71) — 서비스 워커(코드 인터넷 먼저 3초 · 그림 저장소 먼저 · 해시 저장소 · 음악은 안 거침 · 새 버전은 토스트만) · 설치(크롬 창 / 아이폰 안내 시트 · 첫 게임 오버 뒤 배너 한 번) · 전체 화면 · 화면 켜짐(Wake Lock) · 기록 옮기기(SaveManager.exportText/parseImport). https·localhost 에서만(file:// · 테스트판은 등록 시도도 안 함). **프리캐시 목록 `pwa-precache.js` 는 `npm run pwa` 로 만들어 커밋 — js/css/그림 파일을 더하거나 빼면 다시(check 가 막는다)**. 아이콘은 `npm run icons`(sharp · HUD 몬스터볼) |
 
 ## 작업 규칙 (사용자와 합의된 것)
 
@@ -105,7 +107,7 @@ node tools/perf.js 4  # 휴대폰 성능 — CPU 4배 느린 갤럭시 흉내로
 ## 열려 있는 문제 (사용자 결정 대기 포함)
 
 - **모바일 최적화 — 단계로 나눠 한 단계씩**(사용자 계획, 세션 51 · 세션 65 에 ① 을 다시 정함 · 세션 68 에 ③ 을 "편의 기능"으로 다시 정함 —
-  예전 ③ 앱화(세션 53) · ④ 성능(세션 54)은 이미 끝나 아래 "앱화" · "성능" 줄로 남긴다):
+  예전 ③ 앱화(세션 53)는 세션 71 의 ④ 로 다시 맞췄고 · 예전 ④ 성능(세션 54)은 아래 "성능" 줄로 남긴다):
   ① 필드는 고정, 나머지는 시트 ← **세션 65 완료**(세션 51 서랍 레이아웃을 바꿨다) —
      휴대폰(세로 · 가로)에서 필드 캔버스 화면 크기는 시트 · 바가 열리고 닫혀도 안 변한다. 조합식 · 보유 · 시너지 · 도감 · 골드 상점 · 정예 · 조합 사전 ·
      자세한 칸 정보는 필드를 밀지 않고 덮는 시트(세로: 아래에서 · 가로: 오른쪽에서) — 최대 화면의 45%, 손잡이로 peek · 절반 · 전체, 필드를 누르면 peek(선택 유지).
@@ -127,7 +129,11 @@ node tools/perf.js 4  # 휴대폰 성능 — CPU 4배 느린 갤럭시 흉내로
      자리 비움 일시정지(visibilitychange hidden · pagehide → "일시정지됨 — 눌러서 계속", 저절로 안 풀림 — `Convenience.js`) ·
      효과 3단계([더보기] [효과] — 기본은 코어 ≤4 · 메모리 ≤4GB · 동작 줄이기면 줄임). 검사 bootsmoke "편의 기능" · screenshot ⑱.
      [진동] · [효과] 는 휴대폰 [더보기] 에만 있다(PC 화면엔 버튼 없음 — 결정 대기).
-  앱화 — 매니페스트 · 아이콘 · 전체 화면 · 오프라인 ← **세션 53 완료**(https 주소에 올려야 설치된다 — 올릴 곳은 사용자 결정)
+  ④ 홈 화면에 설치하는 앱 ← **세션 71 완료**(세션 53 앱화를 요청대로 다시 맞춤) — 매니페스트(start_url · scope "./" · 상대 경로) · HUD 몬스터볼 아이콘(sharp) ·
+     서비스 워커(프리캐시 목록 커밋 · 코드 인터넷 먼저 3초 · 그림 해시 저장소 · 음악 통과 · 새 버전은 토스트 — 자동 새로고침 없음) ·
+     [더보기] [앱으로 설치](아이폰 안내 시트) · 첫 게임 오버 뒤 배너 한 번 · [화면 켜짐](Wake Lock · 기본 켬) · [기록 옮기기] · [전체 화면].
+     검사 uicheck "홈 화면 앱" · bootsmoke "홈 화면 앱" · screenshot 홈 화면 앱 장면(localhost · setOffline · 새 버전 · 아이폰 시트).
+     **실기기 확인은 아직**(아이폰 홈 화면 앱과 사파리의 저장소가 갈리는지 포함).
   성능 — 저사양 휴대폰에서 프레임 · 발열 · 배터리 ← **세션 54 완료**(`FramePacer` · `tools/perf.js`. 실기기 확인은 아직 — 헤드리스는 GPU 가 없어 그리기가 실제보다 비싸다)
 - 판 이어하기(세션 70): 앱을 닫았다 열면 그 라운드를 처음부터 다시 할 수 있다(라운드 재도전) — 막을지 결정 대기.
 - 두 갈래 맵(세션 56 · 57): 불멸 없음은 체력 ×0.97 · 벽 5.4 · 명당 +2 로 맞췄다(8%). **광역 불멸 2마리는 24% 로 목표 35% 에 못 미친다** — 사용자 결정 대기. 보스 러시 · 엔드리스 · 챌린지는 두 갈래 맵에서 아직 안 쟀다.

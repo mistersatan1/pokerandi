@@ -303,7 +303,7 @@
       var hud = document.querySelector('.hud');
       if (!hud || !hud.classList || !hud.classList.contains('is-more-open') || !e.target || !e.target.closest) return;
       if (e.target.closest('#btnMore') || e.target.closest('#tbMore') || e.target.closest('.audio') ||
-          e.target.closest('#btnHaptics') || e.target.closest('#btnFx')) return;
+          e.target.closest('#btnHaptics') || e.target.closest('#btnFx') || e.target.closest('#btnWake')) return;
       if (e.target.closest('#hudMore .iconbtn') || !e.target.closest('#hudMore')) HudPanels.toggleMore(false);
     });
     bindLongPressTips();
@@ -345,14 +345,8 @@
       });
     }
     if (el.installBtn) {
-      el.installBtn.addEventListener('click', function () {
-        var P = RPD.Pwa;
-        if (!P || P.install()) return;
-        var r = el.installBtn.getBoundingClientRect ? el.installBtn.getBoundingClientRect() : null;
-        var msg = P.installHelp();
-        if (P.status === 'ready') msg += ' (오프라인 준비 끝 — 인터넷 없이도 켜집니다)';
-        HudPanels.showTip(msg, r);
-      });
+      // 설치 창(크롬) 또는 안내 시트(아이폰 · 창이 없을 때) — 세션 71 에 말풍선에서 시트로(AppUI)
+      el.installBtn.addEventListener('click', function () { if (RPD.AppUI) RPD.AppUI.install(); });
     }
     document.addEventListener('fullscreenchange', refreshAppButtons);
     document.addEventListener('webkitfullscreenchange', refreshAppButtons);

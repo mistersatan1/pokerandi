@@ -99,7 +99,10 @@
     <!-- 휴대폰에서만(☰ 메뉴) — PC 는 F11 · 브라우저 설치 버튼이 있다 -->
     <button type="button" class="iconbtn iconbtn--mobile" id="btnSynergy" title="타입 시너지" aria-label="시너지"><span class="ico ico--synergy"></span></button>
     <button type="button" class="iconbtn iconbtn--mobile" id="btnFullscreen" title="전체 화면" aria-label="전체 화면">⛶</button>
-    <button type="button" class="iconbtn iconbtn--mobile" id="btnInstall" title="홈 화면에 앱으로 설치" aria-label="앱 설치">📲</button>
+    <button type="button" class="iconbtn iconbtn--mobile" id="btnInstall" title="홈 화면에 앱으로 설치" aria-label="앱으로 설치">📲</button>
+    <button type="button" class="iconbtn iconbtn--mobile" id="btnWake" title="화면 켜짐 — 판 도중 화면이 꺼지지 않게(배터리를 더 씁니다)" aria-label="화면 켜짐" aria-pressed="true">🔆</button>
+    <button type="button" class="iconbtn iconbtn--mobile" id="btnRecords" title="기록 내보내기 · 가져오기(도감 · 칭호 옮기기)" aria-label="기록 옮기기">🔁</button>
+    <button type="button" class="iconbtn iconbtn--mobile" id="btnUpdate" title="새 버전으로 새로고침" aria-label="새 버전" hidden>🆕</button>
     <button type="button" class="iconbtn iconbtn--mobile" id="btnHaptics" title="진동 켬" aria-label="진동 켬" aria-pressed="true">📳</button>
     <button type="button" class="iconbtn iconbtn--mobile" id="btnFx" title="효과" aria-label="효과 보통">✨</button>
     <button type="button" class="iconbtn iconbtn--ghost" id="btnRestart" title="처음부터" aria-label="처음부터"><span class="ico ico--restart"></span></button>
@@ -490,6 +493,45 @@
   <button type="button" class="btn btn--ghost runnotice__ok" id="btnNoticeOk">확인</button>
 </div>
 
+<!-- 홈 화면 앱(모바일 ④ · 세션 71) — 설치 안내 시트 · 첫 게임 오버 뒤 한 번 배너 · 새 버전 토스트 · 기록 옮기기 -->
+<div class="appsheet" id="installSheet" hidden role="dialog" aria-modal="true" aria-labelledby="installTitle">
+  <div class="appsheet__card pane">
+    <h2 class="pane__title" id="installTitle">홈 화면에 앱으로 설치</h2>
+    <ol class="appsheet__steps" id="installSteps"></ol>
+    <p class="appsheet__note">설치하면 주소창 없이 전체 화면으로 · 인터넷이 없어도 켜집니다(한 번 인터넷으로 연 뒤).</p>
+    <div class="appsheet__acts"><button type="button" class="btn btn--ghost" id="btnInstallClose">닫기</button></div>
+  </div>
+</div>
+<div class="runnotice appbanner" id="installBanner" hidden role="status">
+  <span class="runnotice__text">📲 홈 화면에 앱으로 설치하면 주소창 없이 할 수 있어요</span>
+  <button type="button" class="btn btn--primary runnotice__ok" id="btnBannerInstall">설치</button>
+  <button type="button" class="btn btn--ghost runnotice__ok" id="btnBannerClose">닫기</button>
+</div>
+<div class="runnotice appbanner" id="updateToast" hidden role="status">
+  <span class="runnotice__text">🆕 새 버전이 있어요</span>
+  <button type="button" class="btn btn--primary runnotice__ok" id="btnUpdateNow">새로고침</button>
+  <button type="button" class="btn btn--ghost runnotice__ok" id="btnUpdateLater">나중에</button>
+</div>
+<div class="appsheet" id="recordSheet" hidden role="dialog" aria-modal="true" aria-labelledby="recordTitle">
+  <div class="appsheet__card pane">
+    <h2 class="pane__title" id="recordTitle">기록 옮기기</h2>
+    <p class="appsheet__note">도감 · 칭호 · 클리어 기록 · 발견한 주문을 글자로 옮깁니다(아이폰은 홈 화면 앱과 사파리가 기록을 따로 가질 수 있어요). 진행 중인 판은 옮기지 않습니다.</p>
+    <label class="appsheet__label" for="recordExport">내보내기 — 복사해서 다른 쪽에 붙여 넣으세요</label>
+    <textarea class="appsheet__text" id="recordExport" readonly rows="3"></textarea>
+    <div class="appsheet__acts"><span class="appsheet__msg" id="recordSummary"></span><button type="button" class="btn btn--primary" id="btnRecordCopy">복사</button></div>
+    <label class="appsheet__label" for="recordImport">가져오기 — 다른 쪽에서 복사한 글자를 붙여 넣으세요</label>
+    <textarea class="appsheet__text" id="recordImport" rows="3" placeholder="{&quot;app&quot;:&quot;porandi&quot;, …}"></textarea>
+    <div class="appsheet__confirm" id="recordConfirm" hidden>
+      <span id="recordConfirmText"></span>
+      <button type="button" class="btn btn--danger" id="btnRecordOverwrite">덮어쓰기</button>
+      <button type="button" class="btn btn--ghost" id="btnRecordCancel">취소</button>
+    </div>
+    <div class="appsheet__acts"><span class="appsheet__msg" id="recordMsg" role="status"></span>
+      <button type="button" class="btn btn--primary" id="btnRecordImport">가져오기</button>
+      <button type="button" class="btn btn--ghost" id="btnRecordClose">닫기</button></div>
+  </div>
+</div>
+
 <!-- 앱을 벗어났다 돌아오면(세션 68) — 저절로 이어가지 않는다. 누르면 계속 -->
 <button type="button" class="awaypause" id="awayOverlay" hidden aria-label="일시정지됨 — 눌러서 계속">
   <span class="awaypause__ico">⏸</span>
@@ -573,6 +615,7 @@
 <script src="js/ui/MobileToolbar.js"></script>
 <script src="js/ui/Convenience.js"></script>
 <script src="js/ui/ResumeUI.js"></script>
+<script src="js/ui/AppUI.js"></script>
 <script src="js/ui/GoldShopUI.js"></script>
 <script src="js/ui/EliteUI.js"></script>
 <script src="js/ui/SpellUI.js"></script>

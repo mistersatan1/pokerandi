@@ -1205,6 +1205,56 @@ check('도감 카드 — 화상 확률과 강한 화상 세기가 보인다', ()
   RPD.DexCard.close();
 });
 
+/* ---------- 누적 피해에 지속 피해 (세션 63) ---------- */
+console.log('\n누적 피해');
+function dotRun(kind, perSecond, secs, hp) {
+  const EM = RPD.EnemyManager;
+  EM.enemies.length = 0;
+  const e = EM.spawn('grunt', 10);
+  e.hp = e.maxHp = hp; e.armor = 0; e.shield = 0;
+  const u = RPD.UnitManager.create('weedle');
+  EM.applyDot(e, perSecond, secs, u, kind, kind === 'poison' ? 5 : 0);
+  const hp0 = e.hp;
+  for (let t = 0; t < secs + 0.5; t += 0.1) EM.update(0.1);
+  const taken = hp0 - Math.max(0, e.hp);
+  EM.enemies.length = 0;
+  return { u, taken, alive: e.alive };
+}
+
+check('화상 · 독 — 지속 피해가 건 개체의 누적 피해(totalDamage)에 들어간다(적이 실제로 잃은 체력과 같다)', () => {
+  ['burn', 'poison'].forEach(kind => {
+    const r = dotRun(kind, 100, 3, 1e9);
+    if (!(r.taken > 0)) throw new Error(kind + ' 피해가 안 들어갔다');
+    if (Math.abs(r.u.totalDamage - r.taken) > 1e-6) throw new Error(kind + ': 누적 ' + r.u.totalDamage + ' ≠ 적이 잃은 체력 ' + r.taken);
+  });
+});
+
+check('지속 피해로 적이 죽을 때 — 남은 체력만큼만 센다(넘친 피해는 안 셈)', () => {
+  const r = dotRun('burn', 1000, 3, 250);
+  if (r.alive) throw new Error('적이 안 죽었다 — 전제가 깨졌다');
+  if (Math.abs(r.u.totalDamage - 250) > 1e-6) throw new Error('누적 ' + r.u.totalDamage + ' — 250 이어야 한다');
+});
+
+check('칸 정보 카드의 "누적" · 결과 화면 최고 피해가 지속 피해를 포함한다', () => {
+  const F = RPD.FieldManager, EM = RPD.EnemyManager;
+  F.init(); RPD.StorageManager.reset();
+  const slots = F.slots.filter(s => s.unlocked);
+  const dot = RPD.UnitManager.create('weedle'), hitter = RPD.UnitManager.create('pidgey');
+  F.place(slots[0].index, dot); F.place(slots[1].index, hitter);
+  hitter.totalDamage = 500;                         // 직접 타격만 한 개체
+  EM.enemies.length = 0;
+  const e = EM.spawn('grunt', 10); e.hp = e.maxHp = 1e9; e.armor = 0;
+  EM.applyDot(e, 300, 3, dot, 'poison', 5);          // 지속 피해만 한 개체 — 3초에 900
+  for (let t = 0; t < 3.5; t += 0.1) EM.update(0.1);
+  EM.enemies.length = 0;
+  if (!(dot.totalDamage > 850)) throw new Error('지속 피해 개체 누적 ' + dot.totalDamage);
+  if (RPD.UnitManager.topDamage() !== dot) throw new Error('최고 피해가 지속 피해 개체가 아니다');
+  F.select(slots[0].index);
+  const html = panelHtml('slotBody');
+  if (html.indexOf('누적 ' + RPD.Utils.formatNumber(dot.totalDamage)) < 0) throw new Error('칸 카드 누적에 지속 피해가 없다');
+  F.select(-1);
+});
+
 console.log(`\n────────────────────────────`);
 console.log(failures === 0 ? '부팅 경로 이상 없음' : `부팅 문제 ${failures}건`);
 process.exit(failures === 0 ? 0 : 1);

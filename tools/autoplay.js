@@ -119,8 +119,8 @@ process.on('exit', () => {
   for (const id in SPECIES) out[id] = { dmg: SPECIES[id].dmg, dmgAll: SPECIES[id].dmgAll || 0, time: SPECIES[id].time, games: SPECIES[id].games.size };
   require('fs').writeFileSync(SPECIES_LOG, JSON.stringify(out));
 });
-/* dmgAll — 지속 피해(화상 · 독)까지 넣은 피해. 게임의 totalDamage 는 직접 타격 · 스킬 · 특성만 세고 지속 피해는 안 센다
- * (세션 62 에 발견 — 그래서 dmg 로는 지속 피해 역할의 몫이 안 보였다). 적이 받은 피해 이벤트를 준 개체의 종으로 모은다. */
+/* dmgAll — 적이 받은 피해 이벤트를 준 개체의 종으로 모은 것(실드에 막힌 몫 · 악 타입 처형 포함).
+ * dmg(= totalDamage 차이)는 세션 62 까지 지속 피해(화상 · 독)가 빠져 있었고, 세션 63 부터 들어간다. */
 if (SPECIES_LOG) R.bus.on('enemy:damaged', (p) => {
   const src = p && p.source;
   if (!src || !src.defId || !(p.amount > 0)) return;

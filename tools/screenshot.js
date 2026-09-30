@@ -490,6 +490,10 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
       // 화상을 누가 걸었는지 센다(도구 쪽 관찰 — 게임 코드는 그대로)
       const EM = R.EnemyManager, orig = EM.applyDot;
       window.__burn = { procNonFire: 0 };
+      window.__dot = {};   // 개체별 지속 피해 합(적이 받은 피해 이벤트 중 지속 피해 틱만 — 틱은 opts 없이 source 만 온다)
+      R.bus.on('enemy:damaged', p => { if (p.source && p.source.uid && !p.crit && p.amount > 0 && window.__inTick) window.__dot[p.source.uid] = (window.__dot[p.source.uid] || 0) + p.amount; });
+      const upd = EM.update.bind(EM);
+      EM.update = function (dt) { window.__inTick = true; try { return upd(dt); } finally { window.__inTick = false; } };
       EM.applyDot = function (enemy, perSecond, duration, source, kind, maxStacks) {
         if (kind === 'burn' && source && source.def && source.def.burnChance && !source.typeFlags.FIRE) window.__burn.procNonFire += 1;
         return orig.apply(this, arguments);
@@ -505,6 +509,18 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     console.log('burn field', JSON.stringify(info));
     await bp.evaluate(() => window.RPD.Loop.setPaused(true));
     await bp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '13_burn_field_pc.png') });
+    // 누적 피해에 지속 피해(세션 63) — 질퍽이(독 · 화상 확률) 칸 카드의 "누적"과, 그 개체가 건 지속 피해 몫
+    const slotInfo = await bp.evaluate(() => {
+      const R = window.RPD, F = R.FieldManager;
+      const s = F.slots.find(x => x.unit && x.unit.defId === 'grimer');
+      F.select(s.index);
+      return { total: Math.round(s.unit.totalDamage), dot: Math.round(window.__dot[s.unit.uid] || 0),
+        card: (document.querySelector('#slotBody .sc__dmg') || {}).textContent, top: R.UnitManager.topDamage().name };
+    });
+    console.log('dot total', JSON.stringify(slotInfo));
+    await bp.waitForTimeout(200);
+    await bp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '14_dot_total_slotcard_pc.png') });
+    await bp.evaluate(() => window.RPD.FieldManager.select(-1));
     await bp.evaluate(() => {
       const R = window.RPD;
       R.SaveManager.data.pokedex.weedle = 1;

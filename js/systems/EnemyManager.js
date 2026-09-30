@@ -170,7 +170,10 @@
     for (var i = dots.length - 1; i >= 0; i--) {
       var d = dots[i];
       d.remaining -= dt;
-      applyRaw(e, d.perSecond * dt, d.source);
+      var dealt = applyRaw(e, d.perSecond * dt, d.source);
+      // 지속 피해(화상 · 독)도 건 개체의 누적 피해로 센다 — 칸 카드 "누적" · 결과 "최고 피해"(세션 63).
+      // 예전에는 직접 타격 · 스킬 · 특성만 세서 지속 피해 역할의 몫이 빠져 있었다.
+      if (dealt > 0 && d.source && typeof d.source.totalDamage === 'number') d.source.totalDamage += dealt;
       if (d.remaining <= 0) dots.splice(i, 1);
     }
   }

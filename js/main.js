@@ -57,6 +57,7 @@
     if (RPD.SpellUI) RPD.SpellUI.init();
     if (RPD.HudPanels) RPD.HudPanels.init();
     if (RPD.MobileSheet) RPD.MobileSheet.init();
+    if (RPD.MobileToolbar) RPD.MobileToolbar.init();
 
     registerLayers();
     registerUpdates();

@@ -435,6 +435,15 @@ button.dc__mon:hover { background: var(--panel-3); transform: translateY(-2px); 
 .help__keys { width: 100%; border-collapse: collapse; font-size: 13px; }
 .help__keys td { padding: 5px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
 .help__keys td:first-child { width: 36%; color: var(--muted); font-weight: 800; white-space: nowrap; }
+/* 설명서 "보스 보상"(세션 66) */
+.bosshelp th { padding: 5px 8px; text-align: left; font-size: 11px; color: var(--faint); border-bottom: 1px solid var(--line-2); }
+.bosshelp td:first-child { width: 27%; white-space: normal; }
+.bosshelp td:nth-child(2) { width: 18%; white-space: nowrap; }
+.bosshelp td small { color: var(--gold-hi); font-weight: 800; margin-left: 2px; }
+.bosshelp .is-off { opacity: .45; }
+.bosshelp .is-next td { background: rgba(255, 201, 60, .1); }
+.bosshelp__when, .bosshelp__next { margin: 0 0 4px; }
+.bosshelp__note { margin-top: 8px !important; color: var(--muted) !important; font-size: 12px !important; }
 .help__list { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.6; color: var(--text); }
 .help__list li { margin-bottom: 3px; }
 .help__note { color: var(--faint) !important; font-size: 12px !important; }

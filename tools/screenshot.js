@@ -249,12 +249,13 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     const reach = {};
     for (const [k, sel] of [['Space 소환', '#btnSummon'],
                             ['1·2·3 배속', '.speed__btn[data-speed="3"]'], ['P 일시정지', '#btnPause']]) reach[k] = await visible(sel);
-    await mp.tap('#btnMore'); await mp.waitForTimeout(200);
+    for (const [k, sel] of [['C 조합 (툴바)', '#tbCraft'], ['창고 (툴바)', '#tbOwned'], ['더보기 (툴바)', '#tbMore']]) reach[k] = await visible(sel);
+    await mp.tap('#tbMore'); await mp.waitForTimeout(200);
     for (const [k, sel] of [['H 설명서', '#btnHelp'], ['Enter 주문', '#btnChat'], ['R 조합 사전', '#btnBook'], ['G 골드 상점', '#btnGoldShop'],
                             ['E 정예 소환', '#btnElite'], ['도감', '#btnDex'], ['소리', '#btnAudio'], ['처음부터', '#btnRestart']]) reach[k + ' (☰)'] = await visible(sel);
     if (/portrait|Galaxy S24$|iPhone 15$/.test(dev) && !/landscape/.test(dev)) await mp.screenshot({ path: require('path').join(__dirname, '..', 'dist', 'm_' + tag + '_menu.png') });
-    await mp.tap('#btnMore'); await mp.waitForTimeout(200);
-    await mp.tap('.mtab[data-mtab="recipes"]'); await mp.waitForTimeout(400);
+    await mp.tap('#tbMore'); await mp.waitForTimeout(200);
+    await mp.evaluate(() => window.RPD.HudPanels.setDrawer('recipes'));   // 세션 66: [조합] 은 조합, 시트는 길게 누르기 — 여기선 시트만 await mp.waitForTimeout(400);
     reach['C 조합 (조합식 탭)'] = await visible('#btnCraft');
     await mp.screenshot({ path: require('path').join(__dirname, '..', 'dist', 'm_' + tag + '_drawer.png') });
     await mp.tap('.mtab[data-mtab="owned"]'); await mp.waitForTimeout(300);
@@ -388,7 +389,7 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     await tp.evaluate(() => document.querySelector('.mtab[data-mtab="owned"]').click());   // 서랍 닫기
     await hold(300);
     // ⑦ 길게 누르기 → 설명 말풍선 · 버튼은 안 눌림 (☰ 메뉴의 골드 상점)
-    await tp.evaluate(() => document.getElementById('btnMore').click()); await hold(200);
+    await tp.evaluate(() => document.getElementById('tbMore').click()); await hold(200);
     const gs = await tp.evaluate(() => { const b = document.getElementById('btnGoldShop').getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; });
     await T('touchStart', [[gs.x, gs.y]]); await hold(650);
     const tipTxt = await tp.evaluate(() => { const t = document.querySelector('.tipbubble'); return t && !t.hidden ? t.textContent : null; });
@@ -396,7 +397,7 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     await T('touchEnd', []); await hold(250);
     res['길게 누르기 → 설명 말풍선'] = tipTxt;
     res['말풍선을 띄운 뒤 버튼은 안 눌림'] = await tp.evaluate(() => document.getElementById('goldShopOverlay').hidden);
-    await tp.evaluate(() => { const h = document.querySelector('.hud'); if (h.classList.contains('is-more-open')) document.getElementById('btnMore').click(); });
+    await tp.evaluate(() => { const h = document.querySelector('.hud'); if (h.classList.contains('is-more-open')) document.getElementById('tbMore').click(); });
     // ⑧ 두 번 탭 확대 없음 · 필드는 브라우저 손버릇을 안 받는다
     const mid = S.find(s => !s.unit && !s.unlocked) || S[S.length - 1];
     await tapAt(mid.x + 40, mid.y + 40); await hold(60); await tapAt(mid.x + 40, mid.y + 40); await hold(300);
@@ -410,9 +411,9 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
       return r.width < 40 || r.height < 40;
     }).map(n => (n.id ? '#' + n.id : '.' + String(n.className).split(' ')[0]) + ' ' + Math.round(n.getBoundingClientRect().width) + 'x' + Math.round(n.getBoundingClientRect().height)))).forEach(x => smalls.add(x));
     await scan();
-    for (const t of ['recipes', 'owned', 'synergy', 'dex']) { await tp.evaluate(tt => document.querySelector('.mtab[data-mtab="' + tt + '"]').click(), t); await hold(200); await scan(); }
-    await tp.evaluate(() => document.querySelector('.mtab[data-mtab="dex"]').click());
-    await tp.evaluate(() => document.getElementById('btnMore').click()); await hold(150); await scan(); await tp.evaluate(() => document.getElementById('btnMore').click());
+    for (const t of ['recipes', 'owned', 'synergy', 'dex']) { await tp.evaluate(tt => window.RPD.HudPanels.setDrawer(tt), t); await hold(200); await scan(); }
+    await tp.evaluate(() => window.RPD.HudPanels.setDrawer('dex'));
+    await tp.evaluate(() => document.getElementById('tbMore').click()); await hold(150); await scan(); await tp.evaluate(() => document.getElementById('tbMore').click());
     await tp.evaluate(() => window.RPD.FieldManager.select(window.RPD.FieldManager.slots.find(s => s.unit).index)); await hold(200); await scan();
     res['누름 영역 40px 미만'] = [...smalls];
     touchReport.push({ device: dev, ...res, errors: terr.slice(0, 3) });
@@ -671,7 +672,7 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     await gp.touchscreen.tap(A.x, A.y); await gp.waitForTimeout(100);        // 빈 칸 하나 골라 두기(정보 바가 보이게)
     const B = S2.find(x => x.unit === 'charizard');
     await gp.touchscreen.tap(B.x, B.y); await gp.waitForTimeout(150);
-    await gp.tap('.mtab[data-mtab="recipes"]'); await gp.waitForTimeout(450);
+    await gp.evaluate(() => window.RPD.HudPanels.setDrawer('recipes')); await gp.waitForTimeout(450);
     const sheetInfo = await gp.evaluate(() => { const p = document.querySelector('.pane--recipes').getBoundingClientRect(); return { size: document.body.getAttribute('data-sheet'), w: Math.round(p.width), h: Math.round(p.height) }; });
     if (sheetInfo.size !== 'half') bad('조합식 탭을 열었는데 절반 시트가 아님: ' + sheetInfo.size);
     await same('조합식 시트 절반');
@@ -723,6 +724,161 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
   console.log('mobile1 problems', JSON.stringify(m1Problems));
   if (m1Problems.length) process.exitCode = 1;
 
+  /* ⑰ 모바일 ② — 하단 툴바 · "★ 조합 가능" 줄 · 보스 보상(세션 66). 갤럭시 S24 세로 · 가로 + PC.
+   * 검사(하나라도 어긋나면 이 도구가 실패로 끝난다):
+   *   툴바 버튼 높이 44px 이상 · 툴바가 캔버스와 안 겹침 / 시트([창고] · [조합] 길게 누르기) · [더보기] 를 열고 닫아도 캔버스 크기 그대로 /
+   *   [조합] 배지 = 완성 가능 개수 · "★ 조합 가능" 줄을 누르면 실제로 조합 / 소환 금지 중 [소환] "금지 NR" 잠김 /
+   *   휴대폰에서 보스 보상 칩이 getComputedStyle 로 안 보임 · PC 에서는 보임 / 설명서 보스 보상 표에 RewardManager.table 전부.
+   * 캡처: (a) 세로 기본 (b) 세로 조합 가능 (c) 세로 [더보기] (d) 세로 보스 라운드 (e) 세로 설명서 보스 보상 (f) 가로 (a)(d) (g) PC 보스 라운드 */
+  const m2Problems = [];
+  const m2Report = [];
+  const tbPrep = (opt) => {
+    const R = window.RPD;
+    if (R.TutorialManager && R.TutorialManager.skip) R.TutorialManager.skip();
+    document.querySelectorAll('.modepick, .result, .help, .book').forEach(o => o.hidden = true);
+    R.Game.resetAll('NORMAL', 'NORMAL'); R.Game.startRun('NORMAL', 'NORMAL');
+    R.GameManager.setWave(opt.wave); R.WaveManager.startRound(opt.wave);
+    const F = R.FieldManager;
+    F.slots.forEach(x => { if (x.unit) F.remove(x.index); });
+    const open = F.slots.filter(x => x.unlocked && !x.blocked);
+    ['charizard', 'blastoise', 'venusaur', 'pikachu', 'gengar'].forEach((id, i) => F.place(open[i].index, R.UnitManager.create(id)));
+    R.StorageManager.reset();
+    if (opt.ready) {   // 소환으로 나오는 재료만 쓰는 조합식 둘을 완성 가능하게
+      R.RecipeData.list.filter(x => x.materials.every(m => R.PokemonData.get(m).summon)).slice(0, 2)
+        .forEach(r => r.materials.forEach(m => R.StorageManager.add(R.UnitManager.create(m))));
+    }
+    R.GameManager.life = 999; R.GameManager.gold = 500;
+    R.bus.emit('field:changed', {});
+    R.bus.emit('economy:gold', { gold: 500, delta: 0 });
+  };
+  const rectOf = (pg, q) => pg.evaluate(sel => { const n = document.querySelector(sel); if (!n) return null; const r = n.getBoundingClientRect();
+    return { l: r.left, t: r.top, r: r.right, b: r.bottom, w: Math.round(r.width), h: Math.round(r.height) }; }, q);
+  for (const dev of ['Galaxy S24', 'Galaxy S24 landscape']) {
+    const tctx2 = await browser.newContext({ ...devices[dev], defaultBrowserType: undefined });
+    const tp2 = await tctx2.newPage();
+    const terr = [];
+    tp2.on('pageerror', e => terr.push(e.message));
+    await tp2.goto(URL); await tp2.waitForTimeout(1000);
+    const tag = dev.replace(/ /g, '_'), land = /landscape/.test(dev);
+    const bad = w => m2Problems.push(dev + ': ' + w);
+    const shot = name => tp2.screenshot({ path: require('path').join(__dirname, '..', 'dist', '17_m2_' + tag + '_' + name + '.png') });
+    const cvs = async () => { const r = await rectOf(tp2, '#gameCanvas'); return [r.l, r.t, r.w, r.h].map(Math.round).join(','); };
+
+    // (a) 기본 툴바
+    await tp2.evaluate(tbPrep, { wave: 7 });
+    await tp2.waitForTimeout(2600);
+    await tp2.evaluate(() => window.RPD.Loop.setPaused(true));
+    const C0 = await cvs();
+    const canvasR = await rectOf(tp2, '#gameCanvas');
+    const btns = {};
+    for (const q of ['#btnSummon', '#tbCraft', '#tbOwned', '#tbMore']) btns[q] = await rectOf(tp2, q);
+    const tbar = await rectOf(tp2, '#mobileTabs'), act = await rectOf(tp2, '.pane--action');
+    Object.entries(btns).forEach(([q, r]) => { if (!r || r.h < 44) bad(q + ' 높이 ' + (r && r.h) + 'px < 44'); });
+    const ov = (a, b) => a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;
+    if (ov(tbar, canvasR) || ov(act, canvasR)) bad('툴바가 캔버스와 겹침');
+    if (!land && Math.abs(tbar.b - (await tp2.evaluate(() => innerHeight))) > 12) bad('세로 툴바가 화면 맨 아래가 아님');
+    if (!(await shot('a_toolbar'), true)) {}
+
+    // (d) 보스 라운드 — 필드 위 보상 칩이 안 보여야
+    await tp2.evaluate(tbPrep, { wave: 10 });
+    await tp2.waitForTimeout(2600);
+    await tp2.evaluate(() => window.RPD.Loop.setPaused(true));
+    const chip = await tp2.evaluate(() => { const n = document.getElementById('nextReward'); return { display: getComputedStyle(n).display, text: n.textContent.length }; });
+    if (chip.display !== 'none') bad('휴대폰인데 보스 보상 칩이 보임(display ' + chip.display + ')');
+    const bossUp = await tp2.evaluate(() => window.RPD.EnemyManager.enemies.some(e => e.isBoss));
+    await shot('d_boss_round');
+    if (land) { m2Report.push({ dev, canvas: C0, toolbar: [tbar.w, tbar.h], summon: [btns['#btnSummon'].w, btns['#btnSummon'].h], bossUp, chip }); await tctx2.close(); continue; }
+
+    // (b) 조합 가능 — 배지 · 줄 · 누르면 조합
+    await tp2.evaluate(tbPrep, { wave: 7, ready: true });
+    await tp2.waitForTimeout(2600);
+    await tp2.evaluate(() => window.RPD.Loop.setPaused(true));
+    const rd = await tp2.evaluate(() => ({ n: window.RPD.RecipeManager.readyList().length, badge: document.getElementById('mtabCraft').textContent, badgeShown: !document.getElementById('mtabCraft').hidden,
+      strip: document.getElementById('craftStrip').innerText.replace(/\s+/g, ' '), best: window.RPD.RecipeManager.readyList()[0].resultName }));
+    if (!rd.badgeShown || String(rd.n) !== rd.badge) bad('[조합] 배지 ' + rd.badge + ' ≠ 완성 가능 ' + rd.n);
+    if (!/★ 조합 가능/.test(rd.strip) || rd.strip.indexOf(rd.best) < 0) bad('조합 가능 줄: ' + rd.strip);
+    await shot('b_craft_ready');
+    const before = await tp2.evaluate(() => ({ n: window.RPD.RecipeManager.readyList().length, units: window.RPD.StorageManager.allUnits().map(u => u.defId).sort().join(',') }));
+    await tp2.tap('#craftStrip [data-strip="craft"]'); await tp2.waitForTimeout(300);
+    const after = await tp2.evaluate(() => ({ n: window.RPD.RecipeManager.readyList().length, units: window.RPD.StorageManager.allUnits().map(u => u.defId).sort().join(','), badge: document.getElementById('mtabCraft').textContent }));
+    if (after.units === before.units || !(after.n < before.n)) bad('조합 가능 줄을 눌렀는데 조합이 안 됨: ' + JSON.stringify({ before, after }));
+    if (String(after.n) !== after.badge && after.n > 0) bad('조합 뒤 배지 ' + after.badge + ' ≠ ' + after.n);
+    await cvs() !== C0 && bad('조합 뒤 캔버스 크기 바뀜');
+
+    // 시트 — [창고] 누르기 · [조합] 길게 누르기(실제 손가락) → 캔버스 그대로
+    await tp2.tap('#tbOwned'); await tp2.waitForTimeout(300);
+    if (await tp2.evaluate(() => document.body.getAttribute('data-mtab')) !== 'owned') bad('[창고] 로 보유 시트가 안 열림');
+    if (await cvs() !== C0) bad('보유 시트를 열었더니 캔버스 크기 바뀜');
+    await tp2.tap('#tbOwned'); await tp2.waitForTimeout(200);
+    {
+      const cdp2 = await tctx2.newCDPSession(tp2);
+      const b = btns['#tbCraft'];
+      await cdp2.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: (b.l + b.r) / 2, y: (b.t + b.b) / 2 }] });
+      await tp2.waitForTimeout(600);
+      await cdp2.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await tp2.waitForTimeout(300);
+    }
+    const tabNow = await tp2.evaluate(() => document.body.getAttribute('data-mtab'));
+    if (tabNow !== 'recipes') bad('[조합] 길게 누르기로 조합식 시트가 안 열림(' + tabNow + ')');
+    if (await cvs() !== C0) bad('조합식 시트를 열었더니 캔버스 크기 바뀜');
+    await tp2.evaluate(() => window.RPD.HudPanels.setDrawer(''));
+
+    // (c) [더보기]
+    await tp2.tap('#tbMore'); await tp2.waitForTimeout(300);
+    const more = await tp2.evaluate(() => { const m = document.getElementById('hudMore'), r = m.getBoundingClientRect(), t = document.getElementById('mobileTabs').getBoundingClientRect();
+      const ids = ['btnGoldShop', 'btnElite', 'btnBook', 'btnDex', 'btnHelp', 'btnAudio', 'btnRestart', 'btnSynergy'];
+      const vis = ids.filter(id => { const b = document.getElementById(id).getBoundingClientRect(); return b.width > 4 && b.height > 4 && b.top >= 0 && b.bottom <= innerHeight; });
+      return { open: getComputedStyle(m).display !== 'none', aboveToolbar: r.bottom <= t.top + 1, vis, missing: ids.filter(i => vis.indexOf(i) < 0) }; });
+    if (!more.open || !more.aboveToolbar || more.missing.length) bad('[더보기] 메뉴: ' + JSON.stringify(more));
+    if (await cvs() !== C0) bad('[더보기] 를 열었더니 캔버스 크기 바뀜');
+    await shot('c_more');
+    await tp2.tap('#tbMore'); await tp2.waitForTimeout(200);
+    if (await cvs() !== C0) bad('[더보기] 를 닫았더니 캔버스 크기 바뀜');
+
+    // 소환 금지 — [소환] "금지 NR" 잠김 · [더보기] 점
+    const ban = await tp2.evaluate(() => { const R = window.RPD, E = R.EliteManager; E.banUntil = R.GameManager.wave + 3; R.bus.emit('elite:changed', {});
+      const b = document.getElementById('btnSummon'); const out = { disabled: b.disabled, text: document.getElementById('summonCost').textContent, dot: !document.getElementById('tbMoreDot').hidden, left: E.banRoundsLeft() };
+      E.banUntil = 0; R.bus.emit('elite:changed', {}); return out; });
+    if (!ban.disabled || ban.text !== '금지 ' + ban.left + 'R' || !ban.dot) bad('소환 금지 표시: ' + JSON.stringify(ban));
+
+    // 보상 지급 알림 — 툴바 위 줄에(필드 위 카드 없음)
+    const toast = await tp2.evaluate(() => { const R = window.RPD; R.bus.emit('reward:granted', { wave: 10, items: [{ kind: 'gold', amount: 550, paid: true }, { kind: 'ticket', count: 2 }] });
+      return { strip: document.getElementById('craftStrip').innerText.replace(/\s+/g, ' '), pop: getComputedStyle(document.getElementById('rewardPop')).display }; });
+    if (!/10R 보스 처치/.test(toast.strip) || toast.pop !== 'none') bad('보상 알림: ' + JSON.stringify(toast));
+
+    // (e) 설명서 — 보스 보상 절
+    await tp2.evaluate(() => { window.RPD.HudPanels.toggleHelp(true); document.querySelector('#helpTabs [data-help="boss"]').click(); });
+    await tp2.waitForTimeout(300);
+    const help = await tp2.evaluate(() => { const RM = window.RPD.RewardManager, box = document.getElementById('helpBoss');
+      const keys = Object.keys(RM.table); const missing = keys.filter(k => !box.querySelector('[data-boss-n="' + k + '"]') || box.innerText.indexOf(RM.describe(RM.table[k])) < 0);
+      return { rows: box.querySelectorAll('[data-boss-n]').length, keys: keys.length, missing, next: /다음 보스/.test(box.innerText) }; });
+    if (help.missing.length || !help.next) bad('설명서 보스 보상: ' + JSON.stringify(help));
+    await shot('e_help_boss');
+    await tp2.evaluate(() => window.RPD.HudPanels.toggleHelp(false));
+    m2Report.push({ dev, canvas: C0, toolbar: [tbar.w, tbar.h], summon: [btns['#btnSummon'].w, btns['#btnSummon'].h], bossUp, chip, craft: { rd, after }, help, errors: terr.slice(0, 2) });
+    await tctx2.close();
+  }
+  // (g) PC 보스 라운드 — 보상 칩이 그대로 보여야
+  {
+    const pctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const pp = await pctx.newPage();
+    await pp.goto(URL); await pp.waitForTimeout(1000);
+    await pp.evaluate(tbPrep, { wave: 10 });
+    await pp.waitForTimeout(2600);
+    await pp.evaluate(() => window.RPD.Loop.setPaused(true));
+    const pchip = await pp.evaluate(() => { const n = document.getElementById('nextReward'), r = n.getBoundingClientRect();
+      return { display: getComputedStyle(n).display, hidden: n.hidden, w: Math.round(r.width), toolbar: getComputedStyle(document.getElementById('mobileTabs')).display, strip: getComputedStyle(document.getElementById('craftStrip')).display }; });
+    if (pchip.display === 'none' || pchip.hidden || !(pchip.w > 0)) bad('PC 에서 보스 보상 칩이 안 보임: ' + JSON.stringify(pchip));
+    if (pchip.toolbar !== 'none' || pchip.strip !== 'none') bad('PC 에 휴대폰 툴바 · 조합 가능 줄이 보임: ' + JSON.stringify(pchip));
+    await pp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '17_m2_PC_g_boss_round.png') });
+    m2Report.push({ dev: 'PC', chip: pchip });
+    await pctx.close();
+  }
+  function bad(w) { m2Problems.push('PC: ' + w); }
+  m2Report.forEach(r => console.log('mobile2', JSON.stringify(r)));
+  console.log('mobile2 problems', JSON.stringify(m2Problems));
+  if (m2Problems.length) process.exitCode = 1;
+
   /* ---------- 모바일 ③ — 홈 화면 앱(세션 53) ----------
    * 설치 · 오프라인은 인터넷 주소에서만 되니, 원본 폴더(dist 아님)를 이 자리에서 작은 웹 서버로 띄워 연다(localhost 는 https 와 같게 친다).
    * 확인: 크롬이 "설치할 수 있다"고 보는가(설치 불가 사유 0) · 서비스 워커 · 오프라인 저장 · 인터넷을 끊고 다시 열어도 켜지고 처음 보는 그림이 나오는가 ·
@@ -773,7 +929,7 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     R.UnitManager.recomputeAll(); R.bus.emit('field:changed', {});
   });
   await prepAppPage(ap);
-  await ap.tap('#btnMore'); await ap.waitForTimeout(300);
+  await ap.tap('#tbMore'); await ap.waitForTimeout(300);
   app.menuButtons = await ap.evaluate(() => ['btnFullscreen', 'btnInstall'].map(id => {
     const b = document.getElementById(id), r = b.getBoundingClientRect();
     return { id, shown: !b.hidden && r.width > 0, size: [Math.round(r.width), Math.round(r.height)] };
@@ -788,12 +944,12 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
   });
   await ap.tap('#btnInstall'); await ap.waitForTimeout(300);
   app.installPrompted = await ap.evaluate(() => window.__prompts === 1 && !window.RPD.Pwa.installEvent && !document.querySelector('.tipbubble:not([hidden])'));
-  await ap.tap('#btnMore'); await ap.waitForTimeout(200);
+  await ap.tap('#tbMore'); await ap.waitForTimeout(200);
   await ap.tap('#btnInstall'); await ap.waitForTimeout(300);
   app.installTip = await ap.evaluate(() => { const b = document.querySelector('.tipbubble'); if (!b || b.hidden) return null;
     const r = b.getBoundingClientRect(); return { text: b.textContent, inView: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight }; });
   await ap.screenshot({ path: pathM.join(ROOT, 'dist', 'm_app_install_tip.png') });
-  await ap.tap('#btnMore'); await ap.waitForTimeout(200);
+  await ap.tap('#tbMore'); await ap.waitForTimeout(200);
   await ap.tap('#btnFullscreen'); await ap.waitForTimeout(500);
   app.fullscreen = await ap.evaluate(() => ({ on: !!document.fullscreenElement, title: document.getElementById('btnFullscreen').title }));
   if (app.fullscreen.on) await ap.evaluate(() => document.exitFullscreen());

@@ -1379,6 +1379,99 @@ check('자세한 정보 시트 — 칸을 골랐을 때만 열리고, 선택을 
   MS.forceMobile = false;
 });
 
+/* ---------- 휴대폰 ② 하단 툴바 · 조합 가능 줄 · 보스 보상 (세션 66) ---------- */
+console.log('\n휴대폰 툴바 · 보스 보상');
+const MT = RPD.MobileToolbar;
+function readyRecipe() {
+  // 소환으로 나오는 재료만 쓰는 조합식 하나 — 재료를 창고에 넣어 완성 가능하게
+  RPD.FieldManager.init(); RPD.StorageManager.reset();
+  const r = RPD.RecipeData.list.find(x => x.materials.every(m => RPD.PokemonData.get(m).summon));
+  r.materials.forEach(m => RPD.StorageManager.add(RPD.UnitManager.create(m)));
+  RPD.bus.emit('field:changed', {});
+  return r;
+}
+
+check('[조합] 배지 = RecipeManager 완성 가능 개수 · 0 이면 배지 없고 흐리다', () => {
+  RPD.FieldManager.init(); RPD.StorageManager.reset(); RPD.bus.emit('field:changed', {});
+  if (RPD.RecipeManager.readyList().length !== 0) throw new Error('전제가 깨졌다 — 이미 완성 가능');
+  if (!nodes.mtabCraft.hidden) throw new Error('0 인데 배지가 보인다');
+  if (!nodes.tbCraft.classList.contains('is-dim')) throw new Error('0 인데 안 흐리다');
+  readyRecipe();
+  const n = RPD.RecipeManager.readyList().length;
+  if (n < 1 || nodes.mtabCraft.hidden || String(nodes.mtabCraft.textContent) !== String(n)) throw new Error('배지 ' + nodes.mtabCraft.textContent + ' ≠ ' + n);
+  if (nodes.tbCraft.classList.contains('is-dim')) throw new Error('완성 가능한데 흐리다');
+});
+
+check('"★ 조합 가능" 줄 — [조합] 과 같은 조합식(첫 항목) 이름 · 누르면 실제로 조합된다', () => {
+  readyRecipe();
+  const best = RPD.RecipeManager.readyList()[0];
+  const html = panelHtml('craftStrip');
+  if (html.indexOf('★ 조합 가능') < 0 || html.indexOf(best.resultName) < 0 || html.indexOf('data-strip="craft"') < 0) throw new Error('줄 내용: ' + html.slice(0, 120));
+  // 가짜 DOM 의 버튼에는 click() 이 없다 — 실제 브라우저처럼 등록된 click 을 부르게
+  nodes.btnCraft.click = () => (listeners.btnCraft.click || []).forEach(fn => fn({}));
+  let crafted = null;
+  const fn = (p) => { crafted = p; };
+  RPD.bus.on('recipe:crafted', fn);
+  const target = { closest: (q) => (q === '[data-strip="craft"]' ? {} : null) };
+  (listeners.craftStrip.click || []).forEach(f => f({ target }));
+  RPD.bus.off('recipe:crafted', fn);
+  if (!crafted) throw new Error('눌렀는데 조합이 안 됐다');
+  const got = crafted.resultId || (crafted.unit && crafted.unit.defId) || (crafted.recipe && crafted.recipe.id);
+  if (got && got !== best.resultId) throw new Error('다른 조합식이 조합됐다: ' + got + ' ≠ ' + best.resultId);
+});
+
+check('[더보기] 점 — 정예 진행 중 · 소환 금지 중에만 보인다', () => {
+  const E = RPD.EliteManager;
+  E.active = null; E.banUntil = 0; RPD.bus.emit('elite:changed', {});
+  if (!nodes.tbMoreDot.hidden) throw new Error('평소에도 점이 보인다');
+  E.banUntil = (RPD.GameManager.wave || 1) + 3; RPD.bus.emit('elite:changed', {});
+  if (nodes.tbMoreDot.hidden) throw new Error('소환 금지 중인데 점이 없다');
+  E.banUntil = 0; E.active = { id: 'x' }; RPD.bus.emit('elite:changed', {});
+  if (nodes.tbMoreDot.hidden) throw new Error('정예 진행 중인데 점이 없다');
+  E.active = null; RPD.bus.emit('elite:changed', {});
+});
+
+check('소환 금지 중 [소환] 이 "금지 NR" 로 잠긴다(골드가 안 바뀌어도 바로)', () => {
+  const E = RPD.EliteManager, GM = RPD.GameManager;
+  GM.gold = 9999; RPD.bus.emit('economy:gold', { gold: 9999, delta: 0 });
+  E.banUntil = (GM.wave || 1) + 3; RPD.bus.emit('elite:changed', {});
+  const left = E.banRoundsLeft();
+  if (!nodes.btnSummon.disabled) throw new Error('금지 중인데 소환 버튼이 열려 있다');
+  if (nodes.summonCost.textContent !== '금지 ' + left + 'R') throw new Error('문구: ' + nodes.summonCost.textContent);
+  E.banUntil = 0; RPD.bus.emit('elite:changed', {});
+  if (String(nodes.summonCost.textContent).indexOf('금지') >= 0) throw new Error('금지가 풀렸는데 문구가 남았다');
+});
+
+check('설명서 "보스 보상" — RewardManager.table 모든 항목 · 이후 되풀이 · 처치 골드(bossGoldPreview) · 다음 보스', () => {
+  const RM = RPD.RewardManager, EM = RPD.EconomyManager;
+  const html = RPD.HudPanels.renderBossHelp();
+  const keys = Object.keys(RM.table);
+  const miss = [];
+  keys.forEach(k => {
+    const every = (RPD.GameManager.mode.bossEvery || 10) < 5 ? 10 : RPD.GameManager.mode.bossEvery;
+    if (html.indexOf('data-boss-n="' + k + '"') < 0) miss.push(k + '번째 줄');
+    if (html.indexOf(RM.describe(RM.table[k])) < 0) miss.push(k + '번째 보상');
+    if (html.indexOf(RPD.Utils.formatNumber(EM.bossGoldPreview(k * every)) + 'G') < 0) miss.push(k + '번째 골드');
+  });
+  if (html.indexOf('data-boss-n="beyond"') < 0 || html.indexOf(RM.describe(RM.beyond)) < 0) miss.push('이후 되풀이');
+  if (html.indexOf('다음 보스') < 0) miss.push('다음 보스');
+  if (miss.length) throw new Error('빠진 것: ' + miss.join(', '));
+});
+
+check('보스 보상 지급 — 휴대폰은 필드 위 카드 대신 툴바 위 알림 줄 · PC 는 예전 카드', () => {
+  MS.forceMobile = true;
+  nodes.rewardPop.hidden = true;
+  const entry = { wave: 20, items: [{ kind: 'gold', amount: 800, paid: true }, { kind: 'ticket', count: 3 }] };
+  RPD.bus.emit('reward:granted', entry);
+  if (!nodes.rewardPop.hidden) throw new Error('휴대폰인데 필드 위 보상 카드가 떴다');
+  const strip = panelHtml('craftStrip');
+  if (strip.indexOf('20R 보스 처치') < 0 || strip.indexOf('소환권 3') < 0) throw new Error('알림 줄: ' + strip.slice(0, 120));
+  MS.forceMobile = false;
+  RPD.bus.emit('reward:granted', entry);
+  if (nodes.rewardPop.hidden) throw new Error('PC 인데 보상 카드가 안 떴다');
+  nodes.rewardPop.hidden = true;
+});
+
 console.log(`\n────────────────────────────`);
 console.log(failures === 0 ? '부팅 경로 이상 없음' : `부팅 문제 ${failures}건`);
 process.exit(failures === 0 ? 0 : 1);

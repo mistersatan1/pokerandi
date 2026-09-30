@@ -681,6 +681,7 @@
     RPD.bus.on('economy:gold', refreshActionButtons);
     RPD.bus.on('field:changed', refreshActionButtons);
     RPD.bus.on('field:select', refreshActionButtons);
+    RPD.bus.on('elite:changed', refreshActionButtons);   // 소환 금지 시작 · 남은 라운드 — 골드가 안 바뀌어도 [소환] 이 "금지 NR" 로 바로(세션 66)
     RPD.bus.on('game:wave', renderSummonPanel);
 
     RPD.bus.on('wave:phase', renderWaveStatus);

@@ -304,5 +304,25 @@
     return best;
   };
 
+  /* ---------- 판 이어하기(RunSave · 세션 70) ----------
+   * 개체는 이것만 남긴다 — uid · 실효 스탯 · 스킬 상태는 create 로 다시 만들고 recompute 가 채운다.
+   * targetChoice(칸에서 직접 고른 공격 대상)도 남긴다 — 사람이 고른 것이라 이어할 때 잃으면 안 된다. */
+  UnitManager.serialize = function (u) {
+    var o = { defId: u.defId, level: u.level || 0, investedGold: u.investedGold || 0, kills: u.kills || 0,
+              totalDamage: u.totalDamage || 0, goldEarned: u.goldEarned || 0 };
+    if (u.targetChoice) o.targetChoice = u.targetChoice;
+    return o;
+  };
+  UnitManager.revive = function (o) {
+    var u = o && this.create(o.defId);
+    if (!u) return null;
+    u.level = o.level || 0; u.investedGold = o.investedGold || 0; u.kills = o.kills || 0;
+    u.totalDamage = o.totalDamage || 0; u.goldEarned = o.goldEarned || 0;
+    if (o.targetChoice) u.targetChoice = o.targetChoice;
+    applyTargeting(u);
+    this.recompute(u, 0);
+    return u;
+  };
+
   RPD.UnitManager = UnitManager;
 })(typeof window !== 'undefined' ? window : globalThis);

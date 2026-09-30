@@ -196,5 +196,9 @@
     return { ok: true, slot: slot, cost: slot.cost };
   };
 
+  /* ---------- 판 이어하기(RunSave · 세션 70) — 라운드 시작 때의 상태만 ---------- */
+  EconomyManager.saveState = function () { return { summonCount: this.summonCount, totalEarned: this.totalEarned }; };
+  EconomyManager.loadState = function (s) { this.summonCount = s.summonCount || 0; this.totalEarned = s.totalEarned || 0; };
+
   RPD.EconomyManager = EconomyManager;
 })(typeof window !== 'undefined' ? window : globalThis);

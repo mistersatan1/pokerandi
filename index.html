@@ -140,6 +140,15 @@
         <p class="startpanel__hint" id="boardHint">칸마다 덮는 경로 길이가 다릅니다. 칸을 클릭해 확인하고 배치하세요.</p>
         <p class="trainerinfo" id="trainerInfo" hidden></p>
         <p class="startpanel__hint startpanel__hint--help">처음이라면 오른쪽 위 <b>?</b> (또는 <kbd>H</kbd>) — 단축키 · 조각 상점 설명</p>
+        <!-- 판 이어하기(세션 70) — 저장된 판이 있으면. 자동으로 이어하지 않는다 -->
+        <div class="resumecard" id="resumeCard" hidden>
+          <span class="resumecard__kicker">이어하기</span>
+          <span class="resumecard__info" id="resumeInfo"></span>
+          <span class="resumecard__acts">
+            <button type="button" class="btn btn--primary resumecard__go" id="btnResume">이어하기</button>
+            <button type="button" class="btn btn--ghost" id="btnNewRun">새 판</button>
+          </span>
+        </div>
         <button type="button" class="bigbtn bigbtn--gold" id="btnStart">
           <span class="bigbtn__name">게임 시작</span>
           <span class="bigbtn__sub" id="startMode">노멀</span>
@@ -465,6 +474,22 @@
 
 </div>
 
+<!-- 판 이어하기(세션 70) — 새 판을 시작하면 저장된 판이 사라진다는 확인 · 한 줄 안내(버전 불일치 · 다른 탭) -->
+<div class="runconfirm" id="runConfirm" hidden role="dialog" aria-modal="true" aria-labelledby="runConfirmTitle">
+  <div class="runconfirm__card pane">
+    <h2 class="pane__title" id="runConfirmTitle">저장된 판이 사라집니다</h2>
+    <p class="runconfirm__text" id="runConfirmText"></p>
+    <div class="runconfirm__acts">
+      <button type="button" class="btn btn--danger" id="btnConfirmNew">새 판 시작</button>
+      <button type="button" class="btn btn--ghost" id="btnConfirmCancel">취소</button>
+    </div>
+  </div>
+</div>
+<div class="runnotice" id="runNotice" hidden role="status">
+  <span class="runnotice__text" id="runNoticeText"></span>
+  <button type="button" class="btn btn--ghost runnotice__ok" id="btnNoticeOk">확인</button>
+</div>
+
 <!-- 앱을 벗어났다 돌아오면(세션 68) — 저절로 이어가지 않는다. 누르면 계속 -->
 <button type="button" class="awaypause" id="awayOverlay" hidden aria-label="일시정지됨 — 눌러서 계속">
   <span class="awaypause__ico">⏸</span>
@@ -528,6 +553,7 @@
 <script src="js/systems/SaveManager.js"></script>
 <script src="js/systems/ProgressManager.js"></script>
 <script src="js/systems/SpellManager.js"></script>
+<script src="js/systems/RunSave.js"></script>
 
 <script src="js/render/SpriteFactory.js"></script>
 <script src="js/render/FramePacer.js"></script>
@@ -546,6 +572,7 @@
 <script src="js/ui/MobileSheet.js"></script>
 <script src="js/ui/MobileToolbar.js"></script>
 <script src="js/ui/Convenience.js"></script>
+<script src="js/ui/ResumeUI.js"></script>
 <script src="js/ui/GoldShopUI.js"></script>
 <script src="js/ui/EliteUI.js"></script>
 <script src="js/ui/SpellUI.js"></script>

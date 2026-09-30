@@ -43,6 +43,7 @@ function boot() {
     vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), sandbox, { filename: f });
   }
   const R = sandbox.RPD;
+  R.Config.autosave = false;   // 판 이어하기 자동 저장 끔(세션 70) — 봇 측정이 저장 기능에 안 흔들리게(RunSave.init 도 안 부른다)
   R.EconomyManager.init(); R.GoldShopManager.init(); R.EliteManager.init(); R.StatsManager.init(); R.UnitManager.init();
   R.SummonManager.init(); R.CombatManager.init(); R.RecipeManager.init();
   R.ShardManager.init(); R.BossManager.init(); R.SaveManager.init();

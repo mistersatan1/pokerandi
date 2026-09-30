@@ -60,5 +60,18 @@
     };
   };
 
+  /* ---------- 판 이어하기(RunSave · 세션 70) — 라운드 시작 때의 상태만 ---------- */
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  var STAT_KEYS = ['kills', 'leaks', 'bossKills', 'goldEarned', 'highestWave', 'damageDealt', 'killsByType'];
+  StatsManager.saveState = function () {
+    var self = this, o = {};
+    STAT_KEYS.forEach(function (k) { o[k] = clone(self[k]); });
+    return o;
+  };
+  StatsManager.loadState = function (s) {
+    var self = this;
+    STAT_KEYS.forEach(function (k) { if (s[k] != null) self[k] = clone(s[k]); });
+  };
+
   RPD.StatsManager = StatsManager;
 })(typeof window !== 'undefined' ? window : globalThis);

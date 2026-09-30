@@ -110,5 +110,9 @@
     return { transcendShards: this.transcendShards, transcendUsed: this.transcendUsed };
   };
 
+  /* ---------- 판 이어하기(RunSave · 세션 70) — 라운드 시작 때의 상태만 ---------- */
+  SpellManager.saveState = function () { return { transcendShards: this.transcendShards, transcendUsed: this.transcendUsed }; };
+  SpellManager.loadState = function (s) { this.transcendShards = s.transcendShards || 0; this.transcendUsed = !!s.transcendUsed; };
+
   RPD.SpellManager = SpellManager;
 })(typeof window !== 'undefined' ? window : globalThis);

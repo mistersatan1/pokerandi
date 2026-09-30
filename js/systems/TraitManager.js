@@ -192,5 +192,10 @@
     RPD.bus.emit('trait:proc', { unit: unit, trait: trait, info: info || {} });
   };
 
+  /* ---------- 판 이어하기(RunSave · 세션 70) — 라운드 시작 때의 상태만 ---------- */
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  TraitManager.saveState = function () { return { procs: clone(this.procs) }; };
+  TraitManager.loadState = function (s) { this.procs = clone(s.procs || {}); };
+
   RPD.TraitManager = TraitManager;
 })(typeof window !== 'undefined' ? window : globalThis);

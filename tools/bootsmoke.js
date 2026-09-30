@@ -1750,6 +1750,240 @@ check('앱을 벗어나면(visibilitychange hidden · pagehide) 일시정지 + �
   MS.forceMobile = false;
 });
 
+/* ---------- 판 이어하기(세션 70) ---------- */
+console.log('\n판 이어하기 — 자동 저장 · 복원');
+const RS = RPD.RunSave, RUI = RPD.ResumeUI;
+const LS = sandbox.localStorage;
+function strip(d) { const c = JSON.parse(JSON.stringify(d)); delete c.savedAt; return JSON.stringify(c); }
+/* 부자 판 하나 — 몇 라운드 돌리고 창고 · 상점 · 금지 · 소환권 · 조각 · 발견 · 공격 대상까지 채운 뒤, 라운드 시작 순간에 저장된 것 */
+function richRun(opts) {
+  opts = opts || {};
+  MS.forceMobile = false;
+  RPD.Config.autosave = true; RS.blocked = false;
+  RPD.Game.restart();
+  RPD.Game.startRun('NORMAL', 'HARD');
+  const F = RPD.FieldManager, GM = RPD.GameManager;
+  const open = F.slots.filter(s => s.unlocked && !s.blocked);
+  ['charizard', 'pikachu', 'blastoise'].forEach((id, i) => { if (!F.get(open[i].index).unit) F.place(open[i].index, RPD.UnitManager.create(id)); });
+  RPD.bus.emit('field:changed', {});
+  GM.life = 999;
+  tick(40);                                   // 몇 라운드
+  const lockedSlot = F.slots.find(s => !s.unlocked && !s.blocked);
+  if (lockedSlot) F.unlock(lockedSlot.index);
+  const u = F.slots.find(s => s.unit).unit; u.level = 3; u.targetChoice = 'BOSS'; u.kills = 17; u.totalDamage = 12345;
+  RPD.StorageManager.capacity += RPD.Config.storageStep;
+  RPD.StorageManager.add(RPD.UnitManager.create('bulbasaur'));
+  RPD.StorageManager.add(RPD.UnitManager.create('gengar'));
+  RPD.SummonManager.tickets = 4; RPD.ShardManager.shards = 23;
+  RPD.GoldShopManager.typeLv = { FIRE: 2 }; RPD.GoldShopManager.tierLv = { T1: 1 };
+  RPD.EliteManager.banUntil = GM.wave + 3; RPD.EliteManager.lastRound = GM.wave;
+  RPD.RecipeManager.discovered = { ivysaur: true };
+  RPD.SpellManager.transcendShards = 1;
+  GM.gold = 1420; GM.targetAll = 'STRONG';
+  if (opts.elite) {
+    RPD.EliteManager.banUntil = 0; RPD.EliteManager.lastRound = 0; GM.gold = 5000;
+    const r = RPD.EliteManager.summon(1);
+    if (!r.ok) throw new Error('정예 소환 실패: ' + r.reason);
+  }
+  RPD.UnitManager.recomputeAll();
+  RPD.bus.emit('wave:started', RPD.WaveManager.plan);   // 라운드 시작 순간 = 저장 시점
+  const r = RS.read();
+  if (!r.ok) throw new Error('저장이 안 됐다: ' + r.reason);
+  return r.data;
+}
+function fingerprint() {
+  const F = RPD.FieldManager, S = RPD.StorageManager, GM = RPD.GameManager;
+  const u = x => x.defId + '/' + (x.level || 0);
+  return JSON.stringify({
+    field: F.slots.filter(s => s.unit).map(s => s.index + ':' + u(s.unit)), unlocked: F.slots.filter(s => s.unlocked).length,
+    storage: S.units.map(u), cap: S.capacity, gold: GM.gold, life: GM.life, wave: GM.wave, mode: GM.mode.id + ':' + GM.mode.difficulty,
+    tickets: RPD.SummonManager.tickets, shards: RPD.ShardManager.shards, shop: [RPD.GoldShopManager.typeLv, RPD.GoldShopManager.tierLv],
+    ban: RPD.EliteManager.banUntil
+  });
+}
+
+check('저장 → 새 판 → 복원 → 다시 저장한 JSON 이 처음과 같다(직렬화 왕복)', () => {
+  const d = richRun();
+  RPD.Game.resetAll('NORMAL', 'EASY');          // 전혀 다른 새 판
+  RS.restore(d);
+  const again = RS.snapshot();
+  if (strip(again) !== strip(d)) {
+    const a = JSON.parse(strip(d)).state, b = JSON.parse(strip(again)).state;
+    const diff = Object.keys(a).filter(k => JSON.stringify(a[k]) !== JSON.stringify(b[k]));
+    throw new Error('달라진 매니저: ' + diff.join(', ') + ' — ' + diff.map(k => JSON.stringify(a[k]).slice(0, 120) + ' ≠ ' + JSON.stringify(b[k]).slice(0, 120)).join(' | '));
+  }
+});
+
+check('복원 뒤 필드 · 창고 종류 · 강화 레벨 · 골드 · 라이프 · 소환권 · 조각 · 골드 상점 · 정예 금지 라운드 · 모드가 같다', () => {
+  const d = richRun();
+  const before = fingerprint();
+  RPD.Game.resetAll('BOSS_RUSH');
+  RS.restore(d);
+  const after = fingerprint();
+  if (after !== before) throw new Error('\n    전 ' + before + '\n    후 ' + after);
+  const u = RPD.FieldManager.slots.find(s => s.unit && s.unit.level === 3).unit;
+  if (u.targetChoice !== 'BOSS' || u.kills !== 17 || u.totalDamage !== 12345 || !(u.dps > 0)) throw new Error('개체 필드: ' + JSON.stringify(RPD.UnitManager.serialize(u)) + ' dps ' + u.dps);
+  if (RPD.GameManager.targetAll !== 'STRONG' || !RPD.RecipeManager.discovered.ivysaur) throw new Error('전체 공격 대상 · 발견');
+});
+
+check('복원 → "눌러서 계속" 전에는 멈춰 있고, 누르면 그 라운드가 시작 효과 없이 열린다(무료 지급 · 특성 골드 · 보호막 한 번만)', () => {
+  const d = richRun();
+  RPD.Game.resetAll('NORMAL', 'NORMAL');
+  RS.restore(d);
+  const GM = RPD.GameManager, count = () => RPD.FieldManager.getUnits().length + RPD.StorageManager.units.length;
+  const n0 = count(), g0 = GM.gold, sh0 = GM.shield, t0 = RPD.SummonManager.tickets;
+  if (!RPD.Loop.paused || GM.state !== RPD.GameState.PAUSED) throw new Error('복원 직후 멈춰 있지 않다');
+  if (RPD.WaveManager.phase !== 'IDLE') throw new Error('누르기 전에 라운드가 시작됐다: ' + RPD.WaveManager.phase);
+  let traitGold = 0; const off = p => { if (p && p.delta > 0) traitGold += p.delta; };
+  RPD.bus.on('economy:gold', off);
+  RS.begin();
+  RPD.bus.off('economy:gold', off);
+  if (RPD.WaveManager.phase !== 'SPAWNING' || RPD.WaveManager.wave !== d.summary.wave) throw new Error('라운드가 안 열렸다 ' + RPD.WaveManager.phase + ' ' + RPD.WaveManager.wave);
+  if (GM.state !== RPD.GameState.RUNNING || RPD.Loop.paused) throw new Error('진행 중이 아니다');
+  if (count() !== n0) throw new Error('라운드 무료 지급이 또 나갔다 ' + n0 + ' → ' + count());
+  if (GM.gold !== g0 || traitGold) throw new Error('골드가 또 들어왔다 ' + g0 + ' → ' + GM.gold);
+  if (GM.shield !== sh0 || RPD.SummonManager.tickets !== t0) throw new Error('보호막 · 소환권');
+  if (GM.wave !== d.summary.wave) throw new Error('라운드 ' + GM.wave);
+});
+
+check('⏸ 로 풀어도 저장된 라운드가 열린다', () => {
+  const d = richRun();
+  RPD.Game.resetAll('NORMAL', 'NORMAL');
+  RS.restore(d);
+  RPD.Loop.setPaused(false);
+  if (RPD.WaveManager.phase !== 'SPAWNING' || RS.pending) throw new Error('⏸ 로는 안 열렸다');
+});
+
+check('진행 중인 정예가 있는 저장 — 이어하면 입구에서 다시 나오고 참가비가 다시 안 빠진다', () => {
+  const d = richRun({ elite: true });
+  if (!d.state.EliteManager.active) throw new Error('저장에 정예가 없다');
+  RPD.Game.resetAll('NORMAL', 'NORMAL');
+  RS.restore(d);
+  const g0 = RPD.GameManager.gold;
+  if (RPD.EliteManager.active) throw new Error('누르기 전에 정예가 나왔다');
+  RS.begin();
+  const e = RPD.EliteManager.active;
+  if (!e || e.eliteTier !== d.state.EliteManager.active.tier || e.eliteFee !== d.state.EliteManager.active.fee) throw new Error('정예가 안 나왔다');
+  if (RPD.EnemyManager.enemies.indexOf(e) < 0 || e.distance !== 0) throw new Error('입구가 아니다(distance ' + e.distance + ')');
+  if (RPD.GameManager.gold !== g0) throw new Error('참가비가 또 빠졌다 ' + g0 + ' → ' + RPD.GameManager.gold);
+  if (RPD.EliteManager.lastRound !== d.state.EliteManager.lastRound) throw new Error('한 라운드 한 번 기록이 바뀌었다');
+});
+
+check('게임 오버 · 클리어 · [처음부터] 뒤에는 저장이 없다', () => {
+  richRun(); RPD.bus.emit('game:over', { wave: 5 });
+  if (LS.getItem(RS.KEY) != null) throw new Error('게임 오버 뒤에 남았다');
+  richRun(); RPD.bus.emit('game:victory', { wave: 70 });
+  if (LS.getItem(RS.KEY) != null) throw new Error('클리어 뒤에 남았다');
+  richRun(); (listeners.btnRestart.click || []).forEach(fn => fn({}));
+  if (LS.getItem(RS.KEY) != null) throw new Error('[처음부터] 뒤에 남았다');
+});
+
+check('맞지 않는 저장(없는 포켓몬 · 없는 모드) · 깨진 JSON · 저장소 사용 불가 — 오류 없이 새 판, 버전 불일치는 한 번 안내', () => {
+  const d = richRun();
+  RPD.Game.restart();
+  const errs = [], real = console.error; console.error = (...a) => errs.push(a.join(' '));
+  try {
+    const bad = JSON.parse(JSON.stringify(d)); bad.state.StorageManager.units.push({ defId: 'agumon_x', level: 0 });
+    LS.setItem(RS.KEY, JSON.stringify(bad));
+    nodes.runNotice.hidden = true;
+    RUI.render();
+    if (nodes.runNotice.hidden || String(nodes.runNoticeText.textContent).indexOf('현재 게임 버전과 맞지 않아') < 0) throw new Error('버전 불일치 안내가 없다');
+    if (LS.getItem(RS.KEY) != null || !nodes.resumeCard.hidden) throw new Error('맞지 않는 저장이 남았거나 카드가 보인다');
+    nodes.runNotice.hidden = true; RUI.render();
+    if (!nodes.runNotice.hidden) throw new Error('안내가 또 떴다(한 번만)');
+    const bm = JSON.parse(JSON.stringify(d)); bm.state.GameManager.mode = 'NO_SUCH_MODE'; LS.setItem(RS.KEY, JSON.stringify(bm));
+    if (RS.read().reason !== 'VERSION') throw new Error('없는 모드를 못 걸렀다');
+    LS.setItem(RS.KEY, '{"schema":1,"state":');
+    if (RS.read().reason !== 'BROKEN' || RUI.resume()) throw new Error('깨진 JSON');
+    const realLS = sandbox.localStorage;
+    Object.defineProperty(sandbox, 'localStorage', { configurable: true, get() { throw new Error('SecurityError'); } });
+    try {
+      if (RS.read().reason !== 'STORAGE' || RS.save() !== false || RUI.resume()) throw new Error('저장소 사용 불가');
+      RUI.render(); RS.clear();
+      RPD.Game.startRun('NORMAL', 'NORMAL'); tick(3);
+    } finally { Object.defineProperty(sandbox, 'localStorage', { configurable: true, writable: true, value: realLS }); }
+    if (RPD.GameManager.state !== RPD.GameState.RUNNING) throw new Error('새 판이 안 돈다');
+  } finally { console.error = real; }
+  if (errs.length) throw new Error('오류: ' + errs[0].slice(0, 160));
+});
+
+check('판 저장을 지우거나 망가뜨려도 진행 기록(도감 · 칭호 · 발견한 주문)은 그대로 — 키가 다르다', () => {
+  const SM = RPD.SaveManager;
+  SM.data.pokedex.charizard = { seen: true, best: 1 };
+  SM.data.spells.articuno_spell = 12345; SM.data.clearsBy['NORMAL:NORMAL'] = 2;
+  SM.save();
+  const progress = LS.getItem(RPD.SAVE_KEY);
+  if (RS.KEY === RPD.SAVE_KEY) throw new Error('같은 키');
+  richRun();
+  LS.setItem(RS.KEY, 'garbage{{'); RS.read(); RS.clear(); RUI.render();
+  if (LS.getItem(RPD.SAVE_KEY) !== progress) throw new Error('진행 기록 문자열이 바뀌었다');
+  SM.load();
+  if (!SM.data.pokedex.charizard || SM.data.spells.articuno_spell !== 12345 || SM.data.clearsBy['NORMAL:NORMAL'] !== 2) throw new Error('진행 기록을 다시 읽으니 달라졌다');
+});
+
+check('이어하기 카드 — 시작 화면에 저장된 모드 · 라운드 · 라이프 · 골드 · 몇 분 전, [이어하기] 가 되살린다', () => {
+  const d = richRun();
+  RPD.Game.resetAll('NORMAL', 'NORMAL');   // 시작 화면(READY) — 저장은 남아 있다(새로고침 흉내)
+  LS.setItem(RS.KEY, JSON.stringify(d));
+  RUI.render();
+  const t = String(nodes.resumeInfo.textContent);
+  const want = [d.summary.label, d.summary.wave + '라운드', '라이프 ' + d.summary.life, '골드 1,420', '방금'];
+  const miss = want.filter(w => t.indexOf(w) < 0);
+  if (nodes.resumeCard.hidden || miss.length) throw new Error('카드: ' + t + ' / 빠짐 ' + miss.join(','));
+  if (RUI.ago(Date.now() - 3 * 60000) !== '3분 전' || RUI.ago(Date.now() - 2 * 3600000) !== '2시간 전') throw new Error('몇 분 전');
+  (listeners.btnResume.click || []).forEach(fn => fn({}));
+  if (RPD.GameManager.wave !== d.summary.wave || !RS.pending || nodes.awayOverlay.hidden) throw new Error('[이어하기] 가 안 되살렸거나 "눌러서 계속"이 없다');
+  if (!nodes.resumeCard.hidden) throw new Error('이어한 뒤에도 카드가 보인다');
+  (listeners.awayOverlay.click || []).forEach(fn => fn({}));
+  if (RPD.WaveManager.phase !== 'SPAWNING') throw new Error('"눌러서 계속"으로 라운드가 안 열렸다');
+});
+
+check('저장이 있는데 [게임 시작] · [새 판] — "저장된 판이 사라집니다" 확인 · 취소하면 그대로 · 새 판 시작이면 지운다', () => {
+  const d = richRun();
+  RPD.Game.resetAll('NORMAL', 'NORMAL'); LS.setItem(RS.KEY, JSON.stringify(d)); RUI.render();
+  nodes.runConfirm.hidden = true;
+  const cap = listeners.btnStart.click[listeners.btnStart.click.length - 1];   // ResumeUI 가 먼저 받는 것
+  let stopped = false;
+  cap({ stopImmediatePropagation() { stopped = true; }, preventDefault() {} });
+  if (nodes.runConfirm.hidden || !stopped) throw new Error('[게임 시작] 에 확인창이 없다');
+  (listeners.btnConfirmCancel.click || []).forEach(fn => fn({}));
+  if (!nodes.runConfirm.hidden || LS.getItem(RS.KEY) == null) throw new Error('취소했는데 저장이 사라졌다');
+  (listeners.btnNewRun.click || []).forEach(fn => fn({}));
+  if (nodes.runConfirm.hidden) throw new Error('[새 판] 에 확인창이 없다');
+  (listeners.btnConfirmNew.click || []).forEach(fn => fn({}));
+  if (LS.getItem(RS.KEY) != null || !nodes.resumeCard.hidden) throw new Error('새 판 시작인데 저장이 남았다');
+});
+
+check('다른 탭이 같은 저장에 쓰면(storage 이벤트) 이 탭은 저장을 멈추고 알린다', () => {
+  richRun();
+  nodes.runNotice.hidden = true;
+  (listeners.__window.storage || []).forEach(fn => fn({ key: RS.KEY, newValue: '{}' }));
+  if (!RS.blocked || nodes.runNotice.hidden || String(nodes.runNoticeText.textContent).indexOf('다른 탭') < 0) throw new Error('못 알아챘다');
+  RS.clear();
+  RPD.bus.emit('wave:started', RPD.WaveManager.plan);
+  if (LS.getItem(RS.KEY) != null) throw new Error('멈췄는데 또 저장했다');
+  RS.blocked = false; nodes.runNotice.hidden = true;
+});
+
+check('자동 저장을 끄면(RPD.Config.autosave = false — 자동 플레이 · 검사) 저장이 안 생긴다', () => {
+  RS.clear(); RPD.Config.autosave = false;
+  try {
+    RPD.Game.restart(); RPD.Game.startRun('NORMAL', 'NORMAL'); tick(20);
+    RPD.bus.emit('wave:started', RPD.WaveManager.plan);
+    if (LS.getItem(RS.KEY) != null) throw new Error('꺼졌는데 저장했다');
+  } finally { RPD.Config.autosave = true; }
+  const ap = fs.readFileSync(path.join(ROOT, 'tools/autoplay.js'), 'utf8');
+  if (!/Config\.autosave\s*=\s*false/.test(ap)) throw new Error('tools/autoplay.js 가 자동 저장을 끄지 않는다');
+});
+
+check('판 상태를 가진 매니저(RPD 의 *Manager 중 reset/init 있는 것)는 saveState · loadState 가 있거나 NOT_SAVED 에 이유가 있다', () => {
+  const miss = Object.keys(RPD).filter(k => /Manager$/.test(k) && RPD[k] && (typeof RPD[k].reset === 'function' || typeof RPD[k].init === 'function'))
+    .filter(k => !(typeof RPD[k].saveState === 'function' && typeof RPD[k].loadState === 'function') && !(RS.NOT_SAVED[k] && RS.NOT_SAVED[k].length > 5));
+  if (miss.length) throw new Error('저장도 이유도 없다: ' + miss.join(', '));
+  const notListed = Object.keys(RPD).filter(k => /Manager$/.test(k) && typeof (RPD[k] || {}).saveState === 'function' && RS.ORDER.indexOf(k) < 0);
+  if (notListed.length) throw new Error('saveState 가 있는데 RunSave.ORDER 에 없다: ' + notListed.join(', '));
+});
+
 console.log(`\n────────────────────────────`);
 console.log(failures === 0 ? '부팅 경로 이상 없음' : `부팅 문제 ${failures}건`);
 process.exit(failures === 0 ? 0 : 1);

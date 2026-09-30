@@ -1,5 +1,70 @@
 # v2-redesign (진행 중)
 
+## 세션 70 — 판 이어하기(자동 저장)
+
+**왜**: 휴대폰은 앱을 바꾸거나 전화가 오면 브라우저가 뒤로 간 탭을 닫는다 — 15~20분짜리 판이 처음부터였다(사용자 요청).
+먼저 찾은 것(grep): 판 저장 · 이어하기는 없었다. 있는 것은 진행 기록 SaveManager(`RPD.SAVE_KEY` — 도감 · 칭호 · 기록 · 발견한 주문 · 설정)와
+자리 비움 덮개(세션 68 `Convenience`) — 덮개는 "눌러서 계속"에 다시 썼다.
+
+**무엇을**
+- `js/systems/RunSave.js`(새) — **라운드가 시작될 때마다**(`wave:started` — 라운드 무료 지급 · 특성 골드 · 보호막 채우기가 다 끝난 직후) 한 장.
+  키는 `RPD.SAVE_KEY + ':run'` — 진행 기록과 섞지 않는다. 게임 오버 · 클리어 · [처음부터] 에 지운다.
+  라운드 도중의 적 · 투사체 · 쿨다운 · 버프는 안 남긴다 → 이어하면 **저장된 라운드를 처음부터**.
+- 매니저마다 `saveState()` / `loadState(s)` — GameManager(모드 · 난이도 · 라운드 · 골드 · 라이프 · 보호막 · 경과) · FieldManager(해금 칸 · 칸별 유닛) ·
+  StorageManager(유닛 · 용량) · SummonManager(count · tickets · sinceTier · lastTier) · EconomyManager · ShardManager · RewardManager(history) ·
+  SpellManager(초월 조각 · 사용) · StatsManager(전부) · GoldShopManager(타입 · 등급 레벨) · EliteManager(금지 · 이번 라운드 · 기준 라이프 · 진행 중 정예의 등급 · 낸 참가비).
+  유닛은 `UnitManager.serialize/revive` — defId · level · investedGold · kills · totalDamage · goldEarned 만 남기고 create + recompute 로 다시 만든다.
+- 저장 안 하는 매니저는 `RunSave.NOT_SAVED` 에 이유(Wave · Enemy · Combat · Boss · Skill · Synergy · Unit · Undo · Save · Progress · Audio · UI).
+- 복원: `RPD.Game.resetAll(모드, 난이도, { restore:true })` — 새 판 흐름 그대로, **칭호 시작 보너스만 건너뛴다**(값은 저장본으로 덮는다).
+  GameManager → Field(해금 → 배치) → Storage → 나머지 → recomputeAll → RecipeManager.refresh → field:changed · storage:changed · economy:gold · stats.
+  그다음 멈춘 채 "일시정지됨 — 눌러서 계속" — 누르면(또는 ⏸) `WaveManager.resumeRound`: **라운드 시작 효과 없이 스폰 계획만** 새로 짠다.
+  - `game:wave` 를 듣는 곳을 다 봤다: TraitManager(특성 골드 — 두 번 나가면 안 됨) · StatsManager(최고 라운드) · RecipeManager · EliteManager · UI · 소리.
+    그래서 복원은 `GameManager.wave` 값만 넣고 `game:wave` 를 내지 않는다. 보호막 · 라운드 무료 지급 · 등급 해금 알림도 다시 안 낸다.
+    보스 보상은 보스 처치 때(라운드 시작이 아니다)라 두 번 나갈 길이 없다.
+  - 진행 중이던 정예는 라운드가 열릴 때 입구(distance 0)에서 새로 — 참가비 재청구 없음 · "이번 라운드 1회" 기록 그대로.
+- 맞지 않는 저장(없는 모드 · 난이도 · 포켓몬 · 칸 · 정예 등급 · schema)은 통째로 버리고 시작 화면에 한 번 "저장된 판이 현재 게임 버전과 맞지 않아 이어할 수 없어요".
+  깨진 JSON · localStorage 사용 불가는 조용히 새 판.
+- 화면(`js/ui/ResumeUI.js` 새 · `index.html` · `css/game.css`): 시작 화면 [게임 시작] 위 이어하기 카드
+  "일반 · 보통 · 34라운드 · 라이프 60 · 골드 4,060 · 방금" [이어하기] [새 판] — 자동으로 이어하지 않는다.
+  저장이 있는데 [게임 시작] · [새 판] → "저장된 판이 사라집니다" 확인창(취소하면 그대로).
+  다른 탭이 같은 키에 쓰면(storage 이벤트) 이 탭은 저장을 멈추고 "다른 탭에서 같은 판이 진행 중이에요".
+- `RPD.Config.autosave`(기본 true) — `tools/autoplay.js` 는 false(RunSave.init 도 안 부른다). 봇 측정은 저장 기능과 무관.
+
+**요청 밖 변경 · 추가 — 짚어 둔다**
+1. 개체의 **직접 고른 공격 대상(targetChoice)** · 판 전체 공격 대상(`GameManager.targetAll`)도 저장한다 — 사람이 고른 것이라 이어할 때 잃으면 안 된다고 봤다.
+2. **RecipeManager.discovered**(이 판에서 처음 만든 결과물 — "새 조합 발견!" · 조합식 줄 표시)와 **TraitManager.procs**(특성 발동 횟수)도 저장한다 — 판 상태라서.
+3. 휴대폰 시작 패널이 오른쪽으로 밀려 [게임 시작] 이 잘리던 버그(세션 51 부터): `transform: scale(.85)` 가 가운데 정렬 `translateX(-50%)` 를 덮었다. 둘 다 쓰게 고쳤다.
+4. 카드가 판 도중에 저장을 읽어 검사하면, 맞지 않는 저장본을 **떠나는 페이지**(새로고침 → 자리 비움 일시정지 → game:state)에서 지우고 안내는 못 보는 일이 있었다(캡처에서 찾음).
+   시작 화면일 때만 읽게 고쳤다.
+
+**알아 둘 것**
+- 한 라운드 안에서 망하면 앱을 닫았다 열어 그 라운드를 다시 할 수 있다(세이브 되돌리기). 요청대로 "최대 한 라운드분"의 교환이다 —
+  번 골드는 안 남으니 골드 파밍은 안 되지만, 라운드 재도전은 된다. 막으려면 라운드 도중 상태를 저장하거나 이어하기에 벌칙을 붙여야 한다(결정 대기).
+- 저장 시점에 앞 라운드에서 넘어온 적(겹쳐 들어온 적 · 30초 넘긴 라운드)은 이어하면 사라진다(라운드 도중 적은 안 남긴다는 규칙 그대로).
+
+**측정 — Playwright(갤럭시 S24 세로 · 게임 로직을 34라운드까지 348초 돌림 · 중간에 소환 · 골드 상점) → 새로고침 → [이어하기]**
+
+| | 새로고침 전(34R 저장 시점) | 이어한 뒤 |
+|---|---|---|
+| 라운드 | 34 | 34 |
+| 골드 · 라이프 | 4,060 · 60 | 4,060 · 60 |
+| 필드 · 창고 유닛 | 20 · 14 (종 · 레벨 34마리 같음) | 20 · 14 |
+| 소환권 · 조각 | 8 · 760 | 8 · 760 |
+| 골드 상점 | 에스퍼 10 | 에스퍼 10 |
+| 정예 금지 라운드 · 모드 | 0 · 일반 · 보통 | 0 · 일반 · 보통 |
+
+"눌러서 계속" 뒤 34라운드 SPAWNING · RUNNING. 이 판은 봇이 강화 · 정예를 안 써서 레벨 · 금지는 0 이다 — 그 값은 bootsmoke 가 따로 본다(레벨 3 · 금지 · 등급 상점 · 공격 대상).
+
+**검사**
+- bootsmoke "판 이어하기"(13): 저장 → 새 판 → 복원 → 다시 저장 JSON 이 같다(왕복) / 필드 · 창고 · 레벨 · 골드 · 라이프 · 소환권 · 조각 · 상점 · 금지 · 모드 같음 /
+  누르기 전 멈춤 · 누르면 시작 효과 없이(유닛 수 · 골드 · 보호막 · 소환권 그대로) / ⏸ 로도 열림 / 정예가 입구에서 다시 · 참가비 안 빠짐 /
+  게임 오버 · 클리어 · [처음부터] 뒤 저장 없음 / 없는 포켓몬 · 없는 모드 · 깨진 JSON · 저장소 사용 불가에서 오류 없이 새 판 · 안내 한 번 /
+  판 저장을 망가뜨려도 진행 기록(도감 · 클리어 · 주문) 그대로 / 카드 문구 · [이어하기] / 확인창 / 다른 탭 / autosave=false /
+  **RPD 의 모든 *Manager(reset · init 있는 것)는 saveState · loadState 가 있거나 NOT_SAVED 에 이유가 있다**.
+- screenshot ⑲(어긋나면 도구 실패): 위 표 · 새로고침 뒤 저절로 안 이어짐 · 카드 · 버튼이 세로 화면 안 · 버전 불일치 안내 · PC 카드.
+  ⑯ · ⑰ · ⑱ 통과 · `npm run check` 통과 · 자동 플레이 정상.
+- 캡처: `19_resume_a_card_portrait` · `19_resume_b_tap_to_continue` · `19_resume_c_version_mismatch` · `19_resume_d_card_pc`.
+
 ## 세션 69 — 정보 바 DPS 잘림 고침
 
 **왜**: 세션 68 에 정보 바에 [↶] 가 들어오면서 세로 화면의 누구 칸이 좁아져 "전설 · DPS 6741" 이 "전설 · …"로 잘렸다(사용자 요청).

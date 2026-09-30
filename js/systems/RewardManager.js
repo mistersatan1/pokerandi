@@ -136,5 +136,10 @@
     return { wave: at, rewards: list };
   };
 
+  /* ---------- 판 이어하기(RunSave · 세션 70) — 라운드 시작 때의 상태만 ---------- */
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  RewardManager.saveState = function () { return { history: clone(this.history) }; };
+  RewardManager.loadState = function (s) { this.history = clone(s.history || []); };
+
   RPD.RewardManager = RewardManager;
 })(typeof window !== 'undefined' ? window : globalThis);

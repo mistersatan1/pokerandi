@@ -81,6 +81,11 @@
     if (el.away) el.away.hidden = false;
     return true;
   };
+  /* 판 이어하기(세션 70) — 되살린 판을 멈춘 채 같은 덮개로. 누르면 C.resume → Loop 풀림 → RunSave 가 라운드를 연다 */
+  C.showPaused = function () {
+    C.away = true;
+    if (el.away) el.away.hidden = false;
+  };
   C.resume = function () {
     if (!C.away) return;
     C.away = false;

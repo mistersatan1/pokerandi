@@ -652,3 +652,32 @@ button.dc__mon:hover { background: var(--panel-3); transform: translateY(-2px); 
 .iconbtn--elite.is-live { box-shadow: 0 0 0 2px #b278ff; animation: breathe 1.4s ease-in-out infinite; }
 .iconbtn--elite.is-banned { color: #ff8a7a; }
 
+
+/* ---------- 판 이어하기(세션 70) — 시작 화면 카드 · 새 판 확인 · 안내 한 줄 ---------- */
+.resumecard {
+  display: grid; justify-items: center; gap: 6px; width: min(460px, 92vw); max-width: 100%;
+  padding: 10px 14px 12px; border-radius: 16px;
+  background: rgba(8, 20, 46, 0.9); border: 1px solid rgba(255, 201, 60, .55); box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
+}
+.resumecard[hidden] { display: none; }
+.resumecard__kicker { font-size: 12px; font-weight: 900; color: var(--gold-hi); letter-spacing: .04em; }
+.resumecard__info { font-size: 14px; font-weight: 800; color: var(--text); text-align: center; line-height: 1.35; }
+.resumecard__acts { display: flex; gap: 8px; }
+.resumecard__acts .btn { min-height: 44px; min-width: 96px; font-size: 15px; font-weight: 900; }
+.runconfirm {
+  position: fixed; inset: 0; z-index: 95; display: grid; place-items: center; padding: 16px;
+  background: rgba(4, 10, 24, .66);
+}
+.runconfirm[hidden] { display: none; }
+.runconfirm__card { width: min(420px, 100%); display: grid; gap: 10px; }
+.runconfirm__text { margin: 0; font-size: 14px; color: var(--text); line-height: 1.45; }
+.runconfirm__acts { display: flex; gap: 8px; justify-content: flex-end; }
+.runconfirm__acts .btn { min-height: 44px; min-width: 96px; }
+.runnotice {
+  position: fixed; z-index: 96; left: 50%; top: max(12px, env(safe-area-inset-top)); transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px; width: max-content; max-width: calc(100vw - 24px);
+  padding: 8px 8px 8px 14px; border-radius: 14px; background: var(--panel-3, #1b2f5c); border: 1px solid rgba(255, 201, 60, .7);
+  color: var(--text); font-size: 14px; font-weight: 800; box-shadow: 0 6px 18px rgba(0, 0, 0, .4);
+}
+.runnotice[hidden] { display: none; }
+.runnotice__ok { min-height: 40px; flex: none; }

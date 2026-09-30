@@ -129,5 +129,16 @@
     return RPD.FieldManager.getUnits().concat(this.units);
   };
 
+  /* ---------- 판 이어하기(RunSave · 세션 70) — 라운드 시작 때의 상태만 ---------- */
+  StorageManager.saveState = function () {
+    return { capacity: this.capacity, units: this.units.map(function (u) { return RPD.UnitManager.serialize(u); }) };
+  };
+  StorageManager.loadState = function (s) {
+    var self = this;
+    this.capacity = s.capacity || RPD.Config.storageBase;
+    (s.units || []).forEach(function (d) { var u = RPD.UnitManager.revive(d); if (u) self.add(u); });
+    RPD.bus.emit('storage:changed', this.units);
+  };
+
   RPD.StorageManager = StorageManager;
 })(typeof window !== 'undefined' ? window : globalThis);

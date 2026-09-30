@@ -35,6 +35,7 @@
     // 벌칙은 "시작 라이프의 비율" — game:reset 은 GameManager 가 라이프를 정한 뒤에 나간다
     this.baseLife = RPD.GameManager.life || RPD.Config.startLife || 60;
     this.active = null;
+    this.pending = null;
     this.banUntil = 0;
     this.log = [];
     RPD.bus.emit('elite:changed', {});
@@ -121,6 +122,34 @@
     this.log.push({ tier: t.id, ok: false, wave: wave() });
     RPD.bus.emit('elite:result', { ok: false, tier: t, life: life, banRounds: CFG.banRounds, enemy: e });
     RPD.bus.emit('elite:changed', {});
+  };
+
+  /* ---------- 판 이어하기(RunSave · 세션 70) — 라운드 시작 때의 상태만 ---------- */
+  /* 진행 중인 정예는 적 자체가 아니라 등급 · 낸 참가비만 — 이어할 때 입구에서 새로 부른다(참가비는 다시 안 받는다) */
+  EliteManager.saveState = function () {
+    var a = this.active;
+    return { banUntil: this.banUntil, lastRound: this.lastRound, baseLife: this.baseLife,
+             active: a && a.alive !== false ? { tier: a.eliteTier, fee: a.eliteFee } : null };
+  };
+  EliteManager.loadState = function (s) {
+    this.banUntil = s.banUntil || 0; this.lastRound = s.lastRound || 0;
+    if (s.baseLife != null) this.baseLife = s.baseLife;
+    this.active = null;
+    this.pending = s.active ? { tier: s.active.tier, fee: s.active.fee } : null;
+    RPD.bus.emit('elite:changed', {});
+  };
+  /* 이어한 라운드가 시작될 때(RunSave) — 저장된 정예를 입구에 다시 세운다 */
+  EliteManager.respawnPending = function () {
+    var p = this.pending, t = p && this.tier(p.tier);
+    this.pending = null;
+    if (!t) return null;
+    var e = RPD.EnemyManager.spawn(t.enemy, wave());
+    e.eliteTier = t.id;
+    e.eliteFee = p.fee;
+    this.active = e;
+    RPD.bus.emit('elite:summoned', { enemy: e, tier: t, fee: p.fee, resumed: true });
+    RPD.bus.emit('elite:changed', {});
+    return e;
   };
 
   RPD.EliteManager = EliteManager;

@@ -1075,6 +1075,123 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
   report.push({ mobile3: m3Report });
   if (m3Problems.length) process.exitCode = 1;
 
+  /* ⑲ 판 이어하기(세션 70) — 34라운드까지 진행 → 새로고침 → 이어하기 카드 → [이어하기] → "눌러서 계속" → 그 라운드가 다시 열린다.
+   * 새로고침 전(34라운드 시작 순간 = 저장 시점)과 이어한 뒤를 비교한다. 어긋나면 이 도구가 실패로 끝난다.
+   * 캡처: (a) 세로 시작 화면 이어하기 카드 (b) 이어한 직후 "눌러서 계속" (c) 버전 불일치 안내 (d) PC 이어하기 카드 */
+  const m4Problems = [], m4Report = {};
+  {
+    const bad = w => m4Problems.push(w);
+    const snap = () => {
+      const R = window.RPD, F = R.FieldManager, S = R.StorageManager, GM = R.GameManager, GS = R.GoldShopManager;
+      const lv = o => Object.keys(o).sort().map(k => k + o[k]).join(',');
+      return { round: GM.wave, gold: GM.gold, life: GM.life, fieldUnits: F.getUnits().length, storageUnits: S.units.length,
+        species: F.getUnits().concat(S.units).map(u => u.defId + '/' + (u.level || 0)).sort().join(' '),
+        tickets: R.SummonManager.tickets, shards: R.ShardManager.shards, shop: lv(GS.typeLv) + ' | ' + lv(GS.tierLv), eliteBan: R.EliteManager.banUntil,
+        mode: GM.mode.label };
+    };
+    const c4 = await browser.newContext({ ...devices['Galaxy S24'], defaultBrowserType: undefined });
+    const p4 = await c4.newPage();
+    const e4 = [];
+    p4.on('pageerror', e => e4.push(e.message));
+    await p4.goto(URL); await p4.waitForTimeout(1000);
+    // 34라운드까지 — 게임 로직(고정 60Hz 갱신)을 빨리 돌린다. 중간에 소환 · 골드 상점 · 창고도 쓴다
+    const progressed = await p4.evaluate(() => {
+      const R = window.RPD, GM = R.GameManager, F = R.FieldManager, S = R.GameState;
+      if (R.TutorialManager && R.TutorialManager.skip) R.TutorialManager.skip();
+      document.querySelectorAll('.modepick, .result, .help, .book').forEach(o => o.hidden = true);
+      R.RunSave.clear();
+      R.Game.startRun('NORMAL', 'NORMAL');
+      R.Loop.setPaused(true);   // 진짜 시간 대신 아래에서 갱신을 직접 돌린다
+      const open = F.slots.filter(x => x.unlocked && !x.blocked);
+      ['mewtwo', 'moltres', 'zapdos', 'articuno', 'dragonite', 'alakazam', 'gengar', 'charizard'].forEach((id, i) => {
+        if (open[i] && !open[i].unit) F.place(open[i].index, R.UnitManager.create(id));
+      });
+      R.bus.emit('field:changed', {});
+      let snapAt34 = null;
+      const onStart = () => { if (GM.wave === 34 && !snapAt34) snapAt34 = JSON.parse(localStorage.getItem(R.RunSave.KEY) || 'null'); };
+      R.bus.on('wave:started', onStart);
+      const step = R.Config.fixedStep;
+      let guard = 0;
+      while (!(GM.wave === 34 && snapAt34) && GM.state !== S.GAMEOVER && guard < 60 * 60 * 40) {
+        for (let k = 0; k < R.Loop._updateFns.length; k++) R.Loop._updateFns[k](step);
+        guard++;
+        if (guard % 600 === 0) {   // 10초마다 — 사람이 하듯 소환 · 상점
+          if (GM.gold > 400) R.SummonManager.summon();
+          if (GM.gold > 600) R.GoldShopManager.buy('type', 'PSYCHIC');
+          if (GM.wave === 20 && R.StorageManager.units.length < 2) R.StorageManager.add(R.UnitManager.create('bulbasaur'));
+        }
+      }
+      R.bus.off('wave:started', onStart);
+      return { wave: GM.wave, state: GM.state, gameSeconds: Math.round(guard * step), saved: !!snapAt34, savedWave: snapAt34 && snapAt34.summary.wave };
+    });
+    m4Report.progressed = progressed;
+    if (progressed.wave !== 34 || !progressed.saved) bad('34라운드 저장까지 못 갔다 ' + JSON.stringify(progressed));
+    const before = await p4.evaluate(() => {
+      // 저장 시점(34라운드 시작 직후)의 값 — 저장본에서 그대로 읽는다(그 뒤에 흐른 몇 프레임과 섞이지 않게)
+      const d = JSON.parse(localStorage.getItem(window.RPD.RunSave.KEY)), st = d.state;
+      const lv = o => Object.keys(o).sort().map(k => k + o[k]).join(',');
+      const units = st.FieldManager.units.map(e => e.unit).concat(st.StorageManager.units);
+      return { round: st.GameManager.wave, gold: st.GameManager.gold, life: st.GameManager.life, fieldUnits: st.FieldManager.units.length, storageUnits: st.StorageManager.units.length,
+        species: units.map(u => u.defId + '/' + (u.level || 0)).sort().join(' '), tickets: st.SummonManager.tickets, shards: st.ShardManager.shards,
+        shop: lv(st.GoldShopManager.typeLv) + ' | ' + lv(st.GoldShopManager.tierLv), eliteBan: st.EliteManager.banUntil, mode: d.summary.label };
+    });
+    // 새로고침(휴대폰이 탭을 닫았다 다시 연 것과 같다)
+    await p4.reload(); await p4.waitForTimeout(1200);
+    const card = await p4.evaluate(() => { const c = document.getElementById('resumeCard'); return { shown: !c.hidden && getComputedStyle(c).display !== 'none', text: document.getElementById('resumeInfo').textContent,
+      state: window.RPD.GameManager.state, wave: window.RPD.GameManager.wave }; });
+    if (!card.shown) bad('새로고침 뒤 이어하기 카드가 없다');
+    const inView = await p4.evaluate(() => ['resumeCard', 'btnResume', 'btnNewRun', 'btnStart'].map(id => { const r = document.getElementById(id).getBoundingClientRect();
+      return { id, ok: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight, r: [Math.round(r.left), Math.round(r.right)] }; }));
+    inView.forEach(v => { if (!v.ok) bad('세로 시작 화면에서 ' + v.id + ' 가 화면 밖 ' + JSON.stringify(v.r)); });
+    if (card.wave !== 0 || card.state !== 'READY') bad('새로고침 뒤 저절로 이어했다 ' + JSON.stringify(card));
+    ['34라운드', '라이프 ' + before.life, '골드 ' + String(before.gold).replace(/\B(?=(\d{3})+(?!\d))/g, ',')].forEach(w => { if (card.text.indexOf(w) < 0) bad('카드에 "' + w + '" 없음: ' + card.text); });
+    await p4.screenshot({ path: require('path').join(__dirname, '..', 'dist', '19_resume_a_card_portrait.png') });
+    await p4.tap('#btnResume'); await p4.waitForTimeout(400);
+    const after = await p4.evaluate(snap);
+    const gate = await p4.evaluate(() => ({ overlay: !document.getElementById('awayOverlay').hidden, paused: window.RPD.Loop.paused, phase: window.RPD.WaveManager.phase }));
+    if (!gate.overlay || !gate.paused || gate.phase !== 'IDLE') bad('이어한 직후 "눌러서 계속"이 아니다 ' + JSON.stringify(gate));
+    await p4.screenshot({ path: require('path').join(__dirname, '..', 'dist', '19_resume_b_tap_to_continue.png') });
+    Object.keys(before).forEach(k => { if (String(before[k]) !== String(after[k])) bad('이어한 뒤 ' + k + ' 다름: ' + before[k] + ' → ' + after[k]); });
+    await p4.tap('#awayOverlay'); await p4.waitForTimeout(1500);
+    const run = await p4.evaluate(() => ({ phase: window.RPD.WaveManager.phase, wave: window.RPD.WaveManager.wave, state: window.RPD.GameManager.state, spawned: window.RPD.WaveManager.spawnedUnits }));
+    if (run.wave !== 34 || run.state !== 'RUNNING' || !(run.spawned > 0)) bad('"눌러서 계속" 뒤 34라운드가 안 열렸다 ' + JSON.stringify(run));
+    m4Report.table = { before, after, run, card: card.text };
+    // (c) 버전 불일치 — 없는 포켓몬이 든 저장
+    await p4.evaluate(() => { const k = window.RPD.RunSave.KEY, d = JSON.parse(localStorage.getItem(k)); d.state.StorageManager.units.push({ defId: 'agumon', level: 0 }); localStorage.setItem(k, JSON.stringify(d)); });
+    await p4.reload(); await p4.waitForTimeout(1200);
+    const ver = await p4.evaluate(() => ({ notice: !document.getElementById('runNotice').hidden, text: document.getElementById('runNoticeText').textContent, card: !document.getElementById('resumeCard').hidden,
+      saved: localStorage.getItem(window.RPD.RunSave.KEY) != null }));
+    if (!ver.notice || ver.card || ver.saved) bad('버전 불일치 안내 · 저장 지움 ' + JSON.stringify(ver));
+    await p4.screenshot({ path: require('path').join(__dirname, '..', 'dist', '19_resume_c_version_mismatch.png') });
+    m4Report.version = ver;
+    m4Report.errors = e4.slice(0, 3);
+    if (e4.length) bad('페이지 오류: ' + e4[0]);
+    await c4.close();
+    // (d) PC — 같은 저장을 넣고 연다
+    const c5 = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+    const p5 = await c5.newPage();
+    await p5.goto(URL); await p5.waitForTimeout(800);
+    await p5.evaluate(() => {
+      const R = window.RPD;
+      R.Game.startRun('NORMAL', 'HARD'); R.Loop.setPaused(true);
+      const F = R.FieldManager, open = F.slots.filter(x => x.unlocked && !x.blocked);
+      ['charizard', 'pikachu', 'gengar'].forEach((id, i) => F.place(open[i].index, R.UnitManager.create(id)));
+      R.GameManager.setWave(22); R.GameManager.gold = 2380; R.GameManager.life = 37;
+      R.RunSave.save();
+      const d = JSON.parse(localStorage.getItem(R.RunSave.KEY)); d.savedAt = Date.now() - 7 * 60000; localStorage.setItem(R.RunSave.KEY, JSON.stringify(d));
+    });
+    await p5.reload(); await p5.waitForTimeout(1200);
+    const pc = await p5.evaluate(() => ({ shown: !document.getElementById('resumeCard').hidden, text: document.getElementById('resumeInfo').textContent }));
+    if (!pc.shown || pc.text.indexOf('7분 전') < 0) bad('PC 이어하기 카드 ' + JSON.stringify(pc));
+    await p5.screenshot({ path: require('path').join(__dirname, '..', 'dist', '19_resume_d_card_pc.png') });
+    m4Report.pc = pc;
+    await c5.close();
+  }
+  console.log('resume', JSON.stringify(m4Report, null, 1));
+  console.log('resume problems', JSON.stringify(m4Problems));
+  report.push({ resume: m4Report });
+  if (m4Problems.length) process.exitCode = 1;
+
   /* ---------- 모바일 ③ — 홈 화면 앱(세션 53) ----------
    * 설치 · 오프라인은 인터넷 주소에서만 되니, 원본 폴더(dist 아님)를 이 자리에서 작은 웹 서버로 띄워 연다(localhost 는 https 와 같게 친다).
    * 확인: 크롬이 "설치할 수 있다"고 보는가(설치 불가 사유 0) · 서비스 워커 · 오프라인 저장 · 인터넷을 끊고 다시 열어도 켜지고 처음 보는 그림이 나오는가 ·

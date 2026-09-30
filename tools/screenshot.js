@@ -532,6 +532,44 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     await bctx.close();
   }
 
+  // ⑮ 처형도 누적 피해에(세션 64) — 고스트 3마리(시너지 "체력 14% 이하 즉사")로 싸운 뒤 칸 카드 "누적"과 처형으로 들어간 몫.
+  {
+    const xctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const xp = await xctx.newPage();
+    await xp.goto(URL); await xp.waitForTimeout(1000);
+    await xp.evaluate(() => {
+      const R = window.RPD;
+      document.querySelectorAll('.modepick, .result, .help, .book').forEach(o => o.hidden = true);
+      R.Game.resetAll('NORMAL', 'NORMAL'); R.Game.startRun('NORMAL', 'NORMAL');
+      R.GameManager.setWave(14); R.WaveManager.startRound(14);
+      const F = R.FieldManager;
+      F.slots.forEach(s => { if (s.unit) F.remove(s.index); });
+      const ids = ['gastly', 'haunter', 'haunter', 'pidgeotto'];
+      F.slots.filter(s => s.unlocked).slice(0, ids.length).forEach((s, i) => F.place(s.index, R.UnitManager.create(ids[i])));
+      R.GameManager.life = 999;
+      R.bus.emit('field:changed', {});
+      // 처형으로 들어간 몫을 개체별로(도구 쪽 관찰) — 처형 알림 순간의 적 체력이 곧 처형 한 방
+      window.__exec = {};
+      R.bus.on('combat:execute', p => { window.__exec[p.unit.uid] = (window.__exec[p.unit.uid] || 0) + Math.max(0, p.enemy.hp); });
+      R.Loop.setSpeed(2); R.Loop.setPaused(false);
+    });
+    await xp.waitForTimeout(9000);
+    const xinfo = await xp.evaluate(() => {
+      const R = window.RPD, F = R.FieldManager;
+      R.Loop.setPaused(true);
+      const us = F.getUnits().filter(u => window.__exec[u.uid]).sort((a, b) => window.__exec[b.uid] - window.__exec[a.uid]);
+      const u = us[0] || F.getUnits().find(x => x.defId === 'haunter');
+      F.select(u.slotIndex);
+      return { synergy: (R.SynergyManager.active || []).filter(a => a.typeId === 'GHOST').map(a => a.label || a.count), unit: u.name,
+        total: Math.round(u.totalDamage), exec: Math.round(window.__exec[u.uid] || 0),
+        executes: Object.values(window.__exec).length, card: (document.querySelector('#slotBody .sc__dmg') || {}).textContent };
+    });
+    console.log('execute total', JSON.stringify(xinfo));
+    await xp.waitForTimeout(200);
+    await xp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '15_execute_total_slotcard_pc.png') });
+    await xctx.close();
+  }
+
   /* ---------- 모바일 ③ — 홈 화면 앱(세션 53) ----------
    * 설치 · 오프라인은 인터넷 주소에서만 되니, 원본 폴더(dist 아님)를 이 자리에서 작은 웹 서버로 띄워 연다(localhost 는 https 와 같게 친다).
    * 확인: 크롬이 "설치할 수 있다"고 보는가(설치 불가 사유 0) · 서비스 워커 · 오프라인 저장 · 인터넷을 끊고 다시 열어도 켜지고 처음 보는 그림이 나오는가 ·

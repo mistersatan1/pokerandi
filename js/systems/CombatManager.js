@@ -167,7 +167,8 @@
       var threshold = (unit.typeFlags.DARK ? P.executeThreshold : 0) + syn.executeAdd;
       if (threshold > 0 && enemy.hp / enemy.maxHp <= threshold) {
         RPD.bus.emit('combat:execute', { unit: unit, enemy: enemy });
-        RPD.EnemyManager.damage(enemy, enemy.hp + 1, { ignoreArmor: true, source: unit });
+        // 처형 한 방도 누적 피해로 센다 — 들어간 만큼(보통 남은 체력)만(세션 64)
+        unit.totalDamage += RPD.EnemyManager.damage(enemy, enemy.hp + 1, { ignoreArmor: true, source: unit });
       }
     }
     return dealt;

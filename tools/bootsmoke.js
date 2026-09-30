@@ -1255,6 +1255,27 @@ check('칸 정보 카드의 "누적" · 결과 화면 최고 피해가 지속 �
   F.select(-1);
 });
 
+check('처형(고스트 시너지 — 지금 로스터엔 악 타입이 없다) — 마지막 한 방(남은 체력)도 누적 피해에 들어간다', () => {
+  const EM = RPD.EnemyManager, U = RPD.Utils, TM = RPD.TraitManager, SM = RPD.SynergyManager;
+  const unit = RPD.UnitManager.baseStats('gastly');
+  EM.enemies.length = 0;
+  const e = EM.spawn('grunt', 10);
+  e.maxHp = 1e6; e.armor = 0; e.shield = 0; e.isBoss = false;
+  const T = 0.14;                                            // 고스트 3마리 시너지
+  e.hp = unit.attack + e.maxHp * T * 0.5;                    // 치명타 없음 · 방어 0 → 맞고 나면 처형 문턱 아래
+  const before = e.hp;
+  const chance = U.chance, after = TM.afterAttack, bonus = SM.bonus;
+  U.chance = () => false; TM.afterAttack = () => {};
+  SM.bonus = Object.assign(SM.baseBonus(), { executeAdd: T });
+  const got = [];
+  const fn = () => got.push(1);
+  RPD.bus.on('combat:execute', fn);
+  try { RPD.CombatManager.fireOnce(unit, e); }
+  finally { U.chance = chance; TM.afterAttack = after; SM.bonus = bonus; RPD.bus.off('combat:execute', fn); EM.enemies.length = 0; }
+  if (!got.length || e.alive) throw new Error('처형이 안 일어났다 — 전제가 깨졌다');
+  if (Math.abs(unit.totalDamage - before) > 1e-6) throw new Error('누적 ' + unit.totalDamage + ' ≠ 적의 처음 체력 ' + before + '(타격 + 처형)');
+});
+
 console.log(`\n────────────────────────────`);
 console.log(failures === 0 ? '부팅 경로 이상 없음' : `부팅 문제 ${failures}건`);
 process.exit(failures === 0 ? 0 : 1);

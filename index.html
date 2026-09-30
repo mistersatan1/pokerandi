@@ -84,6 +84,7 @@
             <dt>Enter</dt><dd>주문 입력</dd>
             <dt>H</dt><dd>설명서</dd>
             <dt>Esc</dt><dd>선택·창 닫기</dd>
+            <dt>Ctrl+Z</dt><dd>되돌리기 (배치 이동만 · 3번)</dd>
           </dl>
           <p class="keyhelp__tip">끌어서 옮기기: 보유 칸(창고) → 필드 칸 · 필드 포켓몬 → 보유 패널</p>
         </div>
@@ -99,6 +100,8 @@
     <button type="button" class="iconbtn iconbtn--mobile" id="btnSynergy" title="타입 시너지" aria-label="시너지"><span class="ico ico--synergy"></span></button>
     <button type="button" class="iconbtn iconbtn--mobile" id="btnFullscreen" title="전체 화면" aria-label="전체 화면">⛶</button>
     <button type="button" class="iconbtn iconbtn--mobile" id="btnInstall" title="홈 화면에 앱으로 설치" aria-label="앱 설치">📲</button>
+    <button type="button" class="iconbtn iconbtn--mobile" id="btnHaptics" title="진동 켬" aria-label="진동 켬" aria-pressed="true">📳</button>
+    <button type="button" class="iconbtn iconbtn--mobile" id="btnFx" title="효과" aria-label="효과 보통">✨</button>
     <button type="button" class="iconbtn iconbtn--ghost" id="btnRestart" title="처음부터" aria-label="처음부터"><span class="ico ico--restart"></span></button>
     </div>
   </header>
@@ -462,6 +465,13 @@
 
 </div>
 
+<!-- 앱을 벗어났다 돌아오면(세션 68) — 저절로 이어가지 않는다. 누르면 계속 -->
+<button type="button" class="awaypause" id="awayOverlay" hidden aria-label="일시정지됨 — 눌러서 계속">
+  <span class="awaypause__ico">⏸</span>
+  <span class="awaypause__title">일시정지됨</span>
+  <span class="awaypause__sub">눌러서 계속</span>
+</button>
+
 <!-- 클래식 script 로드. ES 모듈을 쓰지 않는 이유는 index.html 을 더블클릭(file://)해도
      CORS 없이 바로 실행되게 하기 위해서다. 순서가 곧 의존성이다. -->
 <script src="js/core/RPD.js"></script>
@@ -473,6 +483,8 @@
 <script src="js/core/Loop.js"></script>
 <script src="js/core/MusicFiles.js"></script>
 <script src="js/core/AudioManager.js"></script>
+<script src="js/core/Haptics.js"></script>
+<script src="js/core/Effects.js"></script>
 
 <script src="js/data/types.js"></script>
 <script src="js/data/music.js"></script>
@@ -509,6 +521,7 @@
 <script src="js/systems/BossManager.js"></script>
 <script src="js/systems/RecipeManager.js"></script>
 <script src="js/systems/StorageManager.js"></script>
+<script src="js/systems/UndoManager.js"></script>
 <script src="js/systems/ShardManager.js"></script>
 <script src="js/systems/RewardManager.js"></script>
 <script src="js/systems/WaveManager.js"></script>
@@ -532,6 +545,7 @@
 <script src="js/ui/DexCard.js"></script>
 <script src="js/ui/MobileSheet.js"></script>
 <script src="js/ui/MobileToolbar.js"></script>
+<script src="js/ui/Convenience.js"></script>
 <script src="js/ui/GoldShopUI.js"></script>
 <script src="js/ui/EliteUI.js"></script>
 <script src="js/ui/SpellUI.js"></script>

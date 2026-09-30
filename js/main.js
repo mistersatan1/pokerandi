@@ -42,6 +42,8 @@
     RPD.ProgressManager.init();
     RPD.SpellManager.init();
     RPD.AudioManager.init();
+    if (RPD.UndoManager) RPD.UndoManager.init();
+    if (RPD.Haptics) RPD.Haptics.init();
     RPD.FxRenderer.init();
     RPD.UnitRenderer.init();
     if (RPD.AttackFx) RPD.AttackFx.init();
@@ -58,6 +60,7 @@
     if (RPD.HudPanels) RPD.HudPanels.init();
     if (RPD.MobileSheet) RPD.MobileSheet.init();
     if (RPD.MobileToolbar) RPD.MobileToolbar.init();
+    if (RPD.Convenience) RPD.Convenience.init();
 
     registerLayers();
     registerUpdates();

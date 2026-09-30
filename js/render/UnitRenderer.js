@@ -8,6 +8,8 @@
 (function (global) {
   'use strict';
   var RPD = global.RPD;
+  // 연출 전용 난수 — 게임 난수(Math.random) 흐름을 밀지 않게(Effects.js · 세션 68)
+  var fxRand = RPD.Effects ? RPD.Effects.rand : Math.random;
 
   var POOL_BEAM = 180;
   var POOL_BLAST = 60;
@@ -24,12 +26,12 @@
 
   function takeBeam() {
     for (var k = 0; k < beams.length; k++) if (!beams[k].alive) return beams[k];
-    return beams[(Math.random() * beams.length) | 0];
+    return beams[(fxRand() * beams.length) | 0];
   }
 
   function takeBlast() {
     for (var k = 0; k < blasts.length; k++) if (!blasts[k].alive) return blasts[k];
-    return blasts[(Math.random() * blasts.length) | 0];
+    return blasts[(fxRand() * blasts.length) | 0];
   }
 
   var UnitRenderer = {};

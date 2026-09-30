@@ -273,9 +273,21 @@
       html = '<div class="ib__who"><span class="ib__txt"><span class="ib__name ib__name--hint">칸을 누르면 여기에 정보가 나옵니다</span>' +
         '<span class="ib__meta">바를 위로 밀거나 길게 누르면 자세히</span></span></div>';
     }
+    if (M.moving < 0) html = withUndo(html);
     el.bar.innerHTML = html;
   }
   M.renderBar = renderBar;
+
+  /* [되돌리기](세션 68) — 이동 모드가 아니면 늘 같은 자리: 누구 다음 · 버튼 넷 앞(가로 화면은 누구 줄 오른쪽 끝).
+   * 기록이 없으면 흐리게(disabled). 숫자 = 되돌릴 수 있는 횟수(최대 3) */
+  function withUndo(html) {
+    var U = RPD.UndoManager, n = U ? U.count() : 0;
+    var b = '<button type="button" class="ib__btn ib__btn--undo" data-ib="undo"' + (n ? '' : ' disabled') +
+      ' title="되돌리기 (Ctrl+Z) — 배치 이동만" aria-label="되돌리기' + (n ? ' ' + n + '번 가능' : ' — 기록 없음') + '">' +
+      '<span>↶</span><small>' + (n ? n : '') + '</small></button>';
+    var at = html.indexOf('<div class="ib__acts">');
+    return at >= 0 ? html.slice(0, at) + b + html.slice(at) : html + b;
+  }
 
   function clickById(id) {
     var d = doc(), n = d && d.getElementById(id);
@@ -296,6 +308,7 @@
       else if (a === 'sell') clickById('btnSell');
       else if (a === 'craft') clickById('btnCraft');                           // [조합] 과 같은 조합식(craftBest)
       else if (a === 'toast' && RPD.MobileToolbar) RPD.MobileToolbar.dismissToast();
+      else if (a === 'undo' && RPD.Convenience) RPD.Convenience.undo();         // 배치 이동만(세션 68 · UndoManager)
     });
     // 위로 밀기 · 길게 누르기(버튼이 아닌 곳) → 자세한 정보
     var g = null;
@@ -413,6 +426,7 @@
       renderBar();
     });
     RPD.bus.on('units:recomputed', renderBar);
+    RPD.bus.on('undo:changed', renderBar);
     RPD.bus.on('game:reset', function () { M.cancelMove(); M.closeDetail(); renderBar(); });
     RPD.bus.on('render:resize', M.measure);
     global.addEventListener && global.addEventListener('resize', M.measure);

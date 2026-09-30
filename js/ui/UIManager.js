@@ -550,7 +550,7 @@
     ownedDrag.armed = true;
     ownedDrag.active = true;          // 집었다 — 손가락 아래에 그림을 띄운다
     showOwnedGhost();
-    if (global.navigator && typeof global.navigator.vibrate === 'function') { try { global.navigator.vibrate(12); } catch (e) { /* 막힌 브라우저 */ } }
+    if (RPD.Haptics) RPD.Haptics.buzz('select');   // 집었다 — 진동 무늬 · 끄기 설정은 Haptics.js(세션 68)
   }
   function cancelOwnedDrag() {
     clearTimeout(ownedDrag.timer);

@@ -289,6 +289,8 @@
     if (el.mobileTabs && el.mobileTabs.addEventListener) {
       el.mobileTabs.addEventListener('click', function (e) {
         var b = e.target && e.target.closest ? e.target.closest('[data-mtab]') : null;
+        // 탭 줄 밖(= <body data-mtab="…">)까지 올라간 것은 탭이 아니다 — [조합] 을 길게 눌러 연 시트를 손 뗄 때 click 이 다시 닫던 버그(세션 68)
+        if (b && el.mobileTabs.contains && !el.mobileTabs.contains(b)) b = null;
         if (!b || (b.hasAttribute && b.hasAttribute('data-tb'))) return;   // 툴바 버튼(세션 66)은 MobileToolbar 가 받는다
         var tab = b.getAttribute('data-mtab');
         if (tab === 'shop') { if (RPD.GoldShopUI) RPD.GoldShopUI.toggle(); return; }
@@ -296,11 +298,12 @@
       });
     }
     if (el.moreBtn && el.moreBtn.addEventListener) el.moreBtn.addEventListener('click', function () { HudPanels.toggleMore(); });
-    // 메뉴 안 버튼을 누르면 닫는다(소리 설정은 작은 창이 따로 열리니 둔다) · 메뉴 밖을 누르면 닫는다
+    // 메뉴 안 버튼을 누르면 닫는다(소리 설정은 작은 창이 따로 열리니 둔다 · 진동 · 효과는 켬/끔이 바로 보이게 둔다 — 세션 68) · 메뉴 밖을 누르면 닫는다
     document.addEventListener('click', function (e) {
       var hud = document.querySelector('.hud');
       if (!hud || !hud.classList || !hud.classList.contains('is-more-open') || !e.target || !e.target.closest) return;
-      if (e.target.closest('#btnMore') || e.target.closest('#tbMore') || e.target.closest('.audio')) return;
+      if (e.target.closest('#btnMore') || e.target.closest('#tbMore') || e.target.closest('.audio') ||
+          e.target.closest('#btnHaptics') || e.target.closest('#btnFx')) return;
       if (e.target.closest('#hudMore .iconbtn') || !e.target.closest('#hudMore')) HudPanels.toggleMore(false);
     });
     bindLongPressTips();
@@ -409,11 +412,13 @@
       if (e.stopPropagation) e.stopPropagation();
       if (e.preventDefault) e.preventDefault();
     }, true);
-    // 길게 누르기에 브라우저 기본 메뉴(복사 · 이미지 저장)가 뜨지 않게 — 입력칸은 둔다
+    // 길게 누르기에 브라우저 기본 메뉴(복사 · 이미지 저장)가 뜨지 않게 — 입력칸은 둔다.
+    // 필드 캔버스 · 포켓몬 그림은 마우스 오른쪽 단추로도 막는다(세션 68 — 그림 저장 메뉴가 끌기를 끊지 않게)
     document.addEventListener('contextmenu', function (e) {
-      var t = e.target && e.target.tagName;
+      var tg = e.target, t = tg && tg.tagName;
       if (t === 'INPUT' || t === 'TEXTAREA') return;
-      if (e.pointerType === 'touch' || (global.matchMedia && global.matchMedia('(pointer: coarse)').matches)) e.preventDefault();
+      var art = t === 'CANVAS' || t === 'IMG' || !!(tg && tg.closest && tg.closest('.spr, .infobar'));
+      if (art || e.pointerType === 'touch' || (global.matchMedia && global.matchMedia('(pointer: coarse)').matches)) e.preventDefault();
     });
   }
 

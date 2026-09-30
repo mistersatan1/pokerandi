@@ -7,6 +7,8 @@
 (function (global) {
   'use strict';
   var RPD = global.RPD;
+  // 연출 전용 난수 — 게임 난수(Math.random) 흐름을 밀지 않게(Effects.js · 세션 68)
+  var fxRand = RPD.Effects ? RPD.Effects.rand : Math.random;
   var U = RPD.Utils;
 
   var POOL_TEXT = 220;
@@ -25,12 +27,12 @@
 
   function takeText() {
     for (var i = 0; i < texts.length; i++) if (!texts[i].alive) return texts[i];
-    return texts[(Math.random() * texts.length) | 0];   // 풀이 꽉 차면 가장 오래된 것 대신 아무거나 재활용
+    return texts[(fxRand() * texts.length) | 0];   // 풀이 꽉 차면 가장 오래된 것 대신 아무거나 재활용
   }
 
   function takePuff() {
     for (var i = 0; i < puffs.length; i++) if (!puffs[i].alive) return puffs[i];
-    return puffs[(Math.random() * puffs.length) | 0];
+    return puffs[(fxRand() * puffs.length) | 0];
   }
 
   var FxRenderer = {};
@@ -60,6 +62,7 @@
     opts = opts || {};
     if (amount < 1) return;
     var crit = !!opts.crit;
+    if (!crit && RPD.Effects && !RPD.Effects.showDamage()) return;   // 줄임 · 최소: 보통 피해 숫자는 두 개에 하나(치명타는 다)
     this.text(x, y - 8, (crit ? '' : '') + Math.round(amount), crit ? '#ffd15c' : '#f2efe0', {
       size: crit ? 18 : 13,
       life: crit ? 1.0 : 0.8,

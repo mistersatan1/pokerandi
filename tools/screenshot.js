@@ -270,7 +270,9 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     {
       const cdp0 = await mctx.newCDPSession(mp);
       await mp.locator('#infoBar .ib__who').waitFor({ state: 'visible', timeout: 3000 });   // 칸을 누른 직후 바가 다시 그려지는 사이에 재면 가끔 비었다(세션 66)
-      const bb = await mp.locator('#infoBar .ib__who').boundingBox();
+      // 바는 이벤트마다 innerHTML 로 다시 그려진다(세션 68 부터 되돌리기 기록에도) — 재는 순간 바뀌어 null 이면 다시 잰다
+      let bb = null;
+      for (let k = 0; k < 10 && !bb; k++) { bb = await mp.locator('#infoBar .ib__who').boundingBox(); if (!bb) await mp.waitForTimeout(100); }
       await cdp0.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: bb.x + 8, y: bb.y + bb.height / 2 }] });
       await mp.waitForTimeout(650);
       await cdp0.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
@@ -879,6 +881,180 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
   m2Report.forEach(r => console.log('mobile2', JSON.stringify(r)));
   console.log('mobile2 problems', JSON.stringify(m2Problems));
   if (m2Problems.length) process.exitCode = 1;
+
+  /* ⑱ 모바일 ③ 편의 기능(세션 68) — 되돌리기 · 진동/효과 설정 · 자리 비움 일시정지 · 조작 방해 막기 · 효과 3단계 그리기 시간.
+   * 검사(하나라도 어긋나면 이 도구가 실패로 끝난다):
+   *   [되돌리기] 가 이동 뒤 켜지고(44px 가까이) 누르면 실제로 제자리 · 가로는 누구 줄 안 / [더보기] 에 진동 · 효과 /
+   *   hidden 이벤트 → 일시정지 + 덮개, 다시 보여도 그대로, 누르면 계속 / 계산된 스타일(overscroll · touch-action · user-select) · viewport-fit=cover /
+   *   효과 3단계에서 캔버스 해상도 · 파티클 상한이 바뀐다.
+   * 캡처: (a) 세로 [되돌리기] 켜짐 (b) 세로 [더보기] 진동 · 효과 (c) 세로 "일시정지됨 — 눌러서 계속" (d) 가로 (a) · 효과 단계별 같은 전투 장면 */
+  const m3Problems = [];
+  const m3Report = {};
+  for (const dev of ['Galaxy S24', 'Galaxy S24 landscape']) {
+    const c3 = await browser.newContext({ ...devices[dev], defaultBrowserType: undefined });
+    const p3 = await c3.newPage();
+    const e3 = [];
+    p3.on('pageerror', e => e3.push(e.message));
+    await p3.goto(URL); await p3.waitForTimeout(1000);
+    const tag = dev.replace(/ /g, '_'), land = /landscape/.test(dev);
+    const bad = w => m3Problems.push(dev + ': ' + w);
+    const shot = name => p3.screenshot({ path: require('path').join(__dirname, '..', 'dist', '18_m3_' + tag + '_' + name + '.png') });
+
+    // (a) 옮긴 뒤 [되돌리기] 켜짐 — 실제 정보 바 [이동] → 빈 칸
+    await p3.evaluate(tbPrep, { wave: 7 });
+    await p3.waitForTimeout(2600);
+    await p3.evaluate(() => window.RPD.Loop.setPaused(true));
+    const undoOff = await p3.evaluate(() => { const b = document.querySelector('#infoBar [data-ib="undo"]'); return b ? b.disabled : 'none'; });
+    if (undoOff !== true) bad('기록이 없는데 [되돌리기] 가 흐리지 않다(' + undoOff + ')');
+    const mv = await p3.evaluate(() => {
+      const R = window.RPD, F = R.FieldManager;
+      const from = F.slots.find(x => x.unit && x.unit.defId === 'charizard').index;
+      const to = F.slots.find(x => x.unlocked && !x.blocked && !x.unit).index;
+      F.select(from);
+      return { from, to };
+    });
+    await p3.tap('#infoBar [data-ib="move"]'); await p3.waitForTimeout(150);
+    await p3.evaluate(m => window.RPD.MobileSheet.moveTo(m.to), mv); await p3.waitForTimeout(200);
+    const ub = await p3.evaluate(() => {
+      const b = document.querySelector('#infoBar [data-ib="undo"]'), w = document.querySelector('#infoBar .ib__who'), bar = document.getElementById('infoBar');
+      const r = b.getBoundingClientRect(), wr = w.getBoundingClientRect(), br = bar.getBoundingClientRect();
+      return { disabled: b.disabled, count: b.textContent.replace(/\s+/g, ''), w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top), whoTop: Math.round(wr.top),
+        inside: r.left >= br.left - 1 && r.right <= br.right + 1 && r.top >= br.top - 1 && r.bottom <= br.bottom + 1, whoW: Math.round(wr.width) };
+    });
+    if (ub.disabled) bad('옮겼는데 [되돌리기] 가 흐리다');
+    if (ub.h < 40 || ub.w < 40) bad('[되돌리기] 크기 ' + ub.w + '×' + ub.h);
+    if (!ub.inside) bad('[되돌리기] 가 정보 바 밖으로 나갔다');
+    if (land && Math.abs(ub.top - ub.whoTop) > 12) bad('가로: [되돌리기] 가 누구 줄에 없다(' + ub.top + ' vs ' + ub.whoTop + ')');
+    await shot(land ? 'd_undo' : 'a_undo');
+    await p3.tap('#infoBar [data-ib="undo"]'); await p3.waitForTimeout(200);
+    const back = await p3.evaluate(m => { const F = window.RPD.FieldManager; return { from: F.get(m.from).unit && F.get(m.from).unit.defId, to: !!F.get(m.to).unit, left: window.RPD.UndoManager.count() }; }, mv);
+    if (back.from !== 'charizard' || back.to) bad('[되돌리기] 를 눌렀는데 제자리로 안 돌아감 ' + JSON.stringify(back));
+    m3Report[dev] = { undoBtn: ub, back };
+    if (land) { m3Report[dev].errors = e3.slice(0, 2); await c3.close(); continue; }
+
+    // 조작 방해 막기 — 계산된 스타일 · viewport
+    const st = await p3.evaluate(() => {
+      const cs = (n, p) => n ? getComputedStyle(n).getPropertyValue(p) : 'none';
+      const chat = document.getElementById('chatInput');
+      return {
+        viewport: document.querySelector('meta[name="viewport"]').content,
+        htmlOverscroll: cs(document.documentElement, 'overscroll-behavior-y'), bodyOverscroll: cs(document.body, 'overscroll-behavior-y'),
+        bodyTouch: cs(document.body, 'touch-action'), canvasTouch: cs(document.getElementById('gameCanvas'), 'touch-action'),
+        btnTouch: cs(document.getElementById('btnSummon'), 'touch-action'),
+        canvasSelect: cs(document.getElementById('gameCanvas'), 'user-select'), bodySelect: cs(document.body, 'user-select'),
+        inputSelect: chat ? cs(chat, 'user-select') : 'no-input', inputId: chat && chat.id,
+        appH: Math.round(document.querySelector('.app').getBoundingClientRect().height), innerH: innerHeight,
+        coarse: matchMedia('(pointer: coarse)').matches
+      };
+    });
+    if (!/viewport-fit=cover/.test(st.viewport)) bad('viewport-fit=cover 없음');
+    if (st.htmlOverscroll !== 'none' || st.bodyOverscroll !== 'none') bad('overscroll-behavior ' + st.htmlOverscroll + '/' + st.bodyOverscroll);
+    if (st.bodyTouch !== 'manipulation') bad('body touch-action ' + st.bodyTouch);
+    if (st.canvasTouch !== 'none') bad('캔버스 touch-action ' + st.canvasTouch + ' (끌기 · 길게 누르기는 게임이 받아야)');
+    if (st.canvasSelect !== 'none' || st.bodySelect !== 'none') bad('user-select ' + st.canvasSelect + '/' + st.bodySelect);
+    if (st.inputSelect !== 'text' && st.inputSelect !== 'auto') bad('입력칸 user-select ' + st.inputSelect);
+    if (Math.abs(st.appH - st.innerH) > 2) bad('.app 높이 ' + st.appH + ' ≠ 화면 ' + st.innerH + '(100dvh)');
+    m3Report.styles = st;
+    // 캔버스 길게 누르기 메뉴가 막히는가(contextmenu 가 취소되는가)
+    const ctxBlocked = await p3.evaluate(() => {
+      const ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+      document.getElementById('gameCanvas').dispatchEvent(ev);
+      const ev2 = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+      const inp = document.getElementById('chatInput'); if (inp) inp.dispatchEvent(ev2);
+      return { canvas: ev.defaultPrevented, input: inp ? ev2.defaultPrevented : null };
+    });
+    if (!ctxBlocked.canvas || ctxBlocked.input) bad('contextmenu 캔버스 ' + ctxBlocked.canvas + ' · 입력칸 ' + ctxBlocked.input);
+    m3Report.contextmenu = ctxBlocked;
+
+    // (b) [더보기] — 진동 · 효과
+    await p3.tap('#tbMore'); await p3.waitForTimeout(300);
+    const mb = await p3.evaluate(() => ['btnHaptics', 'btnFx'].map(id => { const n = document.getElementById(id), r = n.getBoundingClientRect();
+      return { id, shown: getComputedStyle(n).display !== 'none' && r.width > 0, label: n.getAttribute('aria-label'), w: Math.round(r.width), h: Math.round(r.height) }; }));
+    mb.forEach(b => { if (!b.shown) bad('[더보기] 에 ' + b.id + ' 가 안 보임'); if (b.h < 44) bad(b.id + ' 높이 ' + b.h); });
+    await p3.tap('#btnHaptics'); await p3.waitForTimeout(100);
+    const hOff = await p3.evaluate(() => ({ label: document.getElementById('btnHaptics').getAttribute('aria-label'), saved: window.RPD.SaveManager.getSetting('haptics', true) }));
+    if (hOff.saved !== false || hOff.label !== '진동 끔') bad('진동 끄기: ' + JSON.stringify(hOff));
+    await p3.tap('#btnHaptics'); await p3.waitForTimeout(100);
+    await shot('b_more_settings');
+    m3Report.more = { buttons: mb, hapticsOff: hOff, fxDefault: await p3.evaluate(() => window.RPD.Effects.levelId()) };
+    await p3.tap('#tbMore'); await p3.waitForTimeout(200);
+
+    // (c) 자리 비움 — 실제 visibilitychange(hidden) · 다시 visible · 덮개 누르기
+    await p3.evaluate(() => { window.RPD.Loop.setPaused(false); window.RPD.GameManager.setState(window.RPD.GameState.RUNNING); });
+    const setHidden = h => p3.evaluate(v => {
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => v });
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => (v ? 'hidden' : 'visible') });
+      document.dispatchEvent(new Event('visibilitychange'));
+    }, h);
+    await setHidden(true); await p3.waitForTimeout(150);
+    await setHidden(false); await p3.waitForTimeout(400);
+    const aw = await p3.evaluate(() => ({ paused: window.RPD.Loop.paused, state: window.RPD.GameManager.state, overlay: getComputedStyle(document.getElementById('awayOverlay')).display !== 'none',
+      text: document.getElementById('awayOverlay').innerText.replace(/\s+/g, ' ') }));
+    if (!aw.paused || aw.state !== 'PAUSED' || !aw.overlay) bad('hidden 뒤 일시정지 · 덮개: ' + JSON.stringify(aw));
+    await shot('c_away_paused');
+    await p3.tap('#awayOverlay'); await p3.waitForTimeout(200);
+    const aw2 = await p3.evaluate(() => ({ paused: window.RPD.Loop.paused, state: window.RPD.GameManager.state, overlay: !document.getElementById('awayOverlay').hidden }));
+    if (aw2.paused || aw2.state !== 'RUNNING' || aw2.overlay) bad('덮개를 눌렀는데 안 이어짐: ' + JSON.stringify(aw2));
+    m3Report.away = { hidden: aw, afterTap: aw2 };
+
+    // 효과 3단계 — 같은 전투 장면(47R — 보스 라운드가 아닌 적 무리 · 6마리)의 한 프레임 그리기 시간 · 해상도 · 파티클(CPU 4배 느리게)
+    const cdp3 = await c3.newCDPSession(p3);
+    const fxRes = {};
+    for (const lv of ['normal', 'reduced', 'minimal']) {
+      await p3.evaluate(() => {
+        const R = window.RPD;
+        document.querySelectorAll('.modepick, .result, .help, .book').forEach(o => o.hidden = true);
+        R.Game.resetAll('NORMAL', 'NORMAL'); R.Game.startRun('NORMAL', 'NORMAL');
+        R.GameManager.setWave(47); R.WaveManager.startRound(47);
+        const F = R.FieldManager;
+        F.slots.forEach(x => { if (!x.unlocked) x.unlocked = true; });
+        F.slots.forEach(x => { if (x.unit) F.remove(x.index); });
+        const ids = ['charizard', 'blastoise', 'venusaur', 'pikachu', 'gengar', 'alakazam', 'dragonite', 'gyarados', 'arcanine', 'lapras', 'jolteon', 'flareon', 'vaporeon', 'machamp', 'golem', 'raichu', 'ninetales', 'starmie', 'exeggutor', 'snorlax'];
+        // 6마리만 — 다 올리면 47R 적이 순식간에 녹아 재는 동안 필드가 빈다(적이 살아 있어야 연출 · 체력 막대가 그려진다)
+        F.slots.filter(x => x.unlocked && !x.blocked).slice(0, 6).forEach((x, i) => { const u = R.UnitManager.create(ids[i % ids.length]); if (u) F.place(x.index, u); });
+        R.GameManager.life = 9999; R.Loop.setSpeed(1);
+        R.bus.emit('field:changed', {});
+      });
+      // 화질 사다리(FramePacer)는 재는 동안 멈춘다 — 느린 CPU 흉내에서 사다리가 먼저 해상도를 내리면 단계 차이가 안 보인다
+      await p3.evaluate(l => { const P = window.RPD.FramePacer; P.reset(); P._stepDown = P._stepDown || P.stepDown; P.stepDown = () => false; window.RPD.Effects.force(l); }, lv);
+      await cdp3.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+      await p3.waitForTimeout(5000);   // 적이 들어오고 연출이 쌓일 때까지
+      const m = await p3.evaluate(() => new Promise(res => {
+        const R = window.RPD, times = [], parts = [];
+        let n = 0;
+        function frame() {
+          const t0 = performance.now();
+          R.Renderer.render(1 / 60);
+          times.push(performance.now() - t0);
+          parts.push(R.AttackFx.stats().particles);
+          if (++n < 90) requestAnimationFrame(frame); else res({ times, parts });
+        }
+        requestAnimationFrame(frame);
+      }));
+      await cdp3.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+      const sorted = m.times.slice().sort((a, b) => a - b);
+      const avg = m.times.reduce((a, b) => a + b, 0) / m.times.length;
+      const info = await p3.evaluate(() => ({ dpr: window.RPD.Renderer.dpr, canvas: window.RPD.Renderer.canvas.width + '×' + window.RPD.Renderer.canvas.height,
+        cap: window.RPD.AttackFx.stats().particleCap, fps: window.RPD.FramePacer.targetFps(), enemies: window.RPD.EnemyManager.enemies.filter(e => e.alive).length }));
+      // 1초에 그리기에 쓰는 시간 = 한 번 그리는 시간 × 1초에 그리는 횟수(최소는 30fps 라 절반만 그린다)
+      fxRes[lv] = { ...info, drawMsPerSec: Math.round(avg * info.fps), drawMsAvg: +avg.toFixed(2), drawMsMedian: +sorted[sorted.length >> 1].toFixed(2), drawMsP90: +sorted[Math.floor(sorted.length * 0.9)].toFixed(2),
+        particlesAvg: Math.round(m.parts.reduce((a, b) => a + b, 0) / m.parts.length) };
+      await p3.evaluate(() => window.RPD.Loop.setPaused(true));
+      await p3.screenshot({ path: require('path').join(__dirname, '..', 'dist', '18_m3_fx_' + lv + '.png') });
+      await p3.evaluate(() => window.RPD.Loop.setPaused(false));
+    }
+    await p3.evaluate(() => { const P = window.RPD.FramePacer; if (P._stepDown) P.stepDown = P._stepDown; window.RPD.Effects.force(null); });
+    if (!(fxRes.normal.dpr > fxRes.reduced.dpr && fxRes.reduced.dpr > fxRes.minimal.dpr)) bad('효과 단계별 해상도가 안 내려감 ' + [fxRes.normal.dpr, fxRes.reduced.dpr, fxRes.minimal.dpr]);
+    if (!(fxRes.normal.cap > fxRes.reduced.cap && fxRes.reduced.cap > fxRes.minimal.cap)) bad('효과 단계별 파티클 상한이 안 내려감');
+    m3Report.fx = fxRes;
+    m3Report[dev].errors = e3.slice(0, 2);
+    if (e3.length) bad('페이지 오류: ' + e3[0]);
+    await c3.close();
+  }
+  console.log('mobile3', JSON.stringify(m3Report, null, 1));
+  console.log('mobile3 problems', JSON.stringify(m3Problems));
+  report.push({ mobile3: m3Report });
+  if (m3Problems.length) process.exitCode = 1;
 
   /* ---------- 모바일 ③ — 홈 화면 앱(세션 53) ----------
    * 설치 · 오프라인은 인터넷 주소에서만 되니, 원본 폴더(dist 아님)를 이 자리에서 작은 웹 서버로 띄워 연다(localhost 는 https 와 같게 친다).

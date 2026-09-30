@@ -41,8 +41,15 @@
 
   FramePacer.deviceDpr = function () { return global.devicePixelRatio || 1; };
   /* Renderer.resize 가 쓰는 해상도 상한 */
-  FramePacer.maxDpr = function () { return LADDER[FramePacer.level].dpr; };
-  FramePacer.targetFps = function () { return LADDER[FramePacer.level].fps; };
+  // 효과 단계(Effects.js — 줄임 1.5 · 최소 1배 · 30fps)가 사다리보다 낮으면 그쪽을 따른다
+  FramePacer.maxDpr = function () {
+    var cap = RPD.Effects ? RPD.Effects.get().dprCap : 2;
+    return Math.min(LADDER[FramePacer.level].dpr, cap);
+  };
+  FramePacer.targetFps = function () {
+    var cap = RPD.Effects ? RPD.Effects.get().fpsCap : 60;
+    return Math.min(LADDER[FramePacer.level].fps, cap);
+  };
 
   FramePacer.wake = function () { FramePacer._wakeUntil = now() + WAKE_MS; };
 
@@ -66,11 +73,12 @@
   /* 화질 한 칸 내리기 — 이 휴대폰에서 실제로 달라지는 칸까지 건너뛴다(원래 1배 화면이면 해상도 칸은 의미가 없다) */
   FramePacer.stepDown = function () {
     var dev = FramePacer.deviceDpr();
-    var cur = LADDER[FramePacer.level];
-    var curDpr = Math.min(dev, cur.dpr);
+    var fx = RPD.Effects ? RPD.Effects.get() : { dprCap: 2, fpsCap: 60 };
+    var curDpr = Math.min(dev, FramePacer.maxDpr()), curFps = FramePacer.targetFps();
     for (var i = FramePacer.level + 1; i < LADDER.length; i++) {
       var L = LADDER[i];
-      if (Math.min(dev, L.dpr) < curDpr - 0.01 || L.fps < cur.fps) {
+      // 효과 단계가 이미 낮춰 둔 칸은 건너뛴다(줄임이면 2 → 1.5 는 달라지는 게 없다)
+      if (Math.min(dev, L.dpr, fx.dprCap) < curDpr - 0.01 || Math.min(L.fps, fx.fpsCap) < curFps) {
         FramePacer.level = i;
         if (RPD.Renderer && RPD.Renderer.canvas) RPD.Renderer.resize();
         if (RPD.bus) RPD.bus.emit('render:quality', { level: i, dpr: L.dpr, fps: L.fps });

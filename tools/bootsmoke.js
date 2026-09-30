@@ -110,7 +110,12 @@ const sandbox = {
   },
   document: {
     readyState: 'complete',
-    addEventListener: () => {},
+    hidden: false,
+    visibilityState: 'visible',
+    addEventListener: (type, fn) => {   // 검사에서 직접 불러 보려고 모아 둔다(keydown · visibilitychange …)
+      listeners.__document = listeners.__document || {};
+      (listeners.__document[type] = listeners.__document[type] || []).push(fn);
+    },
     createElement: (tag) => makeNode('created_' + tag),
     getElementById: (id) => {
       if (!ids.has(id)) return null;          // 실제 브라우저와 똑같이 null 을 준다
@@ -1481,6 +1486,268 @@ check('보스 보상 지급 — 휴대폰은 필드 위 카드 대신 정보 바
   RPD.bus.emit('reward:granted', entry);
   if (nodes.rewardPop.hidden) throw new Error('PC 인데 보상 카드가 안 떴다');
   nodes.rewardPop.hidden = true;
+});
+
+/* ---------- 편의 기능(모바일 ③ · 세션 68) ---------- */
+console.log('\n편의 기능 — 되돌리기 · 진동 · 효과 · 자리 비움');
+const UN = RPD.UndoManager, CV = RPD.Convenience;
+function docFire(type, ev) { ((listeners.__document || {})[type] || []).forEach(fn => fn(ev)); }
+function undoSetup() {
+  MS.forceMobile = true;
+  const F = RPD.FieldManager;
+  F.init(); RPD.StorageManager.reset(); UN.reset();
+  const open = F.slots.filter(s => s.unlocked && !s.blocked);
+  F.place(open[0].index, RPD.UnitManager.create('charizard'));
+  F.place(open[1].index, RPD.UnitManager.create('pikachu'));
+  RPD.bus.emit('field:changed', {});
+  UN.reset();
+  return { F, S: RPD.StorageManager, a: open[0].index, b: open[1].index, empty: open[2].index };
+}
+
+check('되돌리기 — 빈 칸으로 옮긴 것 · 맞바꾼 것 · 창고로 · 필드로를 차례로 되돌린다(최대 3개)', () => {
+  const { F, S, a, b, empty } = undoSetup();
+  const ua = F.get(a).unit, ub = F.get(b).unit;
+  F.swap(a, empty);                                   // 옮기기
+  if (F.get(empty).unit !== ua || UN.count() !== 1) throw new Error('옮기기 기록 ' + UN.count());
+  if (!UN.undo().ok || F.get(a).unit !== ua || F.get(empty).unit) throw new Error('옮기기를 못 되돌렸다');
+  F.swap(a, b);                                       // 맞바꾸기
+  if (!UN.undo().ok || F.get(a).unit !== ua || F.get(b).unit !== ub) throw new Error('맞바꾸기를 못 되돌렸다');
+  S.store(a);                                         // 창고로
+  if (!UN.undo().ok || F.get(a).unit !== ua || S.units.length) throw new Error('창고로를 못 되돌렸다');
+  S.store(a); UN.reset();
+  S.deploy(0, empty);                                 // 필드로(빈 칸)
+  if (!UN.undo().ok || F.get(empty).unit || S.units[0] !== ua) throw new Error('필드로를 못 되돌렸다');
+  S.deploy(0, b);                                     // 필드로(누가 있는 칸 — 맞바꿈)
+  if (F.get(b).unit !== ua || S.units[0] !== ub) throw new Error('전제: 맞바꿈 배치 실패');
+  if (!UN.undo().ok || F.get(b).unit !== ub || S.units[0] !== ua) throw new Error('맞바꿈 배치를 못 되돌렸다');
+  if (UN.undo().reason !== 'EMPTY') throw new Error('기록이 남았다');
+  for (let i = 0; i < 5; i++) F.swap(i % 2 ? empty : b, i % 2 ? b : empty);
+  if (UN.count() !== 3) throw new Error('최대 3개가 아니다: ' + UN.count());
+});
+
+check('되돌리기 — 조합 재료로 쓰인 · 방출된 개체가 낀 기록은 지워진다', () => {
+  const { F, S, empty } = undoSetup();
+  const r = RPD.RecipeData.list.find(x => x.materials.every(m => RPD.PokemonData.get(m).summon));
+  F.init(); S.reset(); UN.reset();
+  const open = F.slots.filter(s => s.unlocked && !s.blocked);
+  const mats = r.materials.map((m, i) => { const u = RPD.UnitManager.create(m); F.place(open[i].index, u); return u; });
+  RPD.bus.emit('field:changed', {}); UN.reset();
+  const spare = open[r.materials.length].index;
+  F.swap(open[0].index, spare);                       // 재료 하나를 옮겨 둔다
+  if (UN.count() !== 1) throw new Error('전제: 기록 1개가 아니다');
+  const res = RPD.RecipeManager.craft(r.key || r.result);
+  if (!res.ok) throw new Error('조합 실패: ' + res.reason);
+  if (UN.count() !== 0 || UN.stack.length !== 0) throw new Error('재료로 쓰였는데 기록이 남았다');
+  // 방출
+  F.init(); S.reset(); UN.reset();
+  const u = RPD.UnitManager.create('pikachu'); F.place(open[0].index, u); RPD.bus.emit('field:changed', {}); UN.reset();
+  F.swap(open[0].index, open[1].index);
+  RPD.EconomyManager.sell(open[1].index);
+  if (UN.count() !== 0 || UN.stack.length !== 0) throw new Error('방출했는데 기록이 남았다');
+  void mats; void empty;
+});
+
+check('되돌리기 — 새 판(처음부터) · 게임 오버에 비워진다', () => {
+  const { F, a, empty } = undoSetup();
+  F.swap(a, empty);
+  RPD.Game.restart();
+  if (UN.count() !== 0) throw new Error('처음부터 뒤에 기록이 남았다');
+  const s2 = undoSetup();
+  s2.F.swap(s2.a, s2.empty);
+  RPD.bus.emit('game:over', { wave: 1 });
+  if (UN.count() !== 0) throw new Error('게임 오버 뒤에 기록이 남았다');
+});
+
+check('되돌리기 — 위치가 바뀌었으면 거절 · 그 기록은 버리고 "되돌릴 수 없어요"', () => {
+  const { F, a, empty } = undoSetup();
+  F.swap(a, empty);                                   // a → empty
+  F.place(a, RPD.UnitManager.create('squirtle'));     // 기록 밖 변화: 원래 자리가 찼다
+  const r = CV.undo();
+  if (r.ok || r.reason !== 'STALE') throw new Error('거절하지 않았다: ' + JSON.stringify(r));
+  if (UN.stack.length !== 0) throw new Error('실패한 기록을 안 버렸다');
+  if (panelHtml('infoBar').indexOf('되돌릴 수 없어요') < 0) throw new Error('알림이 없다');
+  RPD.MobileToolbar.dismissToast();
+});
+
+check('정보 바 [되돌리기] — 기록이 없으면 흐리게(disabled) · 있으면 횟수 · 누르면 되돌린다', () => {
+  const { F, a, empty } = undoSetup();
+  F.select(-1);
+  const off = panelHtml('infoBar').match(/<button[^>]*data-ib="undo"[^>]*>/);
+  if (!off || !/\sdisabled/.test(off[0])) throw new Error('기록이 없는데 흐리지 않다: ' + (off && off[0]));
+  F.swap(a, empty); F.select(empty);
+  const html = panelHtml('infoBar');
+  const on = html.match(/<button[^>]*data-ib="undo"[^>]*>/);
+  if (!on || /\sdisabled/.test(on[0])) throw new Error('기록이 있는데 흐리다');
+  if (html.indexOf('data-ib="undo"') > html.indexOf('data-ib="move"')) throw new Error('[되돌리기] 가 버튼 넷 뒤에 있다(누구 줄 옆이어야)');
+  if (brokenClass(html).length) throw new Error('class 안에 속성이 섞였다');
+  const btn = { disabled: false, getAttribute: k => (k === 'data-ib' ? 'undo' : null) };
+  listeners.infoBar.click.forEach(fn => fn({ target: { closest: () => btn } }));
+  if (F.get(a).unit == null || F.get(empty).unit) throw new Error('정보 바 버튼으로 안 되돌아갔다');
+  F.select(-1);
+});
+
+check('Ctrl+Z · ⌘Z 로 되돌린다 — 입력칸(주문 · 검색)에서는 글자 되돌리기로 둔다', () => {
+  const { F, a, empty } = undoSetup();
+  F.swap(a, empty);
+  let prevented = false;
+  docFire('keydown', { key: 'z', code: 'KeyZ', ctrlKey: true, target: { tagName: 'INPUT' }, preventDefault() { prevented = true; } });
+  if (F.get(a).unit || prevented) throw new Error('입력칸에서 되돌렸다');
+  docFire('keydown', { key: 'z', code: 'KeyZ', ctrlKey: true, target: { tagName: 'BODY' }, preventDefault() { prevented = true; } });
+  if (!F.get(a).unit || F.get(empty).unit || !prevented) throw new Error('Ctrl+Z 가 안 먹었다');
+  F.swap(a, empty);
+  docFire('keydown', { key: 'z', code: 'KeyZ', metaKey: true, target: { tagName: 'CANVAS' }, preventDefault() {} });
+  if (!F.get(a).unit) throw new Error('⌘Z 가 안 먹었다');
+});
+
+function catchErrors(fn) {
+  const errs = [], real = console.error;
+  console.error = (...a) => errs.push(a.map(String).join(' '));
+  try { fn(); } finally { console.error = real; }
+  return errs;
+}
+function placeAndCraft() {
+  const { F, empty } = undoSetup();
+  F.select(F.slots.find(s => s.unit).index);
+  F.swap(F.selectedIndex, empty);
+  const r = RPD.RecipeData.list.find(x => x.materials.every(m => RPD.PokemonData.get(m).summon));
+  F.init(); RPD.StorageManager.reset();
+  r.materials.forEach(m => RPD.StorageManager.add(RPD.UnitManager.create(m)));
+  RPD.bus.emit('field:changed', {});
+  RPD.Haptics._last = -1e9;
+  const res = RPD.RecipeManager.craft(r.key || r.result);
+  if (!res.ok) throw new Error('조합 실패');
+}
+
+check('진동 — navigator.vibrate 가 없어도(아이폰 · PC) 배치 · 조합에 오류가 없다', () => {
+  delete sandbox.navigator;
+  const errs = catchErrors(placeAndCraft);
+  if (errs.length) throw new Error(errs[0].slice(0, 160));
+  sandbox.navigator = {};
+  const errs2 = catchErrors(placeAndCraft);
+  if (errs2.length) throw new Error(errs2[0].slice(0, 160));
+  delete sandbox.navigator;
+});
+
+check('진동 — 무늬(조합 [20,40,20] · 고르기 8ms · 배치 15ms) · 0.1초 안 되풀이 무시 · 끄면 안 부른다', () => {
+  const H = RPD.Haptics, calls = [];
+  sandbox.navigator = { vibrate: p => { calls.push(p); return true; } };
+  H.setEnabled(true);
+  placeAndCraft();
+  if (!calls.some(p => JSON.stringify(p) === '[20,40,20]')) throw new Error('조합 무늬가 없다: ' + JSON.stringify(calls));
+  calls.length = 0; H._last = -1e9;
+  H.buzz('place'); H.buzz('select');
+  if (calls.length !== 1 || calls[0] !== 15) throw new Error('0.1초 되풀이: ' + JSON.stringify(calls));
+  H.setEnabled(false);
+  calls.length = 0; H._last = -1e9;
+  placeAndCraft();
+  RPD.bus.emit('boss:appeared', {}); RPD.bus.emit('game:life', { life: 1, delta: -1 });
+  if (calls.length) throw new Error('끄기인데 떨었다: ' + JSON.stringify(calls));
+  if (RPD.SaveManager.getSetting('haptics', true) !== false) throw new Error('설정이 저장 안 됐다');
+  H.setEnabled(true);
+  delete sandbox.navigator;
+});
+
+check('[더보기] 진동 · 효과 버튼이 설정을 바꾸고 이름표가 따라간다', () => {
+  const E = RPD.Effects;
+  (listeners.btnHaptics.click || []).forEach(fn => fn({}));
+  if (RPD.Haptics.enabled()) throw new Error('진동 버튼이 안 껐다');
+  (listeners.btnHaptics.click || []).forEach(fn => fn({}));
+  if (!RPD.Haptics.enabled()) throw new Error('진동 버튼이 안 켰다');
+  E.set('normal');
+  (listeners.btnFx.click || []).forEach(fn => fn({}));
+  if (E.levelId() !== 'reduced' || RPD.SaveManager.getSetting('fx') !== 'reduced') throw new Error('효과 버튼: ' + E.levelId());
+  (listeners.btnFx.click || []).forEach(fn => fn({}));
+  if (E.levelId() !== 'minimal') throw new Error('효과 버튼 두 번: ' + E.levelId());
+  (listeners.btnFx.click || []).forEach(fn => fn({}));
+  if (E.levelId() !== 'normal') throw new Error('효과 버튼 세 번: ' + E.levelId());
+});
+
+check('효과 3단계 — 해상도 상한(2 · 1.5 · 1) · 그리기 fps(60 · 60 · 30) · 파티클 상한(1600 · 800 · 400)이 바뀐다', () => {
+  const E = RPD.Effects, FP = RPD.FramePacer, R = RPD.Renderer;
+  const got = {};
+  ['normal', 'reduced', 'minimal'].forEach(id => {
+    E.force(id);
+    got[id] = [FP.maxDpr(), R.dpr, FP.targetFps(), RPD.AttackFx.stats().particleCap].join('/');
+  });
+  E.force(null);
+  const want = { normal: '2/2/60/1600', reduced: '1.5/1.5/60/800', minimal: '1/1/30/400' };
+  const bad = Object.keys(want).filter(k => got[k] !== want[k]);
+  if (bad.length) throw new Error(bad.map(k => k + ' ' + got[k] + ' (기대 ' + want[k] + ')').join(' · '));
+});
+
+check('효과 기본값 — 코어 4개 이하 · 메모리 4GB 이하 · 동작 줄이기면 줄임, 아니면 보통 · 고른 값은 저장해서 그걸 쓴다', () => {
+  const E = RPD.Effects, SM = RPD.SaveManager;
+  delete SM.data.settings.fx;
+  const cases = [[{ hardwareConcurrency: 8, deviceMemory: 8 }, false, 'normal'], [{ hardwareConcurrency: 4 }, false, 'reduced'],
+                 [{ hardwareConcurrency: 8, deviceMemory: 4 }, false, 'reduced'], [{ hardwareConcurrency: 8 }, true, 'reduced']];
+  const realMM = sandbox.matchMedia;
+  const bad = cases.filter(([nav, rm, want]) => {
+    sandbox.navigator = nav;
+    sandbox.matchMedia = q => ({ matches: rm && /reduced-motion/.test(q) });
+    return E.levelId() !== want;
+  });
+  sandbox.matchMedia = realMM; delete sandbox.navigator;
+  if (bad.length) throw new Error('틀림: ' + JSON.stringify(bad));
+  E.set('minimal');
+  sandbox.navigator = { hardwareConcurrency: 16 };
+  if (E.levelId() !== 'minimal') throw new Error('고른 값보다 기기 기본값을 썼다');
+  delete sandbox.navigator;
+  E.set('normal');
+});
+
+check('효과 단계는 전투 결과를 안 바꾼다 — 같은 난수로 30초 전투: 보통 = 최소(골드 · 처치 · 적 체력 · 라이프)', () => {
+  const E = RPD.Effects;
+  function run(level) {
+    E.force(level);
+    RPD.Game.restart();
+    const F = RPD.FieldManager, open = F.slots.filter(s => s.unlocked && !s.blocked);
+    ['charizard', 'pikachu', 'blastoise', 'venusaur', 'alakazam'].forEach((id, i) => F.place(open[i].index, RPD.UnitManager.create(id)));
+    RPD.bus.emit('field:changed', {});
+    vm.runInContext('(function(){ var s = 12345; Math.random = function () { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x80000000; }; })()', sandbox);
+    RPD.WaveManager.begin();
+    for (let t = 0; t < 30; t++) { tick(1); RPD.Renderer.render(1 / 60); }
+    const GM = RPD.GameManager, EM = RPD.EnemyManager;
+    return JSON.stringify({ gold: GM.gold, life: GM.life, wave: GM.wave, kills: RPD.StatsManager.kills || (RPD.StatsManager.data && RPD.StatsManager.data.kills),
+      hp: Math.round(EM.enemies.reduce((a, e) => a + (e.alive ? e.hp : 0), 0)), n: EM.enemies.length,
+      dmg: Math.round(F.getUnits().reduce((a, u) => a + (u.totalDamage || 0), 0)) });
+  }
+  const realRandom = vm.runInContext('Math.random', sandbox);
+  let a, b, c;
+  try { a = run('normal'); b = run('minimal'); c = run('reduced'); }
+  finally { sandbox.__realRandom = realRandom; vm.runInContext('Math.random = __realRandom', sandbox); }
+  E.force(null);
+  if (a !== b || a !== c) throw new Error('\n    보통 ' + a + '\n    최소 ' + b + '\n    줄임 ' + c);
+  if (JSON.parse(a).dmg <= 0) throw new Error('전투가 안 일어났다: ' + a);
+});
+
+check('js/systems/ 는 효과 설정을 읽지 않는다(그리기만 바꾼다)', () => {
+  const dir = path.join(ROOT, 'js/systems');
+  const bad = fs.readdirSync(dir).filter(f => f.endsWith('.js'))
+    .filter(f => /RPD\.Effects|getSetting\(\s*['"]fx['"]|Effects\.(get|levelId|LEVELS)/.test(fs.readFileSync(path.join(dir, f), 'utf8')));
+  if (bad.length) throw new Error(bad.join(', '));
+});
+
+check('앱을 벗어나면(visibilitychange hidden · pagehide) 일시정지 + 덮개 · 돌아와도 안 풀리고 · 누르면 계속', () => {
+  const GM = RPD.GameManager, S = RPD.GameState, L = RPD.Loop;
+  RPD.Game.restart(); RPD.WaveManager.begin();
+  if (GM.state !== S.RUNNING || L.paused) throw new Error('전제: 진행 중이 아니다');
+  sandbox.document.hidden = true; sandbox.document.visibilityState = 'hidden';
+  docFire('visibilitychange', {});
+  if (!L.paused || GM.state !== S.PAUSED || nodes.awayOverlay.hidden) throw new Error('가려졌는데 안 멈췄다');
+  sandbox.document.hidden = false; sandbox.document.visibilityState = 'visible';
+  docFire('visibilitychange', {});
+  if (!L.paused || nodes.awayOverlay.hidden) throw new Error('돌아오자마자 저절로 풀렸다');
+  (listeners.awayOverlay.click || []).forEach(fn => fn({}));
+  if (L.paused || GM.state !== S.RUNNING || !nodes.awayOverlay.hidden) throw new Error('눌렀는데 안 이어졌다');
+  (listeners.__window.pagehide || []).forEach(fn => fn({}));
+  if (!L.paused || nodes.awayOverlay.hidden) throw new Error('pagehide 에 안 멈췄다');
+  CV.resume();
+  // 이미 멈춘 판(⏸)은 덮개를 안 띄우고, 풀 때도 건드리지 않는다
+  L.setPaused(true); GM.setState(S.PAUSED);
+  sandbox.document.hidden = true; docFire('visibilitychange', {}); sandbox.document.hidden = false;
+  if (!nodes.awayOverlay.hidden) throw new Error('이미 멈춘 판에 덮개를 띄웠다');
+  L.setPaused(false); GM.setState(S.RUNNING);
+  MS.forceMobile = false;
 });
 
 console.log(`\n────────────────────────────`);

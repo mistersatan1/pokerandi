@@ -205,6 +205,8 @@
     if (sa.unit) { sa.unit.slotIndex = a; sa.unit.x = sa.x; sa.unit.y = sa.y; }
     if (sb.unit) { sb.unit.slotIndex = b; sb.unit.x = sb.x; sb.unit.y = sb.y; }
 
+    // 되돌리기(UndoManager)가 듣는다 — a 에 있던 개체(moved)가 b 로, b 에 있던 개체(other · 없으면 null)가 a 로
+    RPD.bus.emit('field:swapped', { from: a, to: b, moved: sb.unit, other: sa.unit || null });
     RPD.bus.emit('field:changed');
     return true;
   };

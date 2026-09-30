@@ -17,6 +17,8 @@
 (function (global) {
   'use strict';
   var RPD = global.RPD;
+  // 연출 전용 난수 — 게임 난수(Math.random) 흐름을 밀지 않게(Effects.js · 세션 68)
+  var fxRand = RPD.Effects ? RPD.Effects.rand : Math.random;
 
   var PI2 = Math.PI * 2;
 
@@ -82,7 +84,7 @@
   resetParticles();
 
   function spawnP(kind, color, x, y, vx, vy, life, size, opts) {
-    if (freeTop === 0) return -1;
+    if (freeTop === 0 || pActive >= fxLv.particleCap) return -1;   // 효과 단계의 파티클 상한(Effects.js)
     var i = freeStack[--freeTop];
     P.alive[i] = 1; pActive += 1;
     P.kind[i] = kind; P.col[i] = cix(color);
@@ -90,7 +92,7 @@
     life *= 1.25;
     P.life[i] = life; P.max[i] = life; P.size[i] = size;
     P.grow[i] = opts && opts.grow || 0;
-    P.rot[i] = opts && opts.rot != null ? opts.rot : Math.random() * PI2;
+    P.rot[i] = opts && opts.rot != null ? opts.rot : fxRand() * PI2;
     P.vr[i] = opts && opts.vr || 0;
     P.drag[i] = opts && opts.drag != null ? opts.drag : 2.2;
     P.grav[i] = opts && opts.grav || 0;
@@ -99,17 +101,22 @@
 
   /* 풀 사용량에 따른 파티클 배율. 명중 판정이 몰리는 순간에만 줄어든다. */
   var lodCache = 1;
+  // 효과 단계(보통 · 줄임 · 최소 — Effects.js). 공격 · 갱신마다 새로 읽는다
+  var FX_NORMAL = { particleMul: 1, particleCap: P_CAP, shake: true, skillSimple: false };
+  var fxLv = FX_NORMAL;
+  function refreshFx() { fxLv = RPD.Effects ? RPD.Effects.get() : FX_NORMAL; }
   function lod() { return lodCache; }
   function refreshLod() {
+    refreshFx();
     var used = pActive / P_CAP;
     var f = used > 0.85 ? 0.25 : used > 0.6 ? 0.55 : 1;
     if (RPD.Loop && RPD.Loop.speed >= 3) f *= 0.8;
     lodCache = f;
   }
   function n(count) {
-    var v = count * lodCache;
+    var v = count * lodCache * fxLv.particleMul;
     var whole = v | 0;
-    return whole + (Math.random() < v - whole ? 1 : 0);
+    return whole + (fxRand() < v - whole ? 1 : 0);
   }
 
   /* ---------- 오브젝트 풀(투사체·빔·번개·링) ---------- */
@@ -194,7 +201,8 @@
 
   AttackFx.stats = function () {
     var c = function (pool) { var k = 0; for (var i = 0; i < pool.length; i++) if (pool[i].alive) k++; return k; };
-    return { particles: pActive, particleCap: P_CAP, projectiles: c(projectiles), beams: c(beams),
+    refreshFx();
+    return { particles: pActive, particleCap: Math.min(P_CAP, fxLv.particleCap), poolCap: P_CAP, projectiles: c(projectiles), beams: c(beams),
              bolts: c(bolts), rings: c(rings), lod: lodCache };
   };
 
@@ -230,6 +238,12 @@
     var scale = sk.scale || 2;
     var lvl = Math.min(4, cfg.tierIndex || 0);
     var tgt = target || nearestEnemy(unit) || { x: unit.x + 80, y: unit.y };
+    if (fxLv.skillSimple) {
+      // 최소: 발밑 링 한 겹 + 맞은 자리 번쩍 한 번 — 날아가는 잔상 · 남는 연출 · 흔들림 없이
+      addRing('ring', unit.x, unit.y, 10, 40, 0.3, 3, merged.color, merged.color2);
+      impact(tgt.x, tgt.y, merged, 2, true, 1);
+      return;
+    }
     // 발동 표시: 시전자 발밑에 링 두 겹 + 섬광
     addRing('ring', unit.x, unit.y, 10, 46 * Math.min(scale, 2.2), 0.45, 4, merged.color, merged.color2);
     addRing('disc', unit.x, unit.y, 4, 30, 0.3, 0, merged.color2, merged.color2, 0.35);
@@ -334,7 +348,7 @@
       p.ang = Math.atan2(p.y - prevY, p.x - prevX) || p.ang;
 
       var cfg = p.cfg;
-      var trail = Math.max(cfg.trail || 0, TRAIL_MIN[p.lvl]) + (p.big ? 1 : 0);
+      var trail = fxLv.skillSimple ? 0 : Math.max(cfg.trail || 0, TRAIL_MIN[p.lvl]) + (p.big ? 1 : 0);   // 최소: 잔상 없음
       if (trail > 0 && p.type !== 'DELAY') {
         p.trailAcc += dt;
         var every = trail >= 2 ? 0.014 : 0.026;
@@ -361,38 +375,38 @@
     var cfg = p.cfg;
     if (lodCache < 0.3 && strength < 2) return;
     var size = (cfg.size || 5) * SIZE_MUL[p.lvl] * p.scale;
-    var jx = (Math.random() - 0.5) * size * 0.8, jy = (Math.random() - 0.5) * size * 0.8;
+    var jx = (fxRand() - 0.5) * size * 0.8, jy = (fxRand() - 0.5) * size * 0.8;
     var x = p.x + jx, y = p.y + jy;
     switch (cfg.trailKind) {
       case 'ember':
-        spawnP(K.GLOW, Math.random() < 0.5 ? cfg.color : cfg.color2, x, y, (Math.random() - 0.5) * 20, -20 - Math.random() * 30, 0.28, size * 0.9, { drag: 3 });
+        spawnP(K.GLOW, fxRand() < 0.5 ? cfg.color : cfg.color2, x, y, (fxRand() - 0.5) * 20, -20 - fxRand() * 30, 0.28, size * 0.9, { drag: 3 });
         break;
       case 'drop':
-        spawnP(K.DOT, cfg.color2, x, y, (Math.random() - 0.5) * 30, 10, 0.22, size * 0.35, { grav: 260 });
+        spawnP(K.DOT, cfg.color2, x, y, (fxRand() - 0.5) * 30, 10, 0.22, size * 0.35, { grav: 260 });
         break;
       case 'spark':
-        spawnP(K.SPARK, cfg.color2, x, y, (Math.random() - 0.5) * 120, (Math.random() - 0.5) * 120, 0.12, size * 0.4, { drag: 6 });
+        spawnP(K.SPARK, cfg.color2, x, y, (fxRand() - 0.5) * 120, (fxRand() - 0.5) * 120, 0.12, size * 0.4, { drag: 6 });
         break;
       case 'leaf':
-        spawnP(K.LEAF, cfg.color, x, y, (Math.random() - 0.5) * 30, 8, 0.4, size * 0.5, { vr: 8, grav: 40 });
+        spawnP(K.LEAF, cfg.color, x, y, (fxRand() - 0.5) * 30, 8, 0.4, size * 0.5, { vr: 8, grav: 40 });
         break;
       case 'frost':
-        spawnP(K.SHARD, cfg.color2, x, y, (Math.random() - 0.5) * 30, (Math.random() - 0.5) * 30, 0.3, size * 0.4, { vr: 6 });
+        spawnP(K.SHARD, cfg.color2, x, y, (fxRand() - 0.5) * 30, (fxRand() - 0.5) * 30, 0.3, size * 0.4, { vr: 6 });
         break;
       case 'shadow':
         spawnP(K.SMOKE, cfg.color, x, y, 0, -12, 0.35, size * 0.7, { grow: size * 2, drag: 1 });
         break;
       case 'bubble':
-        spawnP(K.BUBBLE, cfg.color2, x, y, (Math.random() - 0.5) * 18, -24, 0.34, size * 0.35, { drag: 1 });
+        spawnP(K.BUBBLE, cfg.color2, x, y, (fxRand() - 0.5) * 18, -24, 0.34, size * 0.35, { drag: 1 });
         break;
       case 'pebble':
-        spawnP(K.SQUARE, cfg.color, x, y, (Math.random() - 0.5) * 40, 0, 0.3, size * 0.35, { grav: 300, vr: 10 });
+        spawnP(K.SQUARE, cfg.color, x, y, (fxRand() - 0.5) * 40, 0, 0.3, size * 0.35, { grav: 300, vr: 10 });
         break;
       case 'wind':
         spawnP(K.SPARK, cfg.color, x, y, -Math.cos(p.ang) * 90, -Math.sin(p.ang) * 90, 0.16, size * 0.7, { drag: 4 });
         break;
       case 'sparkle':
-        spawnP(K.STAR, cfg.color2, x, y, (Math.random() - 0.5) * 30, (Math.random() - 0.5) * 30, 0.36, size * 0.45, { vr: 4 });
+        spawnP(K.STAR, cfg.color2, x, y, (fxRand() - 0.5) * 30, (fxRand() - 0.5) * 30, 0.36, size * 0.45, { vr: 4 });
         break;
       default:
         spawnP(K.GLOW, cfg.color, x, y, 0, 0, 0.22, size * 0.8, { drag: 2 });
@@ -417,10 +431,10 @@
     // 빔을 따라 흩어지는 입자 — 특별함 이상
     var along = n((lvl >= 2 ? 4 : 1) + (big ? 6 : 0));
     for (var k = 0; k < along; k++) {
-      var t = Math.random();
-      spawnP(lvl >= 3 ? K.GLOW : K.DOT, Math.random() < 0.5 ? cfg.color : cfg.color2,
-        sx + dx * t + (Math.random() - 0.5) * width * 2, sy + dy * t + (Math.random() - 0.5) * width * 2,
-        nx * (Math.random() - 0.5) * 60, ny * (Math.random() - 0.5) * 60, 0.25, width * 0.7, { drag: 3 });
+      var t = fxRand();
+      spawnP(lvl >= 3 ? K.GLOW : K.DOT, fxRand() < 0.5 ? cfg.color : cfg.color2,
+        sx + dx * t + (fxRand() - 0.5) * width * 2, sy + dy * t + (fxRand() - 0.5) * width * 2,
+        nx * (fxRand() - 0.5) * 60, ny * (fxRand() - 0.5) * 60, 0.25, width * 0.7, { drag: 3 });
     }
     impact(tx, ty, cfg, lvl, crit, scale);
   }
@@ -436,12 +450,12 @@
     var kind = cfg.style === 'FIRE' ? K.GLOW : cfg.shape === 'powder' ? K.STAR : K.DOT;
     var size = (cfg.size || 4) * SIZE_MUL[lvl] * scale;
     for (var i = 0; i < count; i++) {
-      var off = (Math.random() - 0.5) * spread * 1.1;
-      var spd = dist / travel * (0.75 + Math.random() * 0.35);
-      spawnP(kind, Math.random() < 0.55 ? cfg.color : cfg.color2,
+      var off = (fxRand() - 0.5) * spread * 1.1;
+      var spd = dist / travel * (0.75 + fxRand() * 0.35);
+      spawnP(kind, fxRand() < 0.55 ? cfg.color : cfg.color2,
         sx + ux * 10, sy + uy * 10,
         ux * spd + (-uy) * off * 2.2, uy * spd + ux * off * 2.2,
-        travel * (0.9 + Math.random() * 0.4), size * (0.8 + Math.random() * 0.8),
+        travel * (0.9 + fxRand() * 0.4), size * (0.8 + fxRand() * 0.8),
         { drag: 1.2, grow: size * 1.4, vr: 5 });
     }
     // 시전자 앞 원추 잔상
@@ -516,7 +530,7 @@
     var amp = Math.min(18, dist * 0.12);
     for (var i = 0; i <= BOLT_SEG; i++) {
       var t = i / BOLT_SEG;
-      var j = (i === 0 || i === BOLT_SEG) ? 0 : (Math.random() - 0.5) * 2 * amp;
+      var j = (i === 0 || i === BOLT_SEG) ? 0 : (fxRand() - 0.5) * 2 * amp;
       b.pts[i * 2] = b.x1 + dx * t + nx * j;
       b.pts[i * 2 + 1] = b.y1 + dy * t + ny * j;
     }
@@ -550,15 +564,15 @@
     var shape = cfg.shape || '';
     if (shape === 'crack' || shape === 'quake') {
       addRing('crack', x, y, r * 0.2, r, life + 0.15, 2.4, cfg.color, cfg.color2);
-      ringAngle(Math.random() * PI2);
+      ringAngle(fxRand() * PI2);
     }
     if (shape === 'bloom') {
       addRing('bloom', x, y, r * 0.2, r * 0.7, life + 0.1, 0, cfg.color, cfg.color2);
-      ringAngle(Math.random() * PI2);
+      ringAngle(fxRand() * PI2);
     }
     var count = n(3 + lvl * 2 + (cfg.particles || 3) * 0.5);
     for (var i = 0; i < count; i++) {
-      var a = Math.random() * PI2, d = Math.sqrt(Math.random()) * r * 0.9;
+      var a = fxRand() * PI2, d = Math.sqrt(fxRand()) * r * 0.9;
       var px = x + Math.cos(a) * d, py = y + Math.sin(a) * d;
       areaParticle(cfg, px, py, a, lvl, scale);
     }
@@ -571,13 +585,13 @@
         spawnP(K.SMOKE, cfg.color2, x, y, Math.cos(a) * 30, -10, 0.45, size * 0.8, { grow: size * 2.2, drag: 2 });
         break;
       case 'petals':
-        spawnP(K.PETAL, Math.random() < 0.6 ? cfg.color : cfg.color2, x, y, Math.cos(a) * 50, -40, 0.6, size * 0.7, { vr: 7, grav: 60 });
+        spawnP(K.PETAL, fxRand() < 0.6 ? cfg.color : cfg.color2, x, y, Math.cos(a) * 50, -40, 0.6, size * 0.7, { vr: 7, grav: 60 });
         break;
       case 'spore': case 'poison':
         spawnP(K.SMOKE, cfg.color, x, y, Math.cos(a) * 16, -14, 0.55, size * 0.7, { grow: size * 1.8, drag: 1.2 });
         break;
       case 'burst':
-        spawnP(K.GLOW, Math.random() < 0.5 ? cfg.color : cfg.color2, x, y, Math.cos(a) * 20, -50, 0.4, size, { drag: 2 });
+        spawnP(K.GLOW, fxRand() < 0.5 ? cfg.color : cfg.color2, x, y, Math.cos(a) * 20, -50, 0.4, size, { drag: 2 });
         break;
       case 'notes':
         spawnP(K.NOTE, cfg.color, x, y, Math.cos(a) * 20, -40, 0.6, size * 0.7, { drag: 1 });
@@ -600,107 +614,107 @@
       case 'burst':
         spawnP(K.GLOW, c2, x, y, 0, 0, 0.16, s * 2.4, { drag: 0 });
         for (i = 0; i < count; i++) {
-          a = Math.random() * PI2; sp = 40 + Math.random() * 90;
-          spawnP(K.GLOW, Math.random() < 0.5 ? c1 : c2, x, y, Math.cos(a) * sp, Math.sin(a) * sp - 30, 0.3 + Math.random() * 0.2, s * 0.7, { drag: 3.5, grav: -40 });
+          a = fxRand() * PI2; sp = 40 + fxRand() * 90;
+          spawnP(K.GLOW, fxRand() < 0.5 ? c1 : c2, x, y, Math.cos(a) * sp, Math.sin(a) * sp - 30, 0.3 + fxRand() * 0.2, s * 0.7, { drag: 3.5, grav: -40 });
         }
         break;
       case 'splash':
         addRing('ring', x, y, 2, s * 2.6, 0.24, 2, c2, c2);
         for (i = 0; i < count; i++) {
-          a = -Math.PI * Math.random(); sp = 60 + Math.random() * 90;
-          spawnP(K.DOT, Math.random() < 0.6 ? c1 : c2, x, y, Math.cos(a) * sp, Math.sin(a) * sp, 0.36, s * 0.35, { grav: 420, drag: 0.6 });
+          a = -Math.PI * fxRand(); sp = 60 + fxRand() * 90;
+          spawnP(K.DOT, fxRand() < 0.6 ? c1 : c2, x, y, Math.cos(a) * sp, Math.sin(a) * sp, 0.36, s * 0.35, { grav: 420, drag: 0.6 });
         }
         break;
       case 'spark':
         spawnP(K.GLOW, c2, x, y, 0, 0, 0.1, s * 2.2, { drag: 0 });
         for (i = 0; i < count; i++) {
-          a = Math.random() * PI2; sp = 140 + Math.random() * 160;
-          spawnP(K.SPARK, Math.random() < 0.5 ? c1 : c2, x, y, Math.cos(a) * sp, Math.sin(a) * sp, 0.14, s * 0.5, { drag: 6 });
+          a = fxRand() * PI2; sp = 140 + fxRand() * 160;
+          spawnP(K.SPARK, fxRand() < 0.5 ? c1 : c2, x, y, Math.cos(a) * sp, Math.sin(a) * sp, 0.14, s * 0.5, { drag: 6 });
         }
         break;
       case 'leaves':
         for (i = 0; i < count; i++) {
-          a = Math.random() * PI2; sp = 40 + Math.random() * 70;
-          spawnP(K.LEAF, Math.random() < 0.7 ? c1 : c2, x, y, Math.cos(a) * sp, Math.sin(a) * sp - 20, 0.45, s * 0.55, { vr: 9, drag: 2.5, grav: 80 });
+          a = fxRand() * PI2; sp = 40 + fxRand() * 70;
+          spawnP(K.LEAF, fxRand() < 0.7 ? c1 : c2, x, y, Math.cos(a) * sp, Math.sin(a) * sp - 20, 0.45, s * 0.55, { vr: 9, drag: 2.5, grav: 80 });
         }
         break;
       case 'shards':
         for (i = 0; i < count; i++) {
-          a = Math.random() * PI2; sp = 70 + Math.random() * 110;
-          spawnP(K.SHARD, Math.random() < 0.6 ? c1 : c2, x, y, Math.cos(a) * sp, Math.sin(a) * sp - 40, 0.42, s * 0.55, { vr: 10, grav: 320, drag: 1 });
+          a = fxRand() * PI2; sp = 70 + fxRand() * 110;
+          spawnP(K.SHARD, fxRand() < 0.6 ? c1 : c2, x, y, Math.cos(a) * sp, Math.sin(a) * sp - 40, 0.42, s * 0.55, { vr: 10, grav: 320, drag: 1 });
         }
         break;
       case 'poison':
         spawnP(K.SMOKE, c1, x, y, 0, -6, 0.4, s * 0.9, { grow: s * 2.4, drag: 1 });
         for (i = 0; i < count; i++) {
-          a = Math.random() * PI2;
-          spawnP(K.BUBBLE, Math.random() < 0.5 ? c1 : c2, x + Math.cos(a) * s, y + Math.sin(a) * s * 0.6, Math.cos(a) * 20, -30 - Math.random() * 30, 0.45, s * 0.35, { drag: 1.2 });
+          a = fxRand() * PI2;
+          spawnP(K.BUBBLE, fxRand() < 0.5 ? c1 : c2, x + Math.cos(a) * s, y + Math.sin(a) * s * 0.6, Math.cos(a) * 20, -30 - fxRand() * 30, 0.45, s * 0.35, { drag: 1.2 });
         }
         break;
       case 'ring':
         addRing('ring', x, y, 2, s * 2.8, 0.26, 2.4, c1, c2);
         if (lvl >= 2 || crit) addRing('ring', x, y, 2, s * 1.6, 0.2, 1.6, c2, c2);
         for (i = 0; i < Math.min(count, 4); i++) {
-          a = Math.random() * PI2;
+          a = fxRand() * PI2;
           spawnP(K.GLOW, c2, x, y, Math.cos(a) * 70, Math.sin(a) * 70, 0.22, s * 0.6, { drag: 4 });
         }
         break;
       case 'shadow':
         for (i = 0; i < count; i++) {
-          a = Math.random() * PI2; sp = 20 + Math.random() * 40;
-          spawnP(K.SMOKE, Math.random() < 0.6 ? c1 : '#2a1a44', x, y, Math.cos(a) * sp, Math.sin(a) * sp - 20, 0.42, s * 0.6, { grow: s * 1.6, drag: 2 });
+          a = fxRand() * PI2; sp = 20 + fxRand() * 40;
+          spawnP(K.SMOKE, fxRand() < 0.6 ? c1 : '#2a1a44', x, y, Math.cos(a) * sp, Math.sin(a) * sp - 20, 0.42, s * 0.6, { grow: s * 1.6, drag: 2 });
         }
         break;
       case 'dust':
         for (i = 0; i < count; i++) {
-          a = Math.PI + Math.random() * Math.PI; sp = 30 + Math.random() * 60;
+          a = Math.PI + fxRand() * Math.PI; sp = 30 + fxRand() * 60;
           spawnP(i % 3 === 0 ? K.SQUARE : K.SMOKE, i % 3 === 0 ? c1 : c2, x, y + 4, Math.cos(a) * sp, Math.sin(a) * sp * 0.5, 0.45, s * (i % 3 === 0 ? 0.35 : 0.8), { grow: s * 1.6, grav: i % 3 === 0 ? 300 : 0, drag: 2, vr: 8 });
         }
         break;
       case 'metal':
         addRing('ring', x, y, 2, s * 2, 0.16, 1.5, c2, c2);
         for (i = 0; i < count; i++) {
-          a = Math.random() * PI2; sp = 160 + Math.random() * 120;
+          a = fxRand() * PI2; sp = 160 + fxRand() * 120;
           spawnP(K.SPARK, c2, x, y, Math.cos(a) * sp, Math.sin(a) * sp, 0.12, s * 0.5, { drag: 7 });
         }
         break;
       case 'star':
         for (i = 0; i < count; i++) {
-          a = Math.random() * PI2; sp = 40 + Math.random() * 70;
-          spawnP(K.STAR, Math.random() < 0.5 ? c1 : c2, x, y, Math.cos(a) * sp, Math.sin(a) * sp, 0.45, s * 0.7, { vr: 5, drag: 3 });
+          a = fxRand() * PI2; sp = 40 + fxRand() * 70;
+          spawnP(K.STAR, fxRand() < 0.5 ? c1 : c2, x, y, Math.cos(a) * sp, Math.sin(a) * sp, 0.45, s * 0.7, { vr: 5, drag: 3 });
         }
         spawnP(K.GLOW, c2, x, y, 0, 0, 0.16, s * 2, { drag: 0 });
         break;
       case 'feather':
         for (i = 0; i < Math.max(1, count - 1); i++) {
-          a = Math.random() * PI2;
+          a = fxRand() * PI2;
           spawnP(K.FEATHER, i % 2 ? c1 : '#ffffff', x, y, Math.cos(a) * 50, Math.sin(a) * 30 - 20, 0.6, s * 0.8, { vr: 3, grav: 60, drag: 2.5 });
         }
         addRing('ring', x, y, 2, s * 1.8, 0.16, 1.6, '#ffffff', '#ffffff');
         break;
       case 'coins':
         for (i = 0; i < count; i++) {
-          a = -Math.PI * (0.15 + Math.random() * 0.7); sp = 90 + Math.random() * 80;
+          a = -Math.PI * (0.15 + fxRand() * 0.7); sp = 90 + fxRand() * 80;
           spawnP(K.COIN, c1, x, y, Math.cos(a) * sp, Math.sin(a) * sp, 0.5, s * 0.5, { grav: 420, vr: 14, drag: 0.5 });
         }
         spawnP(K.STAR, c2, x, y - 4, 0, -20, 0.3, s * 0.8, { vr: 4 });
         break;
       case 'spore':
         for (i = 0; i < count; i++) {
-          a = Math.random() * PI2; sp = 20 + Math.random() * 40;
-          spawnP(i % 2 ? K.DOT : K.SMOKE, Math.random() < 0.6 ? c1 : c2, x, y, Math.cos(a) * sp, Math.sin(a) * sp - 10, 0.5, s * (i % 2 ? 0.3 : 0.6), { grow: s, drag: 2 });
+          a = fxRand() * PI2; sp = 20 + fxRand() * 40;
+          spawnP(i % 2 ? K.DOT : K.SMOKE, fxRand() < 0.6 ? c1 : c2, x, y, Math.cos(a) * sp, Math.sin(a) * sp - 10, 0.5, s * (i % 2 ? 0.3 : 0.6), { grow: s, drag: 2 });
         }
         break;
       case 'petals':
         for (i = 0; i < count; i++) {
-          a = Math.random() * PI2; sp = 50 + Math.random() * 60;
-          spawnP(K.PETAL, Math.random() < 0.6 ? c1 : c2, x, y, Math.cos(a) * sp, Math.sin(a) * sp - 20, 0.55, s * 0.6, { vr: 8, grav: 80, drag: 2.5 });
+          a = fxRand() * PI2; sp = 50 + fxRand() * 60;
+          spawnP(K.PETAL, fxRand() < 0.6 ? c1 : c2, x, y, Math.cos(a) * sp, Math.sin(a) * sp - 20, 0.55, s * 0.6, { vr: 8, grav: 80, drag: 2.5 });
         }
         break;
       case 'notes':
         for (i = 0; i < Math.min(count, 5); i++) {
-          a = -Math.PI * Math.random();
-          spawnP(K.NOTE, i % 2 ? c1 : c2, x, y, Math.cos(a) * 40, -30 - Math.random() * 40, 0.55, s * 0.7, { drag: 1.5 });
+          a = -Math.PI * fxRand();
+          spawnP(K.NOTE, i % 2 ? c1 : c2, x, y, Math.cos(a) * 40, -30 - fxRand() * 40, 0.55, s * 0.7, { drag: 1.5 });
         }
         addRing('ring', x, y, 2, s * 2.2, 0.22, 2, c1, c1);
         break;
@@ -708,9 +722,9 @@
       default:
         addRing('ring', x, y, s * 0.3, s * 2.2, 0.16, 3.4, c2 || '#fff', c2 || '#fff');
         addRing('lines', x, y, s * 0.8, s * 2, 0.14, 2.2, c1, c2);
-        ringAngle(Math.random() * PI2);
+        ringAngle(fxRand() * PI2);
         for (i = 0; i < Math.min(count, 4); i++) {
-          a = Math.random() * PI2;
+          a = fxRand() * PI2;
           spawnP(K.GLOW, c1, x, y, Math.cos(a) * 60, Math.sin(a) * 60, 0.16, s * 0.6, { drag: 5 });
         }
     }
@@ -746,7 +760,7 @@
 
 
   function requestShake(strength, force) {
-    if (reduceMotion) return;
+    if (reduceMotion || !fxLv.shake) return;
     if (!force && shake.cooldown > 0) return;
     shake.max = 0.16;
     shake.time = shake.max;
@@ -757,6 +771,7 @@
   /* ---------- 갱신 ---------- */
 
   AttackFx.update = function (dt) {
+    refreshFx();
     updateProjectiles(dt);
 
     var W = RPD.VIEW.width, H = RPD.VIEW.height;
@@ -801,8 +816,8 @@
       if (shake.time > 0) {
         shake.time -= dt;
         var amt = Math.max(0, shake.time / shake.max) * shake.amp;
-        RPD.Renderer.shakeX = (Math.random() - 0.5) * 2 * amt;
-        RPD.Renderer.shakeY = (Math.random() - 0.5) * 2 * amt;
+        RPD.Renderer.shakeX = (fxRand() - 0.5) * 2 * amt;
+        RPD.Renderer.shakeY = (fxRand() - 0.5) * 2 * amt;
       } else if (RPD.Renderer.shakeX || RPD.Renderer.shakeY) {
         RPD.Renderer.shakeX = 0; RPD.Renderer.shakeY = 0;
       }

@@ -97,7 +97,7 @@
     var unit = RPD.FieldManager.remove(fieldIndex);
     this.add(unit);
     RPD.UnitManager.recomputeAll();
-    RPD.bus.emit('storage:stored', { unit: unit });
+    RPD.bus.emit('storage:stored', { unit: unit, from: fieldIndex });
     return { ok: true, unit: unit };
   };
 

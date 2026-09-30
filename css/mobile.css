@@ -205,6 +205,9 @@
   .ib__btn:disabled { opacity: .4; }
   .ib__btn--danger { color: var(--bad); }
   .ib__btn--cancel { min-width: 72px; background: var(--panel-3); }
+  .ib__btn--undo { flex: none; min-width: 40px; padding: 0 2px; color: var(--gold-hi); }   /* 되돌리기(세션 68) — 흐리면 기록 없음 */
+  .ib__btn--undo span { font-size: 19px; line-height: 1; }
+  .infobar .ib__btn--undo { flex: none; min-width: 40px; padding: 0 2px; }
   body.is-moving .infobar { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 201, 60, .45); }
   .ib__who--move { display: grid; }
   .ib__who--move .ib__name { color: var(--gold-hi); }

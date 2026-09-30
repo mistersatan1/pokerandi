@@ -7,8 +7,8 @@
  *   [창고]  보유 포켓몬 시트(창고 개체 수 배지). 필드 포켓몬을 끌어 여기에 놓으면 창고로(UIManager 의 [data-mtab="owned"] 규칙 그대로).
  *   [더보기] ☰ 메뉴(골드 상점 · 정예 · 조합 사전 · 도감 · 설명서 · 소리 · 시너지 · 주문 · 전체 화면 · 앱 설치 · 처음부터)를 툴바 위로 연다.
  *           정예가 진행 중이거나 소환 금지 중이면 작은 점.
- * 툴바 바로 위 줄(필드 밖): 완성 가능한 조합이 있으면 "★ 조합 가능 · 리자몽" 한 줄 버튼 — [조합] 과 같은 것을 바로 조합.
- *   보스 보상 지급 알림도 필드를 덮지 않게 여기에 잠깐(PC 는 예전 그대로 필드 위 보상 카드).
+ * 정보 바(MobileSheet): 아무 칸도 안 골랐고 완성 가능한 조합이 있으면 "★ 조합 가능 · 리자몽" 버튼 — [조합] 과 같은 것을 바로 조합.
+ *   보스 보상 지급 알림도 필드를 덮지 않게 정보 바에 잠깐(PC 는 예전 그대로 필드 위 보상 카드). 세션 66 에는 따로 한 줄이었다 — 세션 67 에 합쳤다.
  * 휴대폰 판별은 MobileSheet.isMobile(세션 65 와 같은 기준). PC(1100px 이상)에서는 CSS 가 숨기고 여기 입력도 막는다.
  */
 (function (global) {
@@ -57,27 +57,27 @@
       var E = RPD.EliteManager;
       el.dot.hidden = !(E && (E.active || E.isBanned()));
     }
-    renderStrip(ready, playable);
+    if (RPD.MobileSheet && RPD.MobileSheet.renderBar) RPD.MobileSheet.renderBar();   // 정보 바가 "★ 조합 가능" · 알림을 같이 그린다(세션 67)
   };
 
-  function renderStrip(ready, playable) {
-    if (!el.strip) return;
-    if (T.toastText) {
-      el.strip.innerHTML = '<div class="mstrip__toast" role="status">' + T.toastText + '</div>';
-      return;
-    }
-    if (playable && ready.length) {
-      var best = ready[0];
-      T.lastBest = best.key;
-      el.strip.innerHTML = '<button type="button" class="mstrip__craft" data-strip="craft" title="조합 (C)">' +
-        '<b>★ 조합 가능</b> · ' + esc(best.resultName) + (ready.length > 1 ? ' <small>외 ' + (ready.length - 1) + '</small>' : '') + '</button>';
-      return;
-    }
-    T.lastBest = null;
-    el.strip.innerHTML = '';
-  }
+  /* 정보 바에 들어갈 조합 · 알림 한 줄(세션 67 — 따로 있던 "★ 조합 가능" 줄을 정보 바에 합쳤다).
+   *   알림(보스 보상 지급) — 3.2초, 누르면 닫힘. 이동 모드가 아니면 칸 정보보다 먼저(놓치지 않게).
+   *   "★ 조합 가능 · 이름 외 N" — 아무 칸도 안 골랐을 때만. 누르면 [조합] 과 같은 조합식 하나. */
+  T.toastHtml = function () {
+    return T.toastText ? '<button type="button" class="ib__toast" data-ib="toast" role="status" title="누르면 닫힘">' + T.toastText + '</button>' : '';
+  };
+  T.craftHtml = function () {
+    var ready = T.ready();
+    var playable = GM.isPlayable ? GM.isPlayable() : true;
+    if (!playable || !ready.length) { T.lastBest = null; return ''; }
+    var best = ready[0];
+    T.lastBest = best.key;
+    return '<button type="button" class="ib__craft" data-ib="craft" title="조합 (C)">' +
+      '<b>★ 조합 가능</b> · ' + esc(best.resultName) + (ready.length > 1 ? ' <small>외 ' + (ready.length - 1) + '</small>' : '') + '</button>';
+  };
+  T.dismissToast = function () { T.toastText = ''; clearTimeout(T.toastTimer); T.render(); };
 
-  /* 한 줄 알림 — 툴바 바로 위 줄에 잠깐 */
+  /* 한 줄 알림 — 정보 바에 잠깐 */
   T.toast = function (html, ms) {
     T.toastText = html;
     clearTimeout(T.toastTimer);
@@ -141,7 +141,6 @@
     el.ownedBadge = $('tbOwnedBadge');
     el.more = $('tbMore');
     el.dot = $('tbMoreDot');
-    el.strip = $('craftStrip');
     el.synergy = $('btnSynergy');
     el.owned = $('tbOwned');
 
@@ -164,13 +163,6 @@
         if (H && H.toggleMore) H.toggleMore(false);
       });
     }
-    if (el.strip && el.strip.addEventListener) {
-      el.strip.addEventListener('click', function (e) {
-        var t = e.target && e.target.closest ? e.target.closest('[data-strip="craft"]') : null;
-        if (t) clickById('btnCraft');
-      });
-    }
-
     ['recipe:changed', 'storage:changed', 'field:changed', 'elite:changed', 'game:wave', 'game:state', 'summon:stateChanged', 'recipe:crafted']
       .forEach(function (ev) { RPD.bus.on(ev, T.render); });
     RPD.bus.on('game:reset', function () { T.toastText = ''; clearTimeout(T.toastTimer); T.render(); });

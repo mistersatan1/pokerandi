@@ -422,15 +422,12 @@
   <!-- ============ 휴대폰 정보 바 · 시트 손잡이 — 1100px 미만에서만 (세션 65 · js/ui/MobileSheet.js) ============
        정보 바: 칸을 고르면 필드 위에 카드를 띄우는 대신 필드 밖 한 줄에 이름 · 등급 · DPS + [이동][창고로][사거리 강화][방출].
        위로 밀거나 길게 누르면 자세한 정보(스킬 · 특성 · 버프 · 공격 대상)가 시트로 올라온다.
+       아무 칸도 안 골랐으면 "★ 조합 가능 · 이름" 버튼(세션 67 — 따로 있던 줄을 합쳤다), 보스 보상 지급 알림도 여기에 잠깐.
        손잡이: 열린 시트(조합식 · 보유 · 시너지 · 도감 · 골드 상점 · 정예 · 조합 사전 · 자세한 정보)의 높이를 끌어서 조절. -->
   <div class="infobar" id="infoBar" aria-live="polite"></div>
   <div class="sheetgrip" id="sheetGrip" role="button" aria-label="시트 높이 — 끌어서 조절 · 누르면 접기/펴기" title="끌어서 높이 조절 · 누르면 접기/펴기">
     <span class="sheetgrip__bar"></span><span class="sheetgrip__title" id="sheetGripTitle"></span>
   </div>
-
-  <!-- ============ 휴대폰 "★ 조합 가능" 줄 · 알림 줄 — 툴바 바로 위(세션 66 · js/ui/MobileToolbar.js) ============
-       완성 가능한 조합이 있으면 한 줄 버튼(누르면 [조합] 과 같은 조합식 하나를 바로 조합). 보스 보상 지급 알림도 여기에 잠깐. -->
-  <div class="mstrip" id="craftStrip" aria-live="polite"></div>
 
   <!-- ============ 휴대폰 하단 툴바 — 1100px 미만에서만 (세션 66) ============
        [소환](.pane--action 의 #btnSummon 이 그대로 이 줄에 놓인다) · [조합] · [창고] · [더보기].

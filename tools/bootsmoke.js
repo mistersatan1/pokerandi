@@ -1402,22 +1402,31 @@ check('[조합] 배지 = RecipeManager 완성 가능 개수 · 0 이면 배지 �
   if (nodes.tbCraft.classList.contains('is-dim')) throw new Error('완성 가능한데 흐리다');
 });
 
-check('"★ 조합 가능" 줄 — [조합] 과 같은 조합식(첫 항목) 이름 · 누르면 실제로 조합된다', () => {
+check('정보 바 "★ 조합 가능"(세션 67 합침) — 아무 칸도 안 골랐을 때 [조합] 과 같은 조합식 이름 · 누르면 실제로 조합 · 칸을 고르면 칸 정보', () => {
   readyRecipe();
+  RPD.FieldManager.select(-1);
   const best = RPD.RecipeManager.readyList()[0];
-  const html = panelHtml('craftStrip');
-  if (html.indexOf('★ 조합 가능') < 0 || html.indexOf(best.resultName) < 0 || html.indexOf('data-strip="craft"') < 0) throw new Error('줄 내용: ' + html.slice(0, 120));
+  const html = panelHtml('infoBar');
+  if (html.indexOf('★ 조합 가능') < 0 || html.indexOf(best.resultName) < 0 || html.indexOf('data-ib="craft"') < 0) throw new Error('정보 바 내용: ' + html.slice(0, 120));
+  if (brokenClass(html).length) throw new Error('class 안에 속성이 섞였다');
   // 가짜 DOM 의 버튼에는 click() 이 없다 — 실제 브라우저처럼 등록된 click 을 부르게
   nodes.btnCraft.click = () => (listeners.btnCraft.click || []).forEach(fn => fn({}));
   let crafted = null;
   const fn = (p) => { crafted = p; };
   RPD.bus.on('recipe:crafted', fn);
-  const target = { closest: (q) => (q === '[data-strip="craft"]' ? {} : null) };
-  (listeners.craftStrip.click || []).forEach(f => f({ target }));
+  const target = { closest: (q) => (q === '[data-ib]' ? { disabled: false, getAttribute: () => 'craft' } : null) };
+  (listeners.infoBar.click || []).forEach(f => f({ target }));
   RPD.bus.off('recipe:crafted', fn);
   if (!crafted) throw new Error('눌렀는데 조합이 안 됐다');
   const got = crafted.resultId || (crafted.unit && crafted.unit.defId) || (crafted.recipe && crafted.recipe.id);
   if (got && got !== best.resultId) throw new Error('다른 조합식이 조합됐다: ' + got + ' ≠ ' + best.resultId);
+  // 칸을 고르면 조합 줄 대신 칸 정보
+  readyRecipe();
+  const F = RPD.FieldManager, s = F.slots.find(x => x.unlocked && !x.blocked);
+  F.place(s.index, RPD.UnitManager.create('charizard')); F.select(s.index);
+  const sel = panelHtml('infoBar');
+  if (sel.indexOf('data-ib="craft"') >= 0 || sel.indexOf('data-ib="move"') < 0) throw new Error('칸을 골랐는데 칸 정보가 아니다');
+  F.select(-1);
 });
 
 check('[더보기] 점 — 정예 진행 중 · 소환 금지 중에만 보인다', () => {
@@ -1458,14 +1467,16 @@ check('설명서 "보스 보상" — RewardManager.table 모든 항목 · 이후
   if (miss.length) throw new Error('빠진 것: ' + miss.join(', '));
 });
 
-check('보스 보상 지급 — 휴대폰은 필드 위 카드 대신 툴바 위 알림 줄 · PC 는 예전 카드', () => {
+check('보스 보상 지급 — 휴대폰은 필드 위 카드 대신 정보 바 알림(누르면 닫힘) · PC 는 예전 카드', () => {
   MS.forceMobile = true;
   nodes.rewardPop.hidden = true;
   const entry = { wave: 20, items: [{ kind: 'gold', amount: 800, paid: true }, { kind: 'ticket', count: 3 }] };
   RPD.bus.emit('reward:granted', entry);
   if (!nodes.rewardPop.hidden) throw new Error('휴대폰인데 필드 위 보상 카드가 떴다');
-  const strip = panelHtml('craftStrip');
-  if (strip.indexOf('20R 보스 처치') < 0 || strip.indexOf('소환권 3') < 0) throw new Error('알림 줄: ' + strip.slice(0, 120));
+  const strip = panelHtml('infoBar');
+  if (strip.indexOf('20R 보스 처치') < 0 || strip.indexOf('소환권 3') < 0 || strip.indexOf('data-ib="toast"') < 0) throw new Error('정보 바 알림: ' + strip.slice(0, 120));
+  MT.dismissToast();
+  if (panelHtml('infoBar').indexOf('보스 처치') >= 0) throw new Error('알림을 눌러 닫아도 남았다');
   MS.forceMobile = false;
   RPD.bus.emit('reward:granted', entry);
   if (nodes.rewardPop.hidden) throw new Error('PC 인데 보상 카드가 안 떴다');

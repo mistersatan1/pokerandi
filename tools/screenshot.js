@@ -795,12 +795,12 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     await tp2.waitForTimeout(2600);
     await tp2.evaluate(() => window.RPD.Loop.setPaused(true));
     const rd = await tp2.evaluate(() => ({ n: window.RPD.RecipeManager.readyList().length, badge: document.getElementById('mtabCraft').textContent, badgeShown: !document.getElementById('mtabCraft').hidden,
-      strip: document.getElementById('craftStrip').innerText.replace(/\s+/g, ' '), best: window.RPD.RecipeManager.readyList()[0].resultName }));
+      strip: document.getElementById('infoBar').innerText.replace(/\s+/g, ' '), best: window.RPD.RecipeManager.readyList()[0].resultName }));
     if (!rd.badgeShown || String(rd.n) !== rd.badge) bad('[조합] 배지 ' + rd.badge + ' ≠ 완성 가능 ' + rd.n);
     if (!/★ 조합 가능/.test(rd.strip) || rd.strip.indexOf(rd.best) < 0) bad('조합 가능 줄: ' + rd.strip);
     await shot('b_craft_ready');
     const before = await tp2.evaluate(() => ({ n: window.RPD.RecipeManager.readyList().length, units: window.RPD.StorageManager.allUnits().map(u => u.defId).sort().join(',') }));
-    await tp2.tap('#craftStrip [data-strip="craft"]'); await tp2.waitForTimeout(300);
+    await tp2.tap('#infoBar [data-ib="craft"]'); await tp2.waitForTimeout(300);
     const after = await tp2.evaluate(() => ({ n: window.RPD.RecipeManager.readyList().length, units: window.RPD.StorageManager.allUnits().map(u => u.defId).sort().join(','), badge: document.getElementById('mtabCraft').textContent }));
     if (after.units === before.units || !(after.n < before.n)) bad('조합 가능 줄을 눌렀는데 조합이 안 됨: ' + JSON.stringify({ before, after }));
     if (String(after.n) !== after.badge && after.n > 0) bad('조합 뒤 배지 ' + after.badge + ' ≠ ' + after.n);
@@ -844,7 +844,7 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
 
     // 보상 지급 알림 — 툴바 위 줄에(필드 위 카드 없음)
     const toast = await tp2.evaluate(() => { const R = window.RPD; R.bus.emit('reward:granted', { wave: 10, items: [{ kind: 'gold', amount: 550, paid: true }, { kind: 'ticket', count: 2 }] });
-      return { strip: document.getElementById('craftStrip').innerText.replace(/\s+/g, ' '), pop: getComputedStyle(document.getElementById('rewardPop')).display }; });
+      return { strip: document.getElementById('infoBar').innerText.replace(/\s+/g, ' '), pop: getComputedStyle(document.getElementById('rewardPop')).display }; });
     if (!/10R 보스 처치/.test(toast.strip) || toast.pop !== 'none') bad('보상 알림: ' + JSON.stringify(toast));
 
     // (e) 설명서 — 보스 보상 절
@@ -868,7 +868,7 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     await pp.waitForTimeout(2600);
     await pp.evaluate(() => window.RPD.Loop.setPaused(true));
     const pchip = await pp.evaluate(() => { const n = document.getElementById('nextReward'), r = n.getBoundingClientRect();
-      return { display: getComputedStyle(n).display, hidden: n.hidden, w: Math.round(r.width), toolbar: getComputedStyle(document.getElementById('mobileTabs')).display, strip: getComputedStyle(document.getElementById('craftStrip')).display }; });
+      return { display: getComputedStyle(n).display, hidden: n.hidden, w: Math.round(r.width), toolbar: getComputedStyle(document.getElementById('mobileTabs')).display, strip: getComputedStyle(document.getElementById('infoBar')).display }; });
     if (pchip.display === 'none' || pchip.hidden || !(pchip.w > 0)) bad('PC 에서 보스 보상 칩이 안 보임: ' + JSON.stringify(pchip));
     if (pchip.toolbar !== 'none' || pchip.strip !== 'none') bad('PC 에 휴대폰 툴바 · 조합 가능 줄이 보임: ' + JSON.stringify(pchip));
     await pp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '17_m2_PC_g_boss_round.png') });

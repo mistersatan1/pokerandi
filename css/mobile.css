@@ -8,7 +8,7 @@
 .hud #btnPause { order: 1; }               /* 순서도 예전 그대로: … 도감 · 일시정지 · 처음부터 */
 .hud #btnRestart { order: 2; }
 .hud__more .iconbtn--mobile { display: none; }   /* 전체 화면 · 앱 설치 — 휴대폰 ☰ 메뉴에만(모바일 ③) */
-.infobar, .sheetgrip, .mstrip { display: none; }   /* 휴대폰 정보 바 · 시트 손잡이(세션 65) · "★ 조합 가능" 줄(세션 66) — PC 에는 없다 */
+.infobar, .sheetgrip { display: none; }           /* 휴대폰 정보 바 · 시트 손잡이(세션 65) — PC 에는 없다 */
 
 /* ================= 휴대폰 (모바일 ① 레이아웃 · 세션 51 → 세션 65 재설계: 필드 고정 · 나머지는 시트) =================
  * 1100px 미만. 필드가 주인공 — **필드 캔버스의 화면 크기는 무엇이 열리고 닫혀도 안 변한다.**
@@ -30,12 +30,11 @@
   .app {
     height: 100vh; height: 100dvh; min-height: 0; padding: var(--gap);
     grid-template-columns: minmax(0, 1fr) var(--rail-w);
-    grid-template-rows: auto minmax(0, 1fr) auto auto auto auto;
+    grid-template-rows: auto minmax(0, 1fr) auto auto auto;
     grid-template-areas:
       "hud    hud"
       "board  ."
       "board  bar"
-      "board  strip"
       "board  action"
       "board  tabs";
     overflow: hidden;
@@ -47,7 +46,6 @@
   .pane--action { grid-area: action; }
   .mtabs { grid-area: tabs; }
   .infobar { grid-area: bar; }
-  .mstrip { grid-area: strip; }
   .pane--recipes, .pane--owned, .pane--synergy, .pane--dex { display: none; min-width: 0; }
   body[data-mtab="recipes"] .pane--recipes,
   body[data-mtab="owned"] .pane--owned,
@@ -267,12 +265,12 @@
 /* 휴대폰 세로 — 필드(Renderer 가 90° 돌려 세로로 긴 맵으로 그린다) 아래에 소환 줄 · 탭 · 서랍 */
 @media (max-width: 1099.98px) and (orientation: portrait) {
   #gameCanvas { --field-rotate: 1; }   /* 휴대폰 세로: 필드를 90° 돌려 세로로 긴 맵 */
-  /* 필드 줄 둘레는 높이가 정해진 줄뿐 — 정보 바 52 · "★ 조합 가능" 줄 40 · 툴바 56. 무엇이 열려도 필드 줄 높이는 그대로다(세션 65 · 66).
+  /* 필드 줄 둘레는 높이가 정해진 줄뿐 — 정보 바 52(세션 67 부터 "★ 조합 가능"도 여기) · 툴바 56. 무엇이 열려도 필드 줄 높이는 그대로다(세션 65 · 66).
    * 툴바 = [소환](가장 크게) + [조합][창고][더보기] */
   .app {
     grid-template-columns: minmax(0, 38fr) minmax(0, 62fr);
-    grid-template-rows: auto minmax(0, 1fr) 52px 40px 56px;
-    grid-template-areas: "hud hud" "board board" "bar bar" "strip strip" "action tabs";
+    grid-template-rows: auto minmax(0, 1fr) 52px 56px;
+    grid-template-areas: "hud hud" "board board" "bar bar" "action tabs";
   }
   .infobar { flex-wrap: nowrap; }
   .infobar .ib__acts { flex: none; }
@@ -363,17 +361,15 @@
   .mtab__badge--dim { background: var(--panel-3); color: var(--text); }
   .pane--action .summon { min-height: 48px; }
 
-  /* "★ 조합 가능" 줄 · 알림 — 툴바 바로 위 */
-  .mstrip { display: flex; align-items: stretch; min-width: 0; height: 40px; }
-  .mstrip:empty { visibility: hidden; }
-  .mstrip__craft, .mstrip__toast {
-    flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 4px; padding: 0 10px;
-    border-radius: 10px; font-size: 13px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  /* 정보 바 안의 "★ 조합 가능" · 보상 알림(세션 67 — 세션 66 에는 툴바 위 따로 한 줄이었다) */
+  .ib__craft, .ib__toast {
+    flex: 1; min-width: 0; min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 4px; padding: 0 10px;
+    border-radius: 10px; font: inherit; font-size: 13px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; touch-action: manipulation;
   }
-  .mstrip__craft { min-height: 40px; border: 1px solid rgba(255, 201, 60, .7); background: linear-gradient(180deg, rgba(255, 201, 60, .22), rgba(255, 201, 60, .08)); color: var(--gold-hi); touch-action: manipulation; }
-  .mstrip__craft small { color: var(--muted); font-weight: 700; }
-  .mstrip__toast { background: var(--panel-3); border: 1px solid var(--line-2); color: var(--text); animation: sheetUp .2s ease-out; }
-  .mstrip__toast b { color: var(--gold-hi); }
+  .ib__craft { border: 1px solid rgba(255, 201, 60, .7); background: linear-gradient(180deg, rgba(255, 201, 60, .22), rgba(255, 201, 60, .08)); color: var(--gold-hi); }
+  .ib__craft small { color: var(--muted); font-weight: 700; }
+  .ib__toast { background: var(--panel-3); border: 1px solid var(--line-2); color: var(--text); animation: sheetUp .2s ease-out; }
+  .ib__toast b { color: var(--gold-hi); }
 
   /* ☰ 메뉴 — [더보기]를 누르면 툴바 위로(세로: 화면 너비 · 가로: 오른쪽 줄) */
   .hud__more { position: fixed; top: auto; left: auto; right: max(4px, env(safe-area-inset-right)); bottom: var(--more-bottom, 120px); }

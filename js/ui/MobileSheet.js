@@ -242,8 +242,11 @@
   function renderBar() {
     if (!el.bar) return;
     var U = RPD.UI, s = F.getSelected(), A = M.actions || {};
-    var html;
-    if (M.moving >= 0) {
+    var html, T = RPD.MobileToolbar;
+    var toast = T && T.toastHtml ? T.toastHtml() : '';
+    if (M.moving < 0 && toast) {
+      html = toast;                                                  // 보스 보상 지급 알림(세션 67) — 3.2초 · 누르면 닫힘
+    } else if (M.moving >= 0) {
       var mu = F.get(M.moving) && F.get(M.moving).unit;
       html = '<div class="ib__who ib__who--move"><span class="ib__name">옮길 칸을 누르세요</span>' +
         '<span class="ib__meta">' + (mu ? mu.name + ' · ' : '') + '빈 칸 금색 · 바꿀 칸 파랑</span></div>' +
@@ -264,6 +267,8 @@
       html = '<div class="ib__who"><span class="ib__txt"><span class="ib__name">' + (s.unlocked ? '빈 칸' : '잠긴 칸 · ' + s.cost + 'G') + '</span>' +
         '<span class="ib__meta">' + (s.kindLabel ? s.kindLabel + ' · ' : '') + k.label +
         (s.unlocked ? '' : ' — 한 번 더 누르면 구매') + '</span></span></div>';
+    } else if (T && T.craftHtml && (html = T.craftHtml())) {
+      // "★ 조합 가능 · 이름" — 아무 칸도 안 골랐을 때(세션 67 — 따로 있던 줄을 합쳤다)
     } else {
       html = '<div class="ib__who"><span class="ib__txt"><span class="ib__name ib__name--hint">칸을 누르면 여기에 정보가 나옵니다</span>' +
         '<span class="ib__meta">바를 위로 밀거나 길게 누르면 자세히</span></span></div>';
@@ -289,6 +294,8 @@
       else if (a === 'store') clickById('btnStore');
       else if (a === 'upgrade') clickById('btnUpgrade');
       else if (a === 'sell') clickById('btnSell');
+      else if (a === 'craft') clickById('btnCraft');                           // [조합] 과 같은 조합식(craftBest)
+      else if (a === 'toast' && RPD.MobileToolbar) RPD.MobileToolbar.dismissToast();
     });
     // 위로 밀기 · 길게 누르기(버튼이 아닌 곳) → 자세한 정보
     var g = null;

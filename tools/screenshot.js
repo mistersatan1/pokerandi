@@ -930,6 +930,25 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     const back = await p3.evaluate(m => { const F = window.RPD.FieldManager; return { from: F.get(m.from).unit && F.get(m.from).unit.defId, to: !!F.get(m.to).unit, left: window.RPD.UndoManager.count() }; }, mv);
     if (back.from !== 'charizard' || back.to) bad('[되돌리기] 를 눌렀는데 제자리로 안 돌아감 ' + JSON.stringify(back));
     m3Report[dev] = { undoBtn: ub, back };
+    // 정보 바 글이 안 잘리는가(세션 69 — [↶] 가 들어온 뒤 세로에서 DPS 가 "…"로 잘렸다) — 가장 긴 이름 · 긴 DPS 로
+    const cuts = await p3.evaluate(() => {
+      const R = window.RPD, F = R.FieldManager, idx = F.slots.find(x => x.unit && x.unit.defId === 'charizard').index;
+      const keep = F.get(idx).unit, out = [];
+      for (const [id, dps] of [['charizard_transcend', 9876543], ['vileplume', 99999], ['pikachu', 158]]) {
+        const u = R.UnitManager.create(id); F.remove(idx); F.place(idx, u); u.dps = dps; F.select(idx); R.MobileSheet.renderBar();
+        const cut = sel => { const n = document.querySelector('#infoBar ' + sel); return !n || n.scrollWidth > n.clientWidth + 1; };
+        const undo = document.querySelector('#infoBar [data-ib="undo"]').getBoundingClientRect(), who = document.querySelector('#infoBar .ib__who').getBoundingClientRect();
+        out.push({ id, name: cut('.ib__name'), meta: cut('.ib__meta'), text: document.querySelector('#infoBar .ib__txt').innerText.replace(/\s+/g, ' '), undoRow: Math.abs(undo.top - who.top) < 14  });
+      }
+      F.select(idx);
+      return { out, restore: (F.remove(idx), F.place(idx, keep), F.select(idx), R.MobileSheet.renderBar(), true) };
+    });
+    cuts.out.forEach(c => { if (c.name || c.meta) bad('정보 바 글이 잘림: ' + c.text + (c.name ? ' (이름)' : '') + (c.meta ? ' (등급 · DPS)' : '')); });
+    if (land) cuts.out.forEach(c => { if (!c.undoRow) bad('가로: 긴 글에 [↶] 가 다음 줄로 밀림 — ' + c.id); });
+    await p3.evaluate(() => { const R = window.RPD, F = R.FieldManager, u = R.UnitManager.create('charizard_transcend'); const i = F.selectedIndex; F.remove(i); F.place(i, u); u.dps = 9876543; F.select(i); R.MobileSheet.renderBar(); });
+    await shot(land ? 'd2_longtext' : 'a2_longtext');
+    await p3.evaluate(() => { const R = window.RPD, F = R.FieldManager, i = F.selectedIndex; F.remove(i); F.place(i, R.UnitManager.create('charizard')); F.select(i); R.MobileSheet.renderBar(); });
+    m3Report[dev].infoBarText = cuts.out;
     if (land) { m3Report[dev].errors = e3.slice(0, 2); await c3.close(); continue; }
 
     // 조작 방해 막기 — 계산된 스타일 · viewport

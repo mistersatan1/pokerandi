@@ -255,7 +255,8 @@
       var u = s.unit, tier = RPD.Tiers[u.tier] || RPD.Tiers.T1;
       html = '<div class="ib__who" style="--tier:' + tier.color + '">' + U.sprite(u.def, 'spr--ib') +
         '<span class="ib__txt"><span class="ib__name">' + u.name + '</span>' +
-        '<span class="ib__meta"><b style="color:' + tier.color + '">' + tier.label + '</b> · DPS ' + RPD.Utils.formatNumber(Math.round(u.dps)) + '</span></span></div>' +
+        '<span class="ib__meta"><b style="color:' + tier.color + '">' + tier.label + '</b><span class="ib__sep"> · </span>' +
+          '<span class="ib__dps">DPS ' + RPD.Utils.formatNumber(Math.round(u.dps)) + '</span></span></span></div>' +
         '<div class="ib__acts">' +
           btn('move', '이동', '', false) +
           btn('store', '창고로', '', A.store ? A.store.disabled : false) +

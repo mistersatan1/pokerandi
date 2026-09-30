@@ -195,6 +195,9 @@
   .ib__name--hint { font-size: 12px; color: var(--muted); }
   .ib__meta { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ib__who .spr--ib { width: 34px; height: 34px; flex: none; }
+  /* 등급 · DPS 는 두 줄(이름 / 등급 / DPS) — 한 줄이면 [↶](세션 68)가 들어온 뒤 DPS 가 "…"로 잘렸다(세션 69) */
+  .ib__who .ib__meta { display: grid; font-size: 10.5px; line-height: 1.15; }
+  .ib__who .ib__sep { display: none; }
   .ib__acts { display: flex; gap: 4px; flex: none; }
   .ib__btn {
     display: grid; place-items: center; align-content: center; min-width: 44px; min-height: 44px; padding: 0 6px;
@@ -216,6 +219,8 @@
   .infobar { flex-wrap: wrap; align-content: center; }
   .infobar .ib__acts { flex: 1 1 100%; }
   .infobar .ib__btn { flex: 1 1 0; min-width: 44px; padding: 0 2px; }
+  .infobar .ib__btn--undo { flex: none; min-width: 44px; }
+  .infobar .ib__who { flex: 1 1 0; }   /* 글이 길어도 [↶] 를 다음 줄로 밀지 않는다 — 누구 줄은 누구 + [↶] 한 줄(세션 69) */
 }
 /* 가로: 시트는 오른쪽에서 — 너비가 --sheet-size */
 @media (max-width: 1099.98px) and (orientation: landscape) {
@@ -277,7 +282,14 @@
   }
   .infobar { flex-wrap: nowrap; }
   .infobar .ib__acts { flex: none; }
-  .infobar .ib__btn { flex: none; min-width: 46px; padding: 0 5px; }
+  .infobar .ib__btn { flex: none; min-width: 44px; padding: 0 4px; }
+  .infobar .ib__acts { gap: 3px; }
+  /* 세로: [↶](세션 68)가 들어와 누구 칸이 좁다 — 그림 28 · [↶] 40 · 버튼 최소 44(손가락 기준)로 DPS 가 잘리지 않게(세션 69) */
+  .infobar .ib__btn--undo { min-width: 40px; padding: 0; }
+  .ib__who .spr--ib { width: 28px; height: 28px; }
+  .ib__who { gap: 4px; }
+  .ib__txt { line-height: 1.15; }
+  .ib__name { font-size: 12.5px; }
   /* 세로 HUD 는 한 줄(라운드 · 라이프 · 골드 · 배속 · 일시정지 · ☰) + 소환 확률 얇은 줄 */
   .hud { flex-wrap: wrap; row-gap: 3px; column-gap: 3px; }
   .hud .chip--odds { order: 9; flex: 1 1 0; min-width: 0; height: 40px; justify-content: space-between; }

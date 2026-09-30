@@ -485,10 +485,11 @@
     canvas.addEventListener('touchcancel', function () { F.cancelDrag(); F.setHover(-1); });
   }
 
-  /* 손가락 입력(모바일 ② · 세션 52)
+  /* 손가락 입력(모바일 ② · 세션 52 · 세션 65 에 10 → 22)
    *   TOUCH_PAD  — 칸을 이만큼(화면 px) 비껴 눌러도 가장 가까운 칸으로 본다. 휴대폰 칸은 24~32px 라 손가락 끝보다 작다.
+   *                손가락 크기 44px(지름) 기준 — 손가락 끝 원(반지름 22px)이 닿는 칸 중 가장 가까운 칸.
    *   TOUCH_SLOP — 이만큼(화면 px) 움직이기 전까지는 끌기가 아니라 누르기다. */
-  var TOUCH_PAD = 10, TOUCH_SLOP = 10;
+  var TOUCH_PAD = 22, TOUCH_SLOP = 10;
   var touch = { x: 0, y: 0, moved: false, at: 0 };
   /* 손가락을 떼면 브라우저가 호환용 mousedown/mouseup 을 한 번 더 보낸다. 그걸 받으면 손가락 판정(근처 칸)으로 고른 칸을
    * 마우스 판정(정확히 칸 안)이 다시 지운다 — 칸 가장자리 밖을 누르면 골랐다가 바로 풀렸다(실제로 그랬다). 직후 0.8초는 무시. */
@@ -498,6 +499,7 @@
     return TOUCH_PAD / sc;
   }
   UIManager.TOUCH = { PAD: TOUCH_PAD, SLOP: TOUCH_SLOP };
+  UIManager.touchPad = touchPad;   // 화면 px → 논리 px (휴대폰 이동 모드 · MobileSheet 가 같은 범위를 쓴다)
 
   function pointerDown(clientX, clientY, shift, isTouch) {
     var p = RPD.Renderer.toLogical(clientX, clientY);
@@ -1096,23 +1098,8 @@
    * 정의하면서 형태도 바꿨다. 사거리 3종의 커버리지를 px 막대로 보여 주는 대신
    * 판정을 대신 내려 준다 — 기획: "보고 바로 이 자리는 장거리용 정도를 이해할 수 있어야 한다."
    */
-  var SLOT_KIND = [
-    { label: '근접용',      hint: '짧은 사거리도 제 몫을 한다' },
-    { label: '중거리용',    hint: '사거리 155 이상이 어울린다' },
-    { label: '장거리 전용', hint: '사거리 235가 아니면 거의 논다' },
-    { label: '구석 자리',   hint: '긴 사거리를 넣어도 덮는 구간이 짧다' }
-  ];
-
   function slotKindHtml(slot) {
-    var M = RPD.MapData;
-    var s100 = M.coverageOf(slot, RPD.Range.SHORT);
-    var s155 = M.coverageOf(slot, RPD.Range.MID);
-    var s235 = M.coverageOf(slot, RPD.Range.LONG);
-
-    var k = s100 >= 140 ? SLOT_KIND[0]
-          : s155 >= 380 ? SLOT_KIND[1]
-          : s235 >= 500 ? SLOT_KIND[2]
-          : SLOT_KIND[3];
+    var k = RPD.UI.slotKind(slot);   // 근접용 · 중거리용 · 장거리 전용 · 구석 자리 (Icons.js — 휴대폰 이동 모드 칸 태그와 같은 판정)
 
     // 두 갈래 경로(세션 56) — 명당 · 갈림길 · 위 길만 · 아래 길만 · 출구 방어
     var where = slot.kindLabel
@@ -1188,6 +1175,12 @@
           ? '+' + RPD.EconomyManager.sellValue(slot.unit) + 'G' : '칸 선택';
       }
     }
+    // 휴대폰 정보 바(MobileSheet)가 같은 버튼 상태를 그대로 따라 그린다 — 규칙을 두 번 쓰지 않게(세션 65)
+    RPD.bus.emit('ui:actions', {
+      upgrade: { disabled: !el.upgrade || el.upgrade.disabled, cost: el.upgradeCost ? el.upgradeCost.textContent : '' },
+      store: { disabled: !el.store || el.store.disabled },
+      sell: { disabled: !el.sell || el.sell.disabled, value: el.sellValue ? el.sellValue.textContent : '' }
+    });
   }
 
   /* 시작 전 화면의 칭호 · 이번 판 시작 보너스 */

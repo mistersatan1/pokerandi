@@ -8,31 +8,34 @@
 .hud #btnPause { order: 1; }               /* 순서도 예전 그대로: … 도감 · 일시정지 · 처음부터 */
 .hud #btnRestart { order: 2; }
 .hud__more .iconbtn--mobile { display: none; }   /* 전체 화면 · 앱 설치 — 휴대폰 ☰ 메뉴에만(모바일 ③) */
+.infobar, .sheetgrip { display: none; }           /* 휴대폰 정보 바 · 시트 손잡이(세션 65) — PC 에는 없다 */
 
-/* ================= 휴대폰 (모바일 ① 레이아웃 · 세션 51) =================
- * 1100px 미만. 필드가 주인공 — 패널은 탭으로 여닫는 서랍에 넣고, 닫혀 있으면 필드가 화면을 다 쓴다.
- * 서랍이 열리면 필드가 그만큼 줄어든다(덮지 않는다). 캔버스 크기가 바뀌면 Renderer 가 알아서 다시 맞춘다.
+/* ================= 휴대폰 (모바일 ① 레이아웃 · 세션 51 → 세션 65 재설계: 필드 고정 · 나머지는 시트) =================
+ * 1100px 미만. 필드가 주인공 — **필드 캔버스의 화면 크기는 무엇이 열리고 닫혀도 안 변한다.**
+ * 필드 줄 둘레는 높이(가로는 너비)가 정해진 줄뿐이고, 패널(조합식 · 보유 · 시너지 · 도감 · 상점 · 정예 · 조합 사전 · 자세한 칸 정보)은
+ * 필드를 밀지 않고 필드 위를 덮는 시트다(아래 "시트"). 시트는 필드 사각형 안에서만 열려 정보 바 · 소환 · 탭은 늘 보인다.
  * .play · .dock · .side 를 display: contents 로 풀어 모든 패널을 .app 격자에 바로 놓는다 — HTML 을 옮기지 않는다.
  *
  *   가로                                   세로 (필드는 Renderer 가 90° 돌려 그린다)
- *   ┌────────── HUD 한 줄 ─────────┐        ┌──── HUD ────┐
- *   │ 필드            │서랍│ 소환   │        │ 필드(세로로  │
- *   │                 │    │ 강화…  │        │ 긴 맵)       │
- *   │                 │    │ 탭     │        ├──── 소환 ───┤
- *   └─────────────────┴────┴───────┘        ├──── 탭 ─────┤
- *                                            └──── 서랍 ───┘  */
+ *   ┌──────── HUD 한 줄 ────────┐          ┌──── HUD ────┐
+ *   │ 필드         ◁시트│ 소환   │          │ 필드(세로로  │
+ *   │                  │ 정보 바│          │ 긴 맵) △시트 │
+ *   │                  │ 탭     │          ├── 정보 바 ──┤
+ *   └──────────────────┴───────┘          ├──── 소환 ───┤
+ *                                          └──── 탭 ─────┘
+ * 가로 화면의 정보 바는 필드 아래가 아니라 오른쪽 줄에 둔다 — 가로 화면은 세로 길이가 모자라 필드 아래 한 줄(44px)이 필드를 13% 줄인다. */
 @media (max-width: 1099.98px) {
-  :root { --gap: 4px; --r-panel: 12px; --drawer-w: 0px; --drawer-h: 0px; --rail-w: 140px; }
-  body[data-mtab]:not([data-mtab=""]):not([data-mtab="shop"]) { --drawer-w: min(46vw, 420px); --drawer-h: 44dvh; }
+  :root { --gap: 4px; --r-panel: 12px; --rail-w: 204px; }
 
   .app {
     height: 100vh; height: 100dvh; min-height: 0; padding: var(--gap);
-    grid-template-columns: minmax(0, 1fr) var(--drawer-w) var(--rail-w);
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) var(--rail-w);
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
     grid-template-areas:
-      "hud    hud    hud"
-      "board  drawer action"
-      "board  drawer tabs";
+      "hud    hud"
+      "board  action"
+      "board  bar"
+      "board  tabs";
     overflow: hidden;
   }
   .play, .dock, .side { display: contents; }
@@ -41,7 +44,8 @@
   .board { grid-area: board; min-height: 0; min-width: 0; }
   .pane--action { grid-area: action; }
   .mtabs { grid-area: tabs; }
-  .pane--recipes, .pane--owned, .pane--synergy, .pane--dex { grid-area: drawer; display: none; min-width: 0; }
+  .infobar { grid-area: bar; }
+  .pane--recipes, .pane--owned, .pane--synergy, .pane--dex { display: none; min-width: 0; }
   body[data-mtab="recipes"] .pane--recipes,
   body[data-mtab="owned"] .pane--owned,
   body[data-mtab="synergy"] .pane--synergy,
@@ -77,7 +81,7 @@
   .pane--action { padding: 5px; gap: 4px; overflow: hidden; }
   .pane--action .rangechips { display: none; }
   .pane--action .kbd { display: none; }
-  .pane--action .action { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: none; gap: 4px; flex: none; }
+  .pane--action .action { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; gap: 4px; flex: none; }
   .pane--action .summon { grid-column: 1 / -1; min-height: 54px; padding: 4px 6px; margin-bottom: 4px;
     grid-template-columns: auto auto; grid-template-rows: auto auto; column-gap: 8px; row-gap: 0; justify-content: center; align-items: center;
     box-shadow: inset 0 2px 0 rgba(255,255,255,0.25), 0 4px 0 var(--blue-edge); }
@@ -85,7 +89,7 @@
   .pane--action .summon__name, .pane--action .summon__cost { justify-self: start; }
   .pane--action .summon__name { font-size: 16px; }
   .pane--action .summon__cost { font-size: 14px; }
-  .pane--action .action__side { display: contents; }
+  .pane--action .action__side { display: none; }   /* 강화 · 창고로 · 방출은 정보 바로(세션 65) — 버튼은 그대로 있어 W · S · X 단축키도 그대로 */
   .pane--action .sidebtn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0;
     min-height: 44px; padding: 2px; margin: 0; text-align: center; }
   .pane--action .sidebtn .ico { width: 15px; height: 15px; }
@@ -96,7 +100,7 @@
   .pane--action .toast { position: fixed; left: 50%; right: auto; top: 48px; bottom: auto; width: min(320px, 90vw); transform: translateX(-50%); z-index: 80; }
 
   /* 탭 */
-  .mtabs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; align-content: end; }
+  .mtabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; align-content: end; }
   .mtab {
     position: relative; display: flex; align-items: center; justify-content: center; gap: 4px;
     min-height: 36px; padding: 2px 4px; border-radius: 10px; border: 1px solid var(--line-2);
@@ -104,7 +108,7 @@
   }
   .mtab .ico { width: 14px; height: 14px; }
   .mtab[aria-pressed="true"] { background: linear-gradient(180deg, var(--blue-hi), var(--blue)); color: #fff; border-color: transparent; }
-  .mtab--shop { grid-column: 1 / -1; color: var(--gold-hi); }
+  .mtab--shop { color: var(--gold-hi); }
   .mtab__badge { position: absolute; top: -5px; right: -3px; min-width: 18px; padding: 0 4px; border-radius: 9px; background: var(--gold); color: #1a1406; font-size: 11px; line-height: 18px; }
 
   /* 조합식 머리 — 좁은 서랍에서 [조합] 버튼이 잘리지 않게 줄바꿈 · 등급 칩은 가로 스크롤 */
@@ -123,15 +127,113 @@
   .pane--recipes .recipes__list, .pane--owned .owned__grid, .synergy__list, .dexmini__list { overflow: auto; }
   .ownedpop, .recipepop { top: auto; bottom: 8px; left: 8px; right: 8px; max-height: 70%; overflow: auto; z-index: 20; }
 
-  /* 창(설명서 · 조합 사전 · 상점 · 정예 · 도감 · 모드 · 결과)은 필드 칸이 아니라 화면 전체에 */
-  .board > .book, .board > .help, .board > .dex, .board > .modepick, .board > .result { position: fixed; inset: 0; z-index: 60; padding: 6px; }
-  .board > .book .book__card, .board > .help .help__card { width: 100%; height: 100%; max-height: none; }
+  /* 창(설명서 · 도감 · 모드 · 결과)은 화면 전체에. 조합 사전 · 골드 상점 · 정예(.book)는 시트(아래) */
+  .board > .help, .board > .dex, .board > .modepick, .board > .result { position: fixed; inset: 0; z-index: 60; padding: 6px; }
+  .board > .help .help__card { width: 100%; height: 100%; max-height: none; }
 
-  /* 정보 카드 — 칸 옆에 띄우는 대신 필드 한쪽에 붙는 판. 가로: 오른쪽 세로 판 · 세로: 아래쪽 판.
-   * PC 카드는 필드 클릭을 막지 않게 통째로 pointer-events: none 이지만, 휴대폰에선 손가락으로 판을 스크롤하고
-   * 공격 대상 칩을 눌러야 하므로 판 전체가 터치를 받는다(판이 덮은 칸은 판을 닫고 누른다). */
-  .slotcard { left: auto !important; right: 4px; top: 4px !important; bottom: 4px; width: min(250px, 42%); max-width: none;
-    overflow: auto; overscroll-behavior: contain; transform: none !important; pointer-events: auto; }
+  /* 정보 카드 — 필드 위에 띄우지 않는다. 칸을 고르면 정보 바(아래)에 한 줄, 자세한 정보는 바를 밀어 올린 시트에서만(세션 65) */
+  .slotcard { display: none; }
+}
+
+/* ================= 시트 (세션 65) =================
+ * 필드 사각형(--bt · --bl · --bb · --br — MobileSheet.measure 가 재서 넣는다) 안에서만 열리고 필드를 덮는다(밀지 않는다).
+ * 세로: 필드 아래 끝에서 위로 --sheet-size 만큼 · 가로: 필드 오른쪽 끝에서 왼쪽으로.
+ * 크기: body[data-sheet] peek(한 줄) · half(절반) · full(화면의 45%, 필드보다 크진 않게). 손잡이로 끄는 동안은 --sheet-size 를 직접 넣는다. */
+@media (max-width: 1099.98px) {
+  :root { --bt: 50px; --bl: 4px; --bb: 160px; --br: 4px; --bw: 360px; --bh: 500px;
+    --sheet-full: min(45dvh, var(--bh)); --sheet-peek: 52px; }
+  body[data-sheet="peek"] { --sheet-size: var(--sheet-peek); }
+  body[data-sheet="half"] { --sheet-size: calc(var(--sheet-full) / 2); }
+  body[data-sheet="full"] { --sheet-size: var(--sheet-full); }
+
+  body[data-mtab="recipes"] .pane--recipes, body[data-mtab="owned"] .pane--owned,
+  body[data-mtab="synergy"] .pane--synergy, body[data-mtab="dex"] .pane--dex,
+  .board > .book, body.is-slotsheet .slotcard:not([hidden]) {
+    position: fixed; z-index: 50; margin: 0; max-width: none; max-height: none; transform: none !important;
+    left: var(--bl) !important; right: var(--br); bottom: var(--bb); top: auto !important; width: auto;
+    height: var(--sheet-size); padding-top: 22px;
+    border-radius: 16px 16px 0 0; overflow: hidden; overscroll-behavior: contain;
+    box-shadow: 0 -6px 22px rgba(0, 0, 0, .45); background: var(--panel); border: 1px solid var(--line-2);
+    animation: sheetUp 0.18s ease-out;
+  }
+  .board > .book { z-index: 51; display: flex; padding: 22px 0 0; place-items: stretch; background: var(--panel); animation: sheetUp 0.18s ease-out; }
+  .board > .book[hidden] { display: none; }
+  .board > .book .book__card { width: 100%; height: 100%; max-height: none; border-radius: 0; box-shadow: none; animation: none; }
+  body.is-slotsheet .slotcard:not([hidden]) { display: block; z-index: 52; overflow: auto; pointer-events: auto; padding: 24px 10px 10px; }
+  /* × 는 내용과 함께 스크롤돼 사라지지 않게 위에 붙인다(가로 화면 시트는 짧아 스크롤된다) */
+  body.is-slotsheet .slotcard .slotcard__close { position: sticky; top: 0; float: right; z-index: 2; margin: -4px -4px 0 4px; background: var(--panel); border-radius: 10px; }
+  /* 시트 속 패널 — 머리까지 통째로 스크롤(절반 높이에서도 목록이 바로 이어진다). 제목은 손잡이가 보여 주니 숨긴다 */
+  body[data-mtab="recipes"] .pane--recipes, body[data-mtab="owned"] .pane--owned,
+  body[data-mtab="synergy"] .pane--synergy, body[data-mtab="dex"] .pane--dex { overflow-y: auto; }
+  .pane--recipes .recipes__list, .pane--owned .owned__grid, .synergy__list, .dexmini__list { overflow: visible; flex: none; min-height: 0; }
+  .pane--recipes > .pane__head .pane__title, .pane--owned > .pane__head .pane__title,
+  .pane--synergy > .pane__head .pane__title, .pane--dex > .pane__head .pane__title { display: none; }
+  .pane--recipes .pane__head { flex-wrap: nowrap; }
+  .pane--recipes .pane__head .tabs { order: 0; flex: 1 1 0; min-width: 0; overflow-x: auto; }
+  .pane--recipes .pane__head .pane__count { display: none; }
+  body[data-sheet="peek"] .board > .book .book__card, body[data-sheet="peek"].is-slotsheet .slotcard { overflow: hidden; }
+
+  /* 손잡이 — 맨 위 시트의 윗변(가로는 왼쪽 변)에 걸친다 */
+  .sheetgrip {
+    position: fixed; z-index: 56; left: var(--bl); right: var(--br); bottom: calc(var(--bb) + var(--sheet-size) - 22px); height: 44px;
+    align-items: center; justify-content: center; gap: 8px; touch-action: none; cursor: grab;
+  }
+  body.has-sheet .sheetgrip { display: flex; }
+  .sheetgrip__bar { width: 44px; height: 5px; border-radius: 3px; background: var(--muted); }
+  .sheetgrip__title { font-size: 11px; font-weight: 900; color: var(--muted); }
+
+  /* 정보 바 — 필드 밖에 고정된 한 줄(가로 화면은 오른쪽 줄 안의 두 줄) */
+  .infobar {
+    display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; position: relative;
+    padding: 4px 6px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line-2); touch-action: none;
+  }
+  .infobar::before { content: ""; position: absolute; top: 2px; left: 50%; width: 26px; height: 3px; margin-left: -13px; border-radius: 2px; background: var(--line-2); }
+  .ib__who { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1 1 auto; }
+  .ib__txt { display: grid; min-width: 0; }
+  .ib__name { font-size: 14px; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ib__name--hint { font-size: 12px; color: var(--muted); }
+  .ib__meta { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ib__who .spr--ib { width: 34px; height: 34px; flex: none; }
+  .ib__acts { display: flex; gap: 4px; flex: none; }
+  .ib__btn {
+    display: grid; place-items: center; align-content: center; min-width: 44px; min-height: 44px; padding: 0 6px;
+    border-radius: 10px; border: 1px solid var(--line-2); background: var(--panel-2); color: var(--text);
+    font-size: 12px; font-weight: 900; line-height: 1.05; touch-action: manipulation;
+  }
+  .ib__btn small { font-size: 9.5px; font-weight: 700; color: var(--muted); }
+  .ib__btn:disabled { opacity: .4; }
+  .ib__btn--danger { color: var(--bad); }
+  .ib__btn--cancel { min-width: 72px; background: var(--panel-3); }
+  body.is-moving .infobar { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 201, 60, .45); }
+  .ib__who--move { display: grid; }
+  .ib__who--move .ib__name { color: var(--gold-hi); }
+
+  /* 가로: 오른쪽 줄 — 정보 바는 두 줄(누구 · 버튼 넷) */
+  .infobar { flex-wrap: wrap; align-content: center; }
+  .infobar .ib__acts { flex: 1 1 100%; }
+  .infobar .ib__btn { flex: 1 1 0; min-width: 44px; padding: 0 2px; }
+}
+/* 가로: 시트는 오른쪽에서 — 너비가 --sheet-size */
+@media (max-width: 1099.98px) and (orientation: landscape) {
+  :root { --sheet-full: min(45vw, var(--bw)); --sheet-peek: 48px; }
+  body[data-mtab="recipes"] .pane--recipes, body[data-mtab="owned"] .pane--owned,
+  body[data-mtab="synergy"] .pane--synergy, body[data-mtab="dex"] .pane--dex,
+  .board > .book, body.is-slotsheet .slotcard:not([hidden]) {
+    top: var(--bt) !important; bottom: var(--bb); right: var(--br); left: auto !important;
+    width: var(--sheet-size); height: auto; padding-top: 0; padding-left: 22px; border-radius: 16px 0 0 16px;
+    box-shadow: -6px 0 22px rgba(0, 0, 0, .45);
+  }
+  .board > .book { padding: 0 0 0 22px; }
+  body.is-slotsheet .slotcard:not([hidden]) { padding: 10px 10px 10px 26px; }
+  /* peek: 가로는 좁은 띠라 내용을 숨기고 손잡이의 세로 제목만 */
+  body[data-sheet="peek"] .pane--recipes > *, body[data-sheet="peek"] .pane--owned > *, body[data-sheet="peek"] .pane--synergy > *,
+  body[data-sheet="peek"] .pane--dex > *, body[data-sheet="peek"] .board > .book > *, body[data-sheet="peek"].is-slotsheet .slotcard > * { visibility: hidden; }
+  .sheetgrip {
+    left: auto; bottom: var(--bb); top: var(--bt); right: calc(var(--br) + var(--sheet-size) - 22px); width: 44px; height: auto;
+    flex-direction: column;
+  }
+  .sheetgrip__bar { width: 5px; height: 44px; }
+  .sheetgrip__title { writing-mode: vertical-rl; }
 }
 
 /* ================= 모바일 ② 터치 — 손가락 크기 (세션 52) =================
@@ -161,13 +263,17 @@
 
 /* 휴대폰 세로 — 필드(Renderer 가 90° 돌려 세로로 긴 맵으로 그린다) 아래에 소환 줄 · 탭 · 서랍 */
 @media (max-width: 1099.98px) and (orientation: portrait) {
-  #gameCanvas { --field-rotate: 1; }   /* 휴대폰 세로: 필드를 90° 돌려 세로로 긴 맵(서랍을 열어도 방향은 그대로) */
-  body[data-mtab]:not([data-mtab=""]):not([data-mtab="shop"]) { --drawer-h: 38dvh; }
+  #gameCanvas { --field-rotate: 1; }   /* 휴대폰 세로: 필드를 90° 돌려 세로로 긴 맵 */
+  /* 필드 줄 둘레는 높이가 정해진 줄뿐 — 정보 바 52 · (소환 + 탭) 52. 무엇이 열려도 필드 줄 높이는 그대로다(세션 65).
+   * 소환과 탭을 한 줄에 — 정보 바 줄을 더하고도 필드가 예전(세션 51~64)보다 작아지지 않게 */
   .app {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr) auto auto var(--drawer-h);
-    grid-template-areas: "hud" "board" "action" "tabs" "drawer";
+    grid-template-columns: 92px minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) 52px 52px;
+    grid-template-areas: "hud hud" "board board" "bar bar" "action tabs";
   }
+  .infobar { flex-wrap: nowrap; }
+  .infobar .ib__acts { flex: none; }
+  .infobar .ib__btn { flex: none; min-width: 46px; padding: 0 5px; }
   /* 세로 HUD 는 한 줄(라운드 · 라이프 · 골드 · 배속 · 일시정지 · ☰) + 소환 확률 얇은 줄 */
   .hud { flex-wrap: wrap; row-gap: 3px; column-gap: 3px; }
   .hud .chip--odds { order: 9; flex: 1 1 0; min-width: 0; height: 40px; justify-content: space-between; }
@@ -184,16 +290,21 @@
   .hud .chip--round .chip__sub { display: none; }
   .hud .speed__btn { font-size: 13px; }
 
-  .pane--action { flex-direction: row; align-items: stretch; padding: 4px; }
-  .pane--action .action { flex: 1; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 4px; }
-  .pane--action .summon { grid-column: auto; min-height: 50px; }
-  .pane--action .sidebtn { min-height: 50px; }
-  .pane--action .shardline { flex-direction: column; justify-content: center; }
+  .pane--action { flex-direction: column; align-items: stretch; justify-content: center; padding: 2px; gap: 1px; overflow: hidden; }
+  .pane--action .action { flex: 1 1 auto; min-height: 32px; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: 0; }
+  .pane--action .summon { grid-column: auto; min-height: 0; height: 100%; margin-bottom: 0; padding: 2px 4px; column-gap: 4px; }
+  .pane--action .summon .ball--lg { width: 22px; height: 22px; }
+  .pane--action .summon__name { font-size: 13px; }
+  .pane--action .summon__cost { font-size: 12px; }
+  /* 조각 수는 소환 버튼 위 오른쪽 모서리의 작은 배지로 — 소환 버튼이 줄 높이를 다 쓰게(누름 40px 이상) */
+  .pane--action { position: relative; }
+  .pane--action .shardline { position: absolute; top: 1px; right: 3px; z-index: 1; pointer-events: none; flex-direction: row; gap: 2px;
+    min-height: 0; padding: 0 5px; font-size: 10px; line-height: 14px; border-radius: 7px; background: rgba(5, 12, 30, .72); }
+  .pane--action .shardline__label { display: none; }
+  .pane--action .shardline__num { margin-left: 0; }
   .nextreward { top: auto; bottom: 4px; transform-origin: bottom right; }
-  .mtabs { grid-template-columns: repeat(5, 1fr); }
-  .mtab { flex-direction: column; gap: 1px; min-height: 44px; font-size: 11px; }
-  .mtab--shop { grid-column: auto; }
-  .slotcard { left: 4px !important; right: 4px; top: auto !important; width: auto; max-height: 58%; }
+  .mtabs { grid-template-columns: repeat(5, 1fr); align-content: stretch; }
+  .mtab { flex-direction: column; gap: 1px; min-height: 44px; font-size: 11px; padding: 2px 1px; }
 }
 
 /* 길게 누르기 말풍선 · 보유 탭 끌어 놓기 표시 (모바일 ② · 세션 52) — 어느 화면 크기든 손가락이면 뜬다 */

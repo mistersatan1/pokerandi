@@ -8,7 +8,8 @@
  * 그래서 여기서 정한다(게임 규칙 · 시간은 건드리지 않는다 — Loop 의 고정 시간 갱신은 그대로라 밸런스는 같다):
  *   전투        : 최대 60fps. 느리면 화질 사다리를 한 칸씩 내린다(해상도 2 → 1.5 → 1.25 → 1배, 마지막은 30fps 고정).
  *   쉬는 중     : 10fps(움직이는 게 거의 없다). 손을 대면(누르기 · 움직이기 · 키) 0.8초 동안 제속도.
- *   가려짐      : 휴대폰에서 전체 화면 창(상점 · 사전 · 도감 …)이 필드를 덮으면 15fps(뒤로 흐리게 보이기만 한다).
+ *   가려짐      : 휴대폰에서 전체 화면 창(설명서 · 도감 · 모드 · 결과)이 필드를 덮으면 15fps(뒤로 흐리게 보이기만 한다).
+ *                 상점 · 정예 · 조합 사전은 세션 65 부터 필드 일부만 덮는 시트라 가려짐으로 안 본다.
  * 화질은 내리기만 한다(오르내리며 깜박이지 않게). 새로 열면 다시 가장 곱게 시작한다.
  */
 (function (global) {
@@ -51,7 +52,8 @@
   }
 
   /* 휴대폰에서 전체 화면 창이 필드를 덮었는가 — 매 프레임 DOM 을 뒤지지 않게 0.25초마다 */
-  var COVER_SEL = '.board > .book:not([hidden]), .board > .help:not([hidden]), .board > .dex:not([hidden]), ' +
+  // 조합 사전 · 골드 상점 · 정예(.book)는 세션 65 부터 휴대폰에서 필드 일부만 덮는 시트다 — 필드가 보이니 가려짐이 아니다
+  var COVER_SEL = '.board > .help:not([hidden]), .board > .dex:not([hidden]), ' +
     '.board > .modepick:not([hidden]), .board > .result:not([hidden])';
   function isCovered(t) {
     if (t - FramePacer._coverAt < 250) return FramePacer._covered;

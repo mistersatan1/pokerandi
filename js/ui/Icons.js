@@ -186,6 +186,21 @@
     return !(sp && RPD.SaveManager && RPD.SaveManager.knowsSpell && RPD.SaveManager.knowsSpell(sp.id));
   };
 
+  /* 칸 성격 — 칸 정보 카드 · 휴대폰 이동 모드의 칸 태그가 같이 쓴다(세션 65에 UIManager 에서 옮김) */
+  var SLOT_KIND = [
+    { label: '근접용',      short: '근접용',   hint: '짧은 사거리도 제 몫을 한다' },
+    { label: '중거리용',    short: '중거리용', hint: '사거리 155 이상이 어울린다' },
+    { label: '장거리 전용', short: '장거리',   hint: '사거리 235가 아니면 거의 논다' },
+    { label: '구석 자리',   short: '구석',     hint: '긴 사거리를 넣어도 덮는 구간이 짧다' }
+  ];
+  UI.slotKind = function (slot) {
+    var M = RPD.MapData;
+    var s100 = M.coverageOf(slot, RPD.Range.SHORT);
+    var s155 = M.coverageOf(slot, RPD.Range.MID);
+    var s235 = M.coverageOf(slot, RPD.Range.LONG);
+    return s100 >= 140 ? SLOT_KIND[0] : s155 >= 380 ? SLOT_KIND[1] : s235 >= 500 ? SLOT_KIND[2] : SLOT_KIND[3];
+  };
+
   UI.tierColor = function (tierId) {
     return (RPD.Tiers[tierId] || RPD.Tiers.T1).color;
   };

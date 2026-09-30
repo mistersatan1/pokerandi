@@ -1276,6 +1276,109 @@ check('처형(고스트 시너지 — 지금 로스터엔 악 타입이 없다) 
   if (Math.abs(unit.totalDamage - before) > 1e-6) throw new Error('누적 ' + unit.totalDamage + ' ≠ 적의 처음 체력 ' + before + '(타격 + 처형)');
 });
 
+/* ---------- 휴대폰 ① 필드 고정 · 시트 · 정보 바 · 이동 모드 (세션 65) ---------- */
+console.log('\n휴대폰 정보 바 · 이동 모드');
+const MS = RPD.MobileSheet;
+function msSetup() {
+  MS.forceMobile = true;
+  const F = RPD.FieldManager;
+  F.init(); RPD.StorageManager.reset();
+  const open = F.slots.filter(s => s.unlocked && !s.blocked);
+  F.place(open[0].index, RPD.UnitManager.create('charizard'));
+  F.place(open[1].index, RPD.UnitManager.create('pikachu'));
+  RPD.bus.emit('field:changed', {});
+  return { F, a: open[0].index, b: open[1].index, empty: open[2].index, locked: F.slots.find(s => !s.unlocked) };
+}
+
+check('정보 바 — 칸을 고르면 이름 · 등급 · DPS + [이동][창고로][강화][방출], 아무것도 안 고르면 안내 한 줄', () => {
+  const { F, a } = msSetup();
+  F.select(-1);
+  if (panelHtml('infoBar').indexOf('칸을 누르면') < 0) throw new Error('안내 문구가 없다');
+  F.select(a);
+  const html = panelHtml('infoBar'), u = F.get(a).unit;
+  const need = [u.name, RPD.Tiers[u.tier].label, 'DPS ' + RPD.Utils.formatNumber(Math.round(u.dps)), 'data-ib="move"', 'data-ib="store"', 'data-ib="upgrade"', 'data-ib="sell"'];
+  const miss = need.filter(t => html.indexOf(t) < 0);
+  if (miss.length) throw new Error('빠진 것: ' + miss.join(', '));
+  if (brokenClass(html).length) throw new Error('class 안에 속성이 섞였다');
+  F.select(-1);
+});
+
+check('이동 모드 — 빈 칸을 누르면 옮겨지고 그 칸이 선택된 채 정보 바로 돌아온다', () => {
+  const { F, a, empty } = msSetup();
+  const u = F.get(a).unit;
+  F.select(a);
+  if (!MS.startMove() || MS.moving !== a) throw new Error('이동 모드가 안 켜졌다');
+  if (panelHtml('infoBar').indexOf('옮길 칸을 누르세요') < 0) throw new Error('정보 바가 이동 안내로 안 바뀌었다');
+  if (!MS.moveTo(empty)) throw new Error('옮기기 실패');
+  if (F.get(empty).unit !== u || F.get(a).unit) throw new Error('개체가 안 옮겨졌다');
+  if (MS.moving !== -1 || F.selectedIndex !== empty) throw new Error('이동 모드가 안 끝났거나 선택이 옮긴 칸이 아니다');
+  if (panelHtml('infoBar').indexOf(u.name) < 0) throw new Error('정보 바로 안 돌아왔다');
+});
+
+check('이동 모드 — 누가 있는 칸이면 맞바꾸고, 같은 칸은 취소, 잠긴 칸은 이동 모드 유지', () => {
+  const { F, a, b, locked } = msSetup();
+  const ua = F.get(a).unit, ub = F.get(b).unit;
+  F.select(a); MS.startMove(); MS.moveTo(b);
+  if (F.get(a).unit !== ub || F.get(b).unit !== ua) throw new Error('안 맞바뀌었다');
+  F.select(b); MS.startMove(); MS.moveTo(b);
+  if (MS.moving !== -1 || F.get(b).unit !== ua) throw new Error('같은 칸을 눌렀는데 취소가 아니다');
+  if (locked) {
+    F.select(b); MS.startMove();
+    if (MS.moveTo(locked.index) || MS.moving !== b) throw new Error('잠긴 칸으로 옮겼거나 이동 모드가 풀렸다');
+    MS.cancelMove();
+  }
+});
+
+check('이동 모드 — 빈 칸 · 누가 있는 칸마다 칸 태그(근접용 · 중거리용 · 장거리 · 구석)가 붙고, 다른 칸을 고르면 풀린다', () => {
+  const { F, a, b } = msSetup();
+  F.select(a); MS.startMove();
+  const tags = Object.values(MS.kinds || {});
+  const allowed = ['근접용', '중거리용', '장거리', '구석'];
+  if (!tags.length || tags.some(t => allowed.indexOf(t) < 0)) throw new Error('칸 태그 이상: ' + tags.slice(0, 5).join(','));
+  if (Object.keys(MS.kinds).length !== F.slots.filter(s => s.unlocked && !s.blocked).length) throw new Error('태그 수가 열린 칸 수와 다르다');
+  F.select(b);
+  if (MS.moving !== -1) throw new Error('다른 칸을 골랐는데 이동 모드가 남았다');
+});
+
+check('칸 근처 빈 곳 — 손가락 크기(지름 44px) 안이면 가장 가까운 칸이 골라진다 · 멀면 안 골라진다', () => {
+  const { F } = msSetup();
+  const R = RPD.Renderer, sc = R.toCanvasCss(0, 0).scale;
+  const pad = (MS.FINGER / 2) / sc;
+  // 기대값을 따로 계산 — 칸 가장자리까지 거리가 손가락 반지름 안인 칸 중 가장 가까운 것
+  const expect = (x, y) => { let best = -1, bd = pad; F.slots.forEach(s => { const h = s.size / 2;
+    const dx = Math.max(0, Math.abs(x - s.x) - h), dy = Math.max(0, Math.abs(y - s.y) - h), d = Math.hypot(dx, dy); if (d <= bd) { bd = d; best = s.index; } }); return best; };
+  const client = (lx, ly) => { const c = R.toCanvasCss(lx, ly); return c; };
+  let checked = 0, hitSelf = 0;
+  F.slots.slice(0, 12).forEach(s => {
+    [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dx, dy]) => {
+      const lx = s.x + dx * (s.size / 2 + 16 / sc), ly = s.y + dy * (s.size / 2 + 16 / sc);
+      const c = client(lx, ly), got = MS.slotAt(c.x, c.y), want = expect(lx, ly);
+      if (got !== want) throw new Error('칸 ' + s.index + ' 옆 16px: ' + got + ' ≠ ' + want);
+      if (want === s.index) hitSelf += 1;
+      checked += 1;
+    });
+  });
+  if (hitSelf < checked / 2) throw new Error('칸 옆 16px 을 눌러 그 칸이 골라진 경우가 너무 적다 ' + hitSelf + '/' + checked);
+  // 어느 칸에서도 먼 곳(22px 넘게)은 안 고른다
+  const far = F.slots[0], c = client(far.x, far.y);
+  const lonely = [[0, 0], [30, 30], [990, 580], [500, 5]].map(([x, y]) => [x, y]).find(([x, y]) => expect(x, y) < 0);
+  if (lonely) { const cc = client(lonely[0], lonely[1]); if (MS.slotAt(cc.x, cc.y) !== -1) throw new Error('칸에서 먼 곳인데 칸을 골랐다'); }
+  if (RPD.UIManager.TOUCH.PAD < MS.FINGER / 2) throw new Error('보통 누르기 범위(' + RPD.UIManager.TOUCH.PAD + ')가 손가락 반지름보다 작다');
+});
+
+check('자세한 정보 시트 — 칸을 골랐을 때만 열리고, 선택을 풀면 닫힌다 · 이동 모드를 켜면 닫힌다', () => {
+  const { F, a } = msSetup();
+  F.select(-1);
+  if (MS.openDetail()) throw new Error('선택 없이 열렸다');
+  F.select(a);
+  if (!MS.openDetail() || !MS.detail) throw new Error('안 열렸다');
+  MS.startMove();
+  if (MS.detail) throw new Error('이동 모드에서도 열려 있다');
+  MS.cancelMove(); MS.openDetail(); F.select(-1);
+  if (MS.detail) throw new Error('선택을 풀어도 남았다');
+  MS.forceMobile = false;
+});
+
 console.log(`\n────────────────────────────`);
 console.log(failures === 0 ? '부팅 경로 이상 없음' : `부팅 문제 ${failures}건`);
 process.exit(failures === 0 ? 0 : 1);

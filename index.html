@@ -412,6 +412,15 @@
     </div>
   </main>
 
+  <!-- ============ 휴대폰 정보 바 · 시트 손잡이 — 1100px 미만에서만 (세션 65 · js/ui/MobileSheet.js) ============
+       정보 바: 칸을 고르면 필드 위에 카드를 띄우는 대신 필드 밖 한 줄에 이름 · 등급 · DPS + [이동][창고로][사거리 강화][방출].
+       위로 밀거나 길게 누르면 자세한 정보(스킬 · 특성 · 버프 · 공격 대상)가 시트로 올라온다.
+       손잡이: 열린 시트(조합식 · 보유 · 시너지 · 도감 · 골드 상점 · 정예 · 조합 사전 · 자세한 정보)의 높이를 끌어서 조절. -->
+  <div class="infobar" id="infoBar" aria-live="polite"></div>
+  <div class="sheetgrip" id="sheetGrip" role="button" aria-label="시트 높이 — 끌어서 조절 · 누르면 접기/펴기" title="끌어서 높이 조절 · 누르면 접기/펴기">
+    <span class="sheetgrip__bar"></span><span class="sheetgrip__title" id="sheetGripTitle"></span>
+  </div>
+
   <!-- ============ 휴대폰 탭(서랍) — 1100px 미만에서만 보인다 ============
        필드를 가리지 않게 패널은 기본으로 닫혀 있고, 탭을 누르면 서랍이 열리며 필드가 그만큼 줄어든다.
        같은 탭을 다시 누르면 닫힌다. [상점]은 골드 상점 창을 연다(G 와 같다). -->
@@ -514,6 +523,7 @@
 <script src="js/ui/HudPanels.js"></script>
 <script src="js/ui/RecipeBook.js"></script>
 <script src="js/ui/DexCard.js"></script>
+<script src="js/ui/MobileSheet.js"></script>
 <script src="js/ui/GoldShopUI.js"></script>
 <script src="js/ui/EliteUI.js"></script>
 <script src="js/ui/SpellUI.js"></script>

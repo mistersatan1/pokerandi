@@ -247,7 +247,7 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
       const b = n.getBoundingClientRect(); const cs = getComputedStyle(n);
       return b.width > 4 && b.height > 4 && cs.visibility !== 'hidden' && cs.display !== 'none' && b.right > 0 && b.bottom > 0 && b.left < innerWidth && b.top < innerHeight; }, sel);
     const reach = {};
-    for (const [k, sel] of [['Space 소환', '#btnSummon'], ['W 강화', '#btnUpgrade'], ['S 창고로', '#btnStore'], ['X 방출', '#btnSell'],
+    for (const [k, sel] of [['Space 소환', '#btnSummon'],
                             ['1·2·3 배속', '.speed__btn[data-speed="3"]'], ['P 일시정지', '#btnPause']]) reach[k] = await visible(sel);
     await mp.tap('#btnMore'); await mp.waitForTimeout(200);
     for (const [k, sel] of [['H 설명서', '#btnHelp'], ['Enter 주문', '#btnChat'], ['R 조합 사전', '#btnBook'], ['G 골드 상점', '#btnGoldShop'],
@@ -262,6 +262,18 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     await mp.tap('.mtab[data-mtab="owned"]'); await mp.waitForTimeout(300);   // 서랍 닫기
     const t0 = targets.find(t => t.i === 0);
     await mp.touchscreen.tap(t0.x, t0.y); await mp.waitForTimeout(300);
+    // 강화 · 창고로 · 방출 — 세션 65 부터 정보 바에(원래 버튼은 숨어 있고 W · S · X 단축키는 그대로)
+    for (const [k, sel] of [['W 강화 (정보 바)', '#infoBar [data-ib="upgrade"]'], ['S 창고로 (정보 바)', '#infoBar [data-ib="store"]'],
+                            ['X 방출 (정보 바)', '#infoBar [data-ib="sell"]'], ['이동 (정보 바)', '#infoBar [data-ib="move"]']]) reach[k] = await visible(sel);
+    // 자세한 정보(스킬 · 특성 · 공격 대상)는 정보 바를 길게 눌러 여는 시트에 — 실제 손가락(CDP)으로 0.6초 누르기
+    {
+      const cdp0 = await mctx.newCDPSession(mp);
+      const bb = await mp.locator('#infoBar .ib__who').boundingBox();
+      await cdp0.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: bb.x + 8, y: bb.y + bb.height / 2 }] });
+      await mp.waitForTimeout(650);
+      await cdp0.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await mp.waitForTimeout(300);
+    }
     // 공격 대상 칩은 보이기만 하면 안 되고 실제로 눌려야 한다(카드 안을 스크롤해서라도)
     await mp.evaluate(() => { const c = document.querySelector('#slotCard [data-tgt="BOSS"]'); if (c) c.scrollIntoView({ block: 'nearest' }); });
     await mp.waitForTimeout(150);
@@ -271,7 +283,7 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
       reach['T 공격 대상 — 칩을 눌러 바뀜'] = await mp.evaluate(() => { const s = window.RPD.FieldManager.getSelected(); return !!(s && s.unit && s.unit.targeting === 'BOSS'); });
       if (/landscape/.test(dev)) await mp.screenshot({ path: require('path').join(__dirname, '..', 'dist', 'm_' + tag + '_card.png') });
     }
-    reach['Esc 닫기 (정보 카드 ×)'] = await visible('#btnSlotClose');
+    reach['Esc 닫기 (자세한 정보 시트 ×)'] = await visible('#btnSlotClose');
     const missing = Object.keys(reach).filter(k => !reach[k]);
 
     report.push({ device: dev, ...geo, slotPx: +(geo.slotCss * geo.dpr).toFixed(0), tapWrong: wrong, tapCount: targets.length, missing, errors: merr.slice(0, 3) });
@@ -569,6 +581,147 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     await xp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '15_execute_total_slotcard_pc.png') });
     await xctx.close();
   }
+
+  /* ⑯ 모바일 재설계 ① — 필드 고정 · 시트 · 정보 바 · 이동 모드(세션 65). 갤럭시 S24 세로 · 가로, 실제 손가락(터치)으로.
+   * 검사(하나라도 어긋나면 이 도구가 실패로 끝난다):
+   *   캔버스 화면 크기(getBoundingClientRect)가 시트(탭 넷 × peek · 절반 · 전체 · 손잡이 끌기) · 창(상점 · 정예 · 조합 사전) · 자세한 정보 · 이동 모드에서 모두 같다
+   *   정보 바가 필드 칸(과 캔버스)과 겹치지 않는다 / 이동 모드에서 칸을 눌러 실제로 옮겨진다 / 칸 근처 빈 곳을 눌러도 가장 가까운 칸이 골라진다
+   * 캡처: (a) 칸 선택 + 정보 바 (b) 이동 모드 (c) 조합식 시트 절반 — 칸의 화면 크기(px)도 남긴다. */
+  const m1Problems = [];
+  for (const dev of ['Galaxy S24', 'Galaxy S24 landscape']) {
+    const gctx = await browser.newContext({ ...devices[dev], defaultBrowserType: undefined });
+    const gp = await gctx.newPage();
+    const gerr = [];
+    gp.on('pageerror', e => gerr.push(e.message));
+    await gp.goto(URL); await gp.waitForTimeout(1000);
+    await gp.evaluate(() => {
+      const R = window.RPD;
+      if (R.TutorialManager && R.TutorialManager.skip) R.TutorialManager.skip();
+      document.querySelectorAll('.modepick, .result, .help, .book').forEach(o => o.hidden = true);
+      R.Game.resetAll('NORMAL', 'NORMAL'); R.Game.startRun('NORMAL', 'NORMAL');
+      R.GameManager.setWave(23); R.WaveManager.startRound(23);
+      const F = R.FieldManager;
+      F.slots.forEach(x => { if (x.unit) F.remove(x.index); });
+      const open = F.slots.filter(x => x.unlocked && !x.blocked);
+      ['charizard', 'blastoise', 'venusaur', 'pikachu', 'gengar', 'alakazam'].forEach((id, i) => F.place(open[i].index, R.UnitManager.create(id)));
+      R.GameManager.life = 999; R.GameManager.gold = 0;
+      R.bus.emit('field:changed', {});
+    });
+    await gp.waitForTimeout(2600);                                   // 라운드 배너가 지나가게
+    await gp.evaluate(() => window.RPD.Loop.setPaused(true));
+    const tag = dev.replace(/ /g, '_');
+    const canvasRect = () => gp.evaluate(() => { const r = document.getElementById('gameCanvas').getBoundingClientRect(); return [r.left, r.top, r.width, r.height].map(v => Math.round(v * 10) / 10).join(','); });
+    const slots = () => gp.evaluate(() => {
+      const R = window.RPD.Renderer, F = window.RPD.FieldManager, c = document.getElementById('gameCanvas').getBoundingClientRect();
+      return F.slots.map(sl => { const p = R.toCanvasCss(sl.x, sl.y), h = sl.size / 2 * p.scale;
+        return { i: sl.index, x: c.left + p.x, y: c.top + p.y, h, unit: sl.unit ? sl.unit.defId : null, open: sl.unlocked && !sl.blocked }; });
+    });
+    const R0 = await canvasRect();
+    const bad = (what) => { m1Problems.push(dev + ': ' + what); };
+    const same = async (what) => { const r = await canvasRect(); if (r !== R0) bad('캔버스 크기가 바뀜 — ' + what + ' ' + R0 + ' → ' + r); };
+    const S = await slots();
+    const slotPx = +(S[0].h * 2).toFixed(1);
+
+    // (a) 칸 선택 — 실제 손가락으로 리자몽 칸
+    const A = S.find(x => x.unit === 'charizard');
+    await gp.touchscreen.tap(A.x, A.y); await gp.waitForTimeout(250);
+    if (await gp.evaluate(() => window.RPD.FieldManager.selectedIndex) !== A.i) bad('리자몽 칸이 안 골라짐');
+    const bar = await gp.evaluate(() => { const r = document.getElementById('infoBar').getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom, text: document.getElementById('infoBar').innerText.replace(/\s+/g, ' ') }; });
+    const cv = await gp.evaluate(() => { const r = document.getElementById('gameCanvas').getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom }; });
+    const overlap = (a, b) => a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;
+    const hitSlots = S.filter(x => overlap(bar, { l: x.x - x.h, t: x.y - x.h, r: x.x + x.h, b: x.y + x.h })).map(x => x.i);
+    if (hitSlots.length) bad('정보 바가 칸과 겹침: ' + hitSlots.join(','));
+    if (overlap(bar, cv)) bad('정보 바가 필드(캔버스)와 겹침');
+    if (!/리자몽/.test(bar.text) || !/DPS/.test(bar.text)) bad('정보 바에 이름 · DPS 가 없음: ' + bar.text);
+    if (await gp.evaluate(() => { const c = document.getElementById('slotCard'); return c && getComputedStyle(c).display !== 'none'; })) bad('필드 위에 정보 카드가 뜸');
+    await same('칸 선택');
+    await gp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '16_m1_' + tag + '_a_select.png') });
+
+    // (b) 이동 모드 — [이동] 누르고 빈 칸을 눌러 옮기기
+    await gp.tap('#infoBar [data-ib="move"]'); await gp.waitForTimeout(350);
+    if (await gp.evaluate(() => window.RPD.MobileSheet.moving) !== A.i) bad('[이동] 을 눌러도 이동 모드가 아님');
+    const moveBar = await gp.evaluate(() => document.getElementById('infoBar').innerText.replace(/\s+/g, ' '));
+    if (!/옮길 칸을 누르세요/.test(moveBar) || !/취소/.test(moveBar)) bad('이동 모드 정보 바 문구: ' + moveBar);
+    await same('이동 모드');
+    await gp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '16_m1_' + tag + '_b_move.png') });
+    const E = S.find(x => x.open && !x.unit && x.i !== A.i);
+    await gp.touchscreen.tap(E.x, E.y); await gp.waitForTimeout(300);
+    const moved = await gp.evaluate(([a, e]) => { const F = window.RPD.FieldManager; return { at: F.get(e).unit && F.get(e).unit.defId, left: !!F.get(a).unit, sel: F.selectedIndex, moving: window.RPD.MobileSheet.moving }; }, [A.i, E.i]);
+    if (moved.at !== 'charizard' || moved.left) bad('이동 모드에서 칸을 눌렀는데 안 옮겨짐: ' + JSON.stringify(moved));
+    if (moved.moving !== -1 || moved.sel !== E.i) bad('옮긴 뒤 정보 바로 안 돌아옴: ' + JSON.stringify(moved));
+
+    // 칸 근처 빈 곳 — 칸 가장자리 밖 14px(손가락 반지름 22px 안) · 다른 칸이 더 가깝지 않은 방향으로
+    const S2 = await slots();
+    let nearTest = null;
+    for (const x of S2) {
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const px = x.x + dx * (x.h + 14), py = x.y + dy * (x.h + 14);
+        const clash = S2.some(o => o.i !== x.i && Math.hypot(Math.max(0, Math.abs(px - o.x) - o.h), Math.max(0, Math.abs(py - o.y) - o.h)) <= 22);
+        if (!clash && px > cv.l + 2 && px < cv.r - 2 && py > cv.t + 2 && py < cv.b - 2) { nearTest = { i: x.i, x: px, y: py }; break; }
+      }
+      if (nearTest) break;
+    }
+    await gp.evaluate(() => window.RPD.FieldManager.select(-1));
+    await gp.touchscreen.tap(nearTest.x, nearTest.y); await gp.waitForTimeout(200);
+    const nearGot = await gp.evaluate(() => window.RPD.FieldManager.selectedIndex);
+    if (nearGot !== nearTest.i) bad('칸 근처 빈 곳(가장자리 밖 14px) → ' + nearGot + ' (기대 ' + nearTest.i + ')');
+    await gp.evaluate(() => window.RPD.FieldManager.select(-1));
+
+    // (c) 조합식 시트 절반
+    await gp.touchscreen.tap(A.x, A.y); await gp.waitForTimeout(100);        // 빈 칸 하나 골라 두기(정보 바가 보이게)
+    const B = S2.find(x => x.unit === 'charizard');
+    await gp.touchscreen.tap(B.x, B.y); await gp.waitForTimeout(150);
+    await gp.tap('.mtab[data-mtab="recipes"]'); await gp.waitForTimeout(450);
+    const sheetInfo = await gp.evaluate(() => { const p = document.querySelector('.pane--recipes').getBoundingClientRect(); return { size: document.body.getAttribute('data-sheet'), w: Math.round(p.width), h: Math.round(p.height) }; });
+    if (sheetInfo.size !== 'half') bad('조합식 탭을 열었는데 절반 시트가 아님: ' + sheetInfo.size);
+    await same('조합식 시트 절반');
+    await gp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '16_m1_' + tag + '_c_recipes_half.png') });
+
+    // 필드를 누르면 peek 로 · 선택은 그대로
+    const selBefore = await gp.evaluate(() => window.RPD.FieldManager.selectedIndex);
+    await gp.touchscreen.tap(B.x, B.y); await gp.waitForTimeout(250);
+    const afterTap = await gp.evaluate(() => ({ size: document.body.getAttribute('data-sheet'), sel: window.RPD.FieldManager.selectedIndex }));
+    if (afterTap.size !== 'peek' || afterTap.sel !== selBefore) bad('필드를 누르면 peek + 선택 유지여야 하는데: ' + JSON.stringify(afterTap));
+
+    // 캔버스 크기 불변 — 탭 넷 × 세 크기 · 손잡이 끌기 · 창 셋 · 자세한 정보
+    for (const tab of ['recipes', 'owned', 'synergy', 'dex']) {
+      await gp.evaluate(t => { window.RPD.HudPanels.setDrawer(''); window.RPD.HudPanels.setDrawer(t); }, tab);
+      for (const size of ['peek', 'half', 'full']) {
+        await gp.evaluate(z => window.RPD.MobileSheet.setSize(z), size); await gp.waitForTimeout(120);
+        await same(tab + ' ' + size);
+      }
+    }
+    // 손잡이를 실제 손가락으로 끌기(세로: 위로 · 가로: 왼쪽으로) → 크기가 바뀌고 캔버스는 그대로
+    await gp.evaluate(() => window.RPD.MobileSheet.setSize('peek')); await gp.waitForTimeout(150);
+    const gb = await gp.locator('#sheetGrip').boundingBox();
+    const land = /landscape/.test(dev);
+    const cdp = await gctx.newCDPSession(gp);
+    const gx = gb.x + gb.width / 2, gy = gb.y + gb.height / 2;
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: gx, y: gy }] });
+    for (let k = 1; k <= 8; k++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: land ? gx - k * 30 : gx, y: land ? gy : gy - k * 30 }] }); await gp.waitForTimeout(16); }
+    await same('손잡이 끄는 중');
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await gp.waitForTimeout(200);
+    const dragged = await gp.evaluate(() => document.body.getAttribute('data-sheet'));
+    if (dragged === 'peek') bad('손잡이를 끌어도 시트 크기가 그대로 peek');
+    await same('손잡이 끈 뒤(' + dragged + ')');
+    await gp.evaluate(() => window.RPD.HudPanels.setDrawer(''));
+    for (const id of ['goldShopOverlay', 'eliteOverlay', 'bookOverlay']) {
+      await gp.evaluate(i => { document.getElementById(i).hidden = false; }, id); await gp.waitForTimeout(150);
+      await same(id);
+      await gp.evaluate(i => { document.getElementById(i).hidden = true; }, id);
+    }
+    await gp.touchscreen.tap(B.x, B.y); await gp.waitForTimeout(150);
+    await gp.evaluate(() => window.RPD.MobileSheet.openDetail()); await gp.waitForTimeout(200);
+    await same('자세한 정보 시트');
+    const detailShown = await gp.evaluate(() => getComputedStyle(document.getElementById('slotCard')).display !== 'none');
+    if (!detailShown) bad('자세한 정보 시트가 안 보임');
+    const info = { canvas: R0, slotCssPx: slotPx, bar: [Math.round(bar.l), Math.round(bar.t), Math.round(bar.r - bar.l), Math.round(bar.b - bar.t)], sheet: sheetInfo, dragged, errors: gerr.slice(0, 2) };
+    console.log('mobile1', dev, JSON.stringify(info));
+    report.push({ mobile1: dev, ...info });
+    await gctx.close();
+  }
+  console.log('mobile1 problems', JSON.stringify(m1Problems));
+  if (m1Problems.length) process.exitCode = 1;
 
   /* ---------- 모바일 ③ — 홈 화면 앱(세션 53) ----------
    * 설치 · 오프라인은 인터넷 주소에서만 되니, 원본 폴더(dist 아님)를 이 자리에서 작은 웹 서버로 띄워 연다(localhost 는 https 와 같게 친다).

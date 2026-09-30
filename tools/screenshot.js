@@ -269,6 +269,7 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     // 자세한 정보(스킬 · 특성 · 공격 대상)는 정보 바를 길게 눌러 여는 시트에 — 실제 손가락(CDP)으로 0.6초 누르기
     {
       const cdp0 = await mctx.newCDPSession(mp);
+      await mp.locator('#infoBar .ib__who').waitFor({ state: 'visible', timeout: 3000 });   // 칸을 누른 직후 바가 다시 그려지는 사이에 재면 가끔 비었다(세션 66)
       const bb = await mp.locator('#infoBar .ib__who').boundingBox();
       await cdp0.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: bb.x + 8, y: bb.y + bb.height / 2 }] });
       await mp.waitForTimeout(650);

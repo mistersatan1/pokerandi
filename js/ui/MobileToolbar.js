@@ -26,6 +26,7 @@
   function doc() { return typeof document !== 'undefined' ? document : null; }
   function isMobile() { return !!(RPD.MobileSheet && RPD.MobileSheet.isMobile()); }
   function byId(id) { var d = doc(); return d ? d.getElementById(id) : null; }
+  function $(id) { return byId(id); }
   function clickById(id) {
     var n = byId(id);
     if (n && !n.disabled && n.click) { n.click(); return true; }
@@ -123,7 +124,7 @@
   T.measure = function () {
     var d = doc();
     if (!d || !d.documentElement || !d.documentElement.style) return;
-    var tops = [byId('mobileTabs'), d.querySelector ? d.querySelector('.pane--action') : null]
+    var tops = [d.getElementById('mobileTabs'), d.querySelector ? d.querySelector('.pane--action') : null]
       .filter(function (n) { return n && n.getBoundingClientRect; })
       .map(function (n) { return n.getBoundingClientRect().top; })
       .filter(function (t) { return t > 0; });
@@ -135,13 +136,14 @@
   T.init = function () {
     var d = doc();
     if (!d) return;
-    el.craft = byId('tbCraft');
-    el.craftBadge = byId('mtabCraft');
-    el.ownedBadge = byId('tbOwnedBadge');
-    el.more = byId('tbMore');
-    el.dot = byId('tbMoreDot');
-    el.strip = byId('craftStrip');
-    el.synergy = byId('btnSynergy');
+    el.craft = $('tbCraft');
+    el.craftBadge = $('mtabCraft');
+    el.ownedBadge = $('tbOwnedBadge');
+    el.more = $('tbMore');
+    el.dot = $('tbMoreDot');
+    el.strip = $('craftStrip');
+    el.synergy = $('btnSynergy');
+    el.owned = $('tbOwned');
 
     bindCraft();
     if (el.more && el.more.addEventListener) {
@@ -150,6 +152,10 @@
         var on = H && H.toggleMore ? H.toggleMore() : false;
         if (el.more.setAttribute) el.more.setAttribute('aria-expanded', String(!!on));
       });
+    }
+    // [창고] — 보유 시트(HudPanels 의 탭 처리와 같은 setDrawer). data-mtab="owned" 는 끌어 놓기 대상 · 눌림 표시용으로 남긴다
+    if (el.owned && el.owned.addEventListener) {
+      el.owned.addEventListener('click', function () { if (RPD.HudPanels) RPD.HudPanels.setDrawer('owned'); });
     }
     if (el.synergy && el.synergy.addEventListener) {
       el.synergy.addEventListener('click', function () {

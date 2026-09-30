@@ -289,7 +289,7 @@
     if (el.mobileTabs && el.mobileTabs.addEventListener) {
       el.mobileTabs.addEventListener('click', function (e) {
         var b = e.target && e.target.closest ? e.target.closest('[data-mtab]') : null;
-        if (!b) return;
+        if (!b || (b.hasAttribute && b.hasAttribute('data-tb'))) return;   // 툴바 버튼(세션 66)은 MobileToolbar 가 받는다
         var tab = b.getAttribute('data-mtab');
         if (tab === 'shop') { if (RPD.GoldShopUI) RPD.GoldShopUI.toggle(); return; }
         HudPanels.setDrawer(tab);

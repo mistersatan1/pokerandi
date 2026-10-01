@@ -509,6 +509,10 @@
     if (r.kind === 'shard') {
       return '<span class="rchip2"><b>◆</b>조각 ' + r.count + '</span>';
     }
+    // 40R 보스 보상 — 초월의 조각(RewardManager.describe 는 이미 알았다. 여기만 빠져 31~40R 칩이 오류로 안 바뀌고 40R 보상 카드가 안 떴다 · 세션 72)
+    if (r.kind === 'item') {
+      return '<span class="rchip2 rchip2--item"><b>✦</b>초월의 조각 ×' + (r.count || 1) + '</span>';
+    }
     var t = RPD.Tiers[r.tier];
     var art = r.unit ? RPD.UI.sprite(r.unit.def, 'spr--reward') : '';
     return '<span class="rchip2" style="--tier:' + t.color + '">' + art +

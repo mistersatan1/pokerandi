@@ -683,6 +683,7 @@
     RPD.bus.on('field:select', refreshActionButtons);
     RPD.bus.on('elite:changed', refreshActionButtons);   // 소환 금지 시작 · 남은 라운드 — 골드가 안 바뀌어도 [소환] 이 "금지 NR" 로 바로(세션 66)
     RPD.bus.on('game:wave', renderSummonPanel);
+    RPD.bus.on('game:wave', renderNextUnlock);   // "N R 뒤 등급" — 소환 없이 라운드만 바뀌어도 맞게(세션 72 · 예전엔 소환·해금 때만 다시 그려 오래된 글자가 남았다)
 
     RPD.bus.on('wave:phase', renderWaveStatus);
     RPD.bus.on('wave:started', onWaveStarted);

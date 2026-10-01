@@ -76,12 +76,9 @@ description: 포켓몬 랜덤 디펜스 프로젝트에서 Claude Code가 코드
 
 예:
 
-- pokemon.js
-- recipes.js
-- synergy.js
-- boss 데이터
-- round 데이터
-- save 데이터
+- js/data/pokemon.js · recipes.js · spells.js(히든 · 불멸 · 초월 주문)
+- js/data/types.js(타입 · 시너지) · tiers.js(소환 확률) · waves.js · enemies.js(라운드 · 보스)
+- js/systems/SaveManager.js(진행 기록) · RunSave.js(판 이어하기 저장 — 새 매니저는 saveState 또는 NOT_SAVED 필요)
 
 실제 프로젝트의 파일 이름이 다르면 실제 파일 구조를 기준으로 판단한다.
 
@@ -346,11 +343,10 @@ BALANCE_CONFIG.damageMultiplier
 
 예:
 
-T1 28%
-T2 28%
+T1 50%
+T2 24%
 T3 26%
-T4 15%
-T5 3%
+(33라운드 이후 — `js/data/tiers.js` 의 `SummonTable.bands`)
 
 합계가 100%인지 확인한다.
 
@@ -473,8 +469,11 @@ migration을 고려한다.
 
 작업이 끝나면 다음 형식으로 간단하게 보고한다.
 
+(이 프로젝트는 `CLAUDE.md` 의 규칙이 우선이다: 기록은 "무엇을 · 왜 · 측정값"(VERSION.md), 밸런스 측정은 표로,
+요청 밖 변경은 따로 짚어서 알린다. 아래 항목은 그 안에 담는다.)
+
 ## 변경 사항
-- 무엇을 수정했는지
+- 무엇을 · 왜 수정했는지
 
 ## 수정 파일
 - 파일명
@@ -483,6 +482,9 @@ migration을 고려한다.
 ## 테스트
 - 실제 실행한 테스트
 - 확인 결과
+
+## 요청 밖 변경
+- 요청하지 않았지만 바꾼 것(없으면 "없음")
 
 ## 주의 사항
 - 남아 있는 문제

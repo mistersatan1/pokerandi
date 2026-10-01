@@ -109,9 +109,12 @@ for (const rel of FILES) {
 }
 
 const RPD = sandbox.RPD;
+/* 고정 난수(세션 72 · tools/seedrand.js) — 검사마다 그 이름으로 시드를 다시 잡는다: 순서가 바뀌어도 · 앞 검사가 난수를 몇 번 썼어도 결과가 같다 */
+const SEED = require('./seedrand.js').install(sandbox);
 let failures = 0;
 
 function run(label, fn) {
+  SEED.reseed(label);
   try { fn(); console.log('  PASS  ' + label); }
   catch (err) { failures += 1; console.log('  FAIL  ' + label + '  → ' + err.message); }
 }
@@ -1171,7 +1174,8 @@ run('창고에서 끌어 놓으면 빈 칸엔 배치, 찬 칸과는 맞바꾼다
 run('흔함은 어느 라운드에도 50% 밑으로 내려가지 않는다', () => {
   for (const w of [17, 25, 33, 45, 60]) {
     freshSummon(w);
-    let c = 0; const N = 5000;
+    // 5000회면 한계(48%)가 실제 값(약 50.0%)에서 2.9σ 라 가끔 떨어졌다(세션 72 측정: 40번 중 1번 47.7%). 20000회면 약 5.7σ
+    let c = 0; const N = 20000;
     for (let i = 0; i < N; i++) if (RPD.SummonManager.rollTier() === 'T1') c++;
     // 확정 천장(25회마다 특별함)이 끼어드는 몫만큼 아주 조금 여유를 둔다
     if (c / N < 0.48) throw new Error(`R${w} 흔함 ${(c / N * 100).toFixed(1)}%`);

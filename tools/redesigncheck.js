@@ -45,6 +45,8 @@ for (const f of FILES) {
 }
 
 const RPD = sandbox.RPD;
+/* 고정 난수(세션 72 · tools/seedrand.js) — 구역(section)마다 그 이름으로 시드를 다시 잡는다: 구역 순서가 바뀌어도 · 앞 구역이 난수를 몇 번 썼어도 결과가 같다 */
+const SEED = require('./seedrand.js').install(sandbox);
 const { GameManager: GM, FieldManager: F, SummonManager: SM, RecipeManager: RM,
         ShardManager: SH, UnitManager: UM, PokemonData: PD, RecipeData: RD,
         SaveManager: SV, SynergyManager: SY } = RPD;
@@ -57,7 +59,7 @@ const check = (name, ok, detail) => {
   if (ok) { pass++; console.log('  PASS  ' + name); }
   else { fail++; console.log('  FAIL  ' + name + (detail ? '  → ' + detail : '')); }
 };
-const section = (t) => console.log('\n' + t);
+const section = (t) => { console.log('\n' + t); SEED.reseed(t); };
 
 function fresh(round) {
   GM.reset('NORMAL'); F.init(); SM.reset(); RM.reset(); SH.reset();
@@ -480,7 +482,8 @@ section('조합 보정');
     const orig = RPD.SummonTable.recipeBoostMul;
     RPD.SummonTable.recipeBoostMul = mul;
     let total = 0;
-    const N = 200;
+    // 200판이면 평균이 ±7% 흔들려 판정선(0.92)을 넘는 일이 5% 있었다(세션 72 측정: 실제 단축은 약 21% · 비율 0.78). 1000판이면 판정선까지 약 3.7σ
+    const N = 1000;
     for (let t = 0; t < N; t++) {
       fresh(11);
       F.place(0, UM.create(biasRecipe.materials[0]));

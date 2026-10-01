@@ -2556,6 +2556,73 @@ check('이어하기 — 옛 저장(용량 14)은 새 기본값으로 올려 불�
   SG.reset();
 });
 
+/* ---------- 시너지 — 서로 다른 종 기준(세션 77) ---------- */
+console.log('\n시너지 — 서로 다른 종 기준');
+function synFresh() {
+  MS.forceMobile = false; RPD.Config.autosave = false;
+  RPD.Game.restart(); RPD.Game.startRun('NORMAL', 'NORMAL');
+  RPD.GameManager.life = 999;
+  RPD.FieldManager.init(); RPD.StorageManager.reset();
+  RPD.FieldManager.slots.forEach(sl => { if (!sl.blocked) sl.unlocked = true; });
+}
+function synPut(id, n) {
+  const out = [];
+  for (let i = 0; i < (n || 1); i++) {
+    const sl = RPD.FieldManager.slots.find(x => x.unlocked && !x.blocked && !x.unit);
+    const u = RPD.UnitManager.create(id); RPD.FieldManager.place(sl.index, u); out.push(u);
+  }
+  RPD.UnitManager.recomputeAll();
+  return out;
+}
+const SY = RPD.SynergyManager;
+const syn = typeId => SY.active.find(a => a.typeId === typeId);
+
+check('구구 2마리 = 비행 1 · 구구 + 피죤 = 비행 2 — 종 기준', () => {
+  synFresh();
+  synPut('pidgey', 2);
+  if (SY.countOf('FLYING') !== 1) throw new Error('구구 2마리 비행 = ' + SY.countOf('FLYING') + ' (기대 1)');
+  if (SY.unitCountOf('FLYING') !== 2) throw new Error('마리 수 ' + SY.unitCountOf('FLYING'));
+  if (SY.bonus.attackSpeedMul !== 1) throw new Error('비행 1종인데 시너지가 켜졌다(공속 ' + SY.bonus.attackSpeedMul + ')');
+  synPut('pidgeotto', 1);
+  if (SY.countOf('FLYING') !== 2) throw new Error('구구 + 피죤 비행 = ' + SY.countOf('FLYING') + ' (기대 2)');
+  if (!(SY.bonus.attackSpeedMul > 1) || !syn('FLYING') || syn('FLYING').tierIndex < 0) throw new Error('비행 2종이면 켜져야 한다');
+});
+
+check('이중 타입은 두 타입 모두 +1 — 노말·비행 구구 → 노말 1 · 비행 1', () => {
+  synFresh();
+  synPut('pidgey', 1);
+  if (SY.countOf('NORMAL') !== 1 || SY.countOf('FLYING') !== 1) throw new Error('노말 ' + SY.countOf('NORMAL') + ' / 비행 ' + SY.countOf('FLYING'));
+  synPut('pidgey', 1);
+  if (SY.countOf('NORMAL') !== 1 || SY.countOf('FLYING') !== 1) throw new Error('같은 종을 더 올렸는데 늘었다');
+});
+
+check('같은 종은 강화 레벨 · 잠금 · 위치가 달라도 1종 — 다른 종(초월 폼 포함)은 따로 센다', () => {
+  synFresh();
+  const [a, b, c] = synPut('pidgey', 3);
+  a.level = 3; RPD.UnitManager.setLocked(b, true);
+  RPD.UnitManager.recomputeAll();
+  if (SY.countOf('FLYING') !== 1) throw new Error('레벨 · 잠금이 달라 다른 종으로 셌다: ' + SY.countOf('FLYING'));
+  synFresh();
+  synPut('charizard', 1); synPut('charizard_transcend', 1);
+  if (SY.countOf('FIRE') !== 2) throw new Error('초월 폼은 다른 종: 불꽃 ' + SY.countOf('FIRE') + ' (기대 2)');
+  const t = RPD.PokemonData.get('charizard_transcend');
+  if (!t || t.types.indexOf('FIRE') < 0) throw new Error('초월 리자몽 타입');
+});
+
+check('시너지 패널 — "비행 1/2" 와 "구구 ×2는 1종으로" 로 왜 안 켜졌는지 보인다', () => {
+  synFresh();
+  synPut('pidgey', 2);
+  RPD.bus.emit('field:changed', {});
+  const html = panelHtml('synergyBody');
+  if (html.indexOf('1/2') < 0) throw new Error('"1/2" 가 없다');
+  if (html.indexOf('구구 ×2는 1종으로') < 0) throw new Error('중복 안내가 없다');
+  if (html.indexOf('1종 더') < 0) throw new Error('"1종 더 → …" 가 없다');
+  synPut('pidgeotto', 1);
+  RPD.bus.emit('field:changed', {});
+  const on = panelHtml('synergyBody');
+  if (on.indexOf('구구 ×2는 1종으로') < 0) throw new Error('켜진 뒤에도 중복 안내는 남아야 한다');
+});
+
 wakePromise.then(() => {
   console.log(`\n────────────────────────────`);
   console.log(failures === 0 ? '부팅 경로 이상 없음' : `부팅 문제 ${failures}건`);

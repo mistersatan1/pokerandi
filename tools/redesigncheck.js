@@ -578,15 +578,14 @@ section('시너지');
   check('같은 타입을 모으면 시너지가 켜진다', SY.countOf('FIRE') >= 2 && SY.bonus.burnMul > 1,
     `count=${SY.countOf('FIRE')}`);
 
-  /* 도달 가능 = "그 타입 개체를 필드에 최고 단계 수만큼 올릴 수 있는가".
-   * 같은 종을 여러 마리 올릴 수 있으므로 종 수가 아니라 ① 그 타입 개체가 존재하는가
-   * ② 최고 단계가 필드 칸 수 안에 들어오는가로 본다. 종이 하나도 없는 타입은
-   * 영원히 0으로 남으므로 시너지 목록에 두지 않는다. */
+  /* 도달 가능 = "그 타입을 가진 서로 다른 종이 최고 단계 수만큼 있는가"(세션 77 — 시너지가 종 기준이 되어
+   * 같은 종을 여러 마리 올려도 1종이라, 종 수가 모자라면 영원히 못 채운다). 최고 단계가 필드 칸 수 안에 들어오는 것도 같이 본다.
+   * 히든 · 초월 폼도 종으로 센다 — 소환 · 조합만으로는 모자란 타입(얼음 · 드래곤 · 페어리)은 VERSION.md 세션 77 표에 있다. */
   const slotCount = RPD.MapData.slots.length;
   const unreachable = Object.keys(RPD.Synergies).filter(t => {
     const top = RPD.Synergies[t][RPD.Synergies[t].length - 1].count;
     const n = PD.all().filter(id => (PD.byId[id].types || []).indexOf(t) >= 0).length;
-    return n === 0 || top > slotCount;
+    return n < top || top > slotCount;
   });
   check('모든 시너지가 도달 가능하다', unreachable.length === 0, `bad=${unreachable}`);
 

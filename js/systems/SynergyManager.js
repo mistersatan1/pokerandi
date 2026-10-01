@@ -42,8 +42,9 @@
   }
 
   var SynergyManager = {
-    counts: {},        // { FIRE: 3, ... }
-    active: [],        // [{ typeId, label, count, tier, next, tierIndex }]
+    counts: {},        // { FIRE: 3, ... } — 그 타입을 가진 "서로 다른 종"의 수(시너지에 쓰이는 값)
+    unitCounts: {},    // { FIRE: 4, ... } — 그 타입을 가진 마리 수(참고용 · 중복이 얼마나 빠졌는지 보여 줄 때)
+    active: [],        // [{ typeId, count(종), units(마리), dups, tier, next, tierIndex }]
     bonus: baseBonus()
   };
 
@@ -51,22 +52,32 @@
 
   SynergyManager.reset = function () {
     this.counts = {};
+    this.unitCounts = {};
     this.active = [];
     this.bonus = baseBonus();
     RPD.bus.emit('synergy:changed', this);
   };
 
-  /* 필드의 개체들을 훑어 타입을 센다.
+  /* 필드의 개체들을 훑어 타입을 센다 — **서로 다른 종(defId) 기준**(세션 77).
    * 한 개체가 두 타입이면 둘 다 1씩 센다 — 복합 타입이 조합의 재미가 된다.
-   * 같은 종이 여러 마리면 각각 센다. */
+   * 같은 종이 여러 마리면 한 종으로 센다(강화 레벨 · 잠금 · 위치와 상관없이). 같은 종 여러 마리로 시너지를 채우는 길을 막아
+   * "여러 종을 모으는" 판을 만든다. 초월 폼(_transcend)은 defId 가 달라 다른 종이다.
+   * 빠진 중복은 dups 로 들고 있어 패널이 "왜 안 켜졌는지" 보여 준다. */
   SynergyManager.recompute = function () {
     var counts = {};
+    var unitCounts = {};
+    var speciesOf = {};     // { 타입: { defId: 마리 수 } }
     var units = RPD.FieldManager.getUnits();
 
     for (var i = 0; i < units.length; i++) {
       var types = units[i].types || [];
+      var id = units[i].defId;
       for (var t = 0; t < types.length; t++) {
-        counts[types[t]] = (counts[types[t]] || 0) + 1;
+        var ty = types[t];
+        var m = speciesOf[ty] || (speciesOf[ty] = {});
+        if (!m[id]) counts[ty] = (counts[ty] || 0) + 1;
+        m[id] = (m[id] || 0) + 1;
+        unitCounts[ty] = (unitCounts[ty] || 0) + 1;
       }
     }
 
@@ -91,6 +102,8 @@
         active.push({
           typeId: typeId,
           count: count,
+          units: unitCounts[typeId] || 0,
+          dups: dupsOf(speciesOf[typeId]),
           tier: tiers[reached],
           tierIndex: reached,
           next: next
@@ -98,7 +111,8 @@
       } else if (count > 0) {
         // 아직 못 채운 타입도 "몇 개 더 필요한지" 보여 줘야 모으는 재미가 생긴다
         active.push({
-          typeId: typeId, count: count, tier: null, tierIndex: -1, next: tiers[0]
+          typeId: typeId, count: count, units: unitCounts[typeId] || 0, dups: dupsOf(speciesOf[typeId]),
+          tier: null, tierIndex: -1, next: tiers[0]
         });
       }
     }
@@ -115,12 +129,25 @@
                   this.active.length !== active.length;
 
     this.counts = counts;
+    this.unitCounts = unitCounts;
     this.active = active;
     this.bonus = bonus;
 
     RPD.bus.emit('synergy:changed', this);
     return changed;
   };
+
+  /* 한 타입 안에서 두 마리 이상인 종 — [{ id, name, n }] (많은 순) */
+  function dupsOf(map) {
+    var out = [];
+    for (var id in map) {
+      if (!Object.prototype.hasOwnProperty.call(map, id) || map[id] < 2) continue;
+      var d = RPD.PokemonData.get(id);
+      out.push({ id: id, name: d ? d.name : id, n: map[id] });
+    }
+    out.sort(function (a, b) { return b.n - a.n; });
+    return out;
+  }
 
   function apply(bonus, add) {
     if (!add) return;
@@ -137,7 +164,8 @@
     }
   }
 
-  SynergyManager.countOf = function (typeId) { return this.counts[typeId] || 0; };
+  SynergyManager.countOf = function (typeId) { return this.counts[typeId] || 0; };               // 종 수
+  SynergyManager.unitCountOf = function (typeId) { return this.unitCounts[typeId] || 0; };      // 마리 수
 
   SynergyManager.activeCount = function () {
     var n = 0;

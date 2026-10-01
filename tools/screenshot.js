@@ -1468,6 +1468,56 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
   report.push({ storage: stReport });
   if (stProblems.length) process.exitCode = 1;
 
+  /* ㉔ 시너지 — 서로 다른 종 기준(세션 77). 구구 2마리를 둔 필드의 시너지 패널(세로 시트 · PC): "비행 1/2" · "구구 ×2는 1종으로".
+   * 캡처: 24_synergy_{portrait|pc}_a_dup(구구 ×2) · _b_two(구구 + 피죤 — 비행 켜짐). 어긋나면 도구가 실패로 끝난다. */
+  const syProblems = [], syReport = {};
+  {
+    const bad = w => syProblems.push(w);
+    for (const mode of ['portrait', 'pc']) {
+      const yctx = await browser.newContext(mode === 'pc' ? { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 } : { ...devices['Galaxy S24'], defaultBrowserType: undefined });
+      const yp = await yctx.newPage();
+      const ye = [];
+      yp.on('pageerror', e => ye.push(e.message));
+      await yp.goto(URL); await yp.waitForTimeout(1000);
+      await yp.evaluate(tbPrep, { wave: 7 });
+      await yp.waitForTimeout(400);
+      const put = ids => yp.evaluate(ids => {
+        const R = window.RPD, F = R.FieldManager;
+        F.slots.forEach(x => { if (x.unit) F.remove(x.index); });
+        ids.forEach(id => { const sl = F.slots.find(x => x.unlocked && !x.blocked && !x.unit); F.place(sl.index, R.UnitManager.create(id)); });
+        R.UnitManager.recomputeAll(); R.bus.emit('field:changed', {});
+        R.Loop.setPaused(true);
+      }, ids);
+      const probe = () => yp.evaluate(() => {
+        const row = document.querySelector('#synergyBody .synrow[data-type="FLYING"]');
+        return { text: row ? row.textContent.replace(/\s+/g, ' ').trim() : '', active: !!row && row.classList.contains('is-active'),
+          cut: row ? [...row.querySelectorAll('.synrow__effect, .synrow__dup, .synrow__name')].some(n => n.scrollWidth > n.clientWidth + 1) : null,
+          rowW: row ? Math.round(row.getBoundingClientRect().width) : 0 };
+      });
+      await put(['pidgey', 'pidgey']);
+      if (mode === 'portrait') { await yp.evaluate(() => window.RPD.HudPanels.setDrawer('synergy')); await yp.waitForTimeout(450); }
+      await yp.waitForTimeout(250);
+      const a = await probe();
+      if (!/비행\s*1\/2/.test(a.text) || a.text.indexOf('구구 ×2는 1종으로') < 0 || a.active) bad(mode + ': 구구 ×2 줄 ' + JSON.stringify(a));
+      if (a.cut) bad(mode + ': 시너지 줄 글이 잘린다 ' + JSON.stringify(a));
+      await yp.evaluate(() => { const r = document.querySelector('#synergyBody .synrow[data-type="FLYING"]'); if (r && r.scrollIntoView) r.scrollIntoView({ block: 'center' }); });
+      await yp.waitForTimeout(150);
+      await yp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '24_synergy_' + mode + '_a_dup.png') });
+      await put(['pidgey', 'pidgey', 'pidgeotto']);
+      await yp.waitForTimeout(250);
+      const b = await probe();
+      if (!/비행\s*2/.test(b.text) || !b.active) bad(mode + ': 구구 + 피죤 줄 ' + JSON.stringify(b));
+      await yp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '24_synergy_' + mode + '_b_two.png') });
+      syReport[mode] = { a, b };
+      if (ye.length) bad(mode + ' 페이지 오류: ' + ye[0]);
+      await yctx.close();
+    }
+  }
+  console.log('synergy', JSON.stringify(syReport));
+  console.log('synergy problems', JSON.stringify(syProblems));
+  report.push({ synergy: syReport });
+  if (syProblems.length) process.exitCode = 1;
+
   /* ---------- 홈 화면 앱(세션 53 · 모바일 ④ 세션 71) ----------
    * 설치 · 오프라인은 인터넷 주소에서만 되니, 원본 폴더(dist 아님)를 이 자리에서 작은 웹 서버로 띄워 연다(localhost 는 https 와 같게 친다).
    * 확인: 크롬이 "설치할 수 있다"고 보는가(설치 불가 사유 0) · 서비스 워커 · 오프라인 저장 · 인터넷을 끊고 다시 열어도 켜지고 처음 보는 그림이 나오는가 ·

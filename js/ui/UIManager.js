@@ -1351,6 +1351,15 @@
   /* 시너지 10종을 항상 전부 보여 준다.
    * 켜진 것만 보여 주면 "무엇을 모으면 무엇이 켜지는지"를 판 중에 알 방법이 없다.
    * 켜진 타입이 위로 오고, 꺼진 타입은 흐리게 둔다. 줄을 누르면 단계표가 펼쳐진다. */
+  /* "구구 ×2는 1종으로" — 같은 종이 겹쳐 시너지 수에서 빠진 것(한 타입 안) */
+  function synergyDupNote(a) {
+    var d = a && a.dups;
+    if (!d || !d.length) return '';
+    var shown = d.slice(0, 2).map(function (x) { return x.name + ' ×' + x.n; }).join(' · ');
+    var rest = d.length > 2 ? ' 외 ' + (d.length - 2) + '종' : '';
+    return shown + rest + (d.length === 1 ? '는 1종으로' : '는 종마다 1종으로');
+  }
+
   function renderSynergyPanel(state) {
     if (!el.synergyBody) return;
     state = state || RPD.SynergyManager;
@@ -1378,8 +1387,10 @@
         return '<span class="pip' + (i <= a.tierIndex ? ' is-on' : '') + '"></span>';
       }).join('');
 
+      // 시너지는 서로 다른 종 기준(세션 77) — 효과에 쓰인 수(종)와 중복으로 빠진 마리를 같이 보여 왜 안 켜졌는지 알 수 있게
       var effect = on ? a.tier.label
-        : (a.count > 0 ? (a.next.count - a.count) + '마리 더 → ' + a.next.label : tiers[0].count + '마리 · ' + tiers[0].label);
+        : (a.count > 0 ? (a.next.count - a.count) + '종 더 → ' + a.next.label : tiers[0].count + '종 · ' + tiers[0].label);
+      var dupNote = synergyDupNote(a);
 
       var pulse = on && (synergyPrev[id] === undefined ? false : a.tierIndex > synergyPrev[id]);
       synergyPrev[id] = a.tierIndex;
@@ -1388,6 +1399,7 @@
       if (synergyOpen[id]) {
         detail = '<div class="syndetail">' +
           '<p>' + (t.desc || '') + '</p>' +
+          '<p class="syndetail__rule">같은 종은 몇 마리여도 1종으로 셉니다(서로 다른 종 기준).</p>' +
           tiers.map(function (tier, i) {
             return '<div class="syndetail__row' + (i <= a.tierIndex ? ' is-on' : '') + '">' +
               '<b>' + tier.count + '</b><span>' + tier.label + '</span></div>';
@@ -1395,13 +1407,15 @@
         '</div>';
       }
 
-      return '<div class="synrow' + (on ? ' is-active' : '') + (a.count > 0 && !on ? ' is-partial' : '') +
+      return '<div class="synrow' + (on ? ' is-active' : '') + (a.count > 0 && !on ? ' is-partial' : '') + (dupNote ? ' has-dup' : '') +
           (pulse ? ' is-pulse' : '') + (synergyOpen[id] ? ' is-open' : '') +
           '" data-type="' + id + '" style="--tc:' + t.color + '" role="button" tabindex="0">' +
         '<span class="synrow__icon">' + UI.typeIcon(id) + '</span>' +
         '<span class="synrow__main">' +
-          '<span class="synrow__name">' + t.label + '<em>' + a.count + '</em></span>' +
+          '<span class="synrow__name">' + t.label + '<em title="서로 다른 종 ' + a.count + '종' + (a.next ? ' / 다음 단계 ' + a.next.count + '종' : '') + '">' +
+            a.count + (a.next ? '/' + a.next.count : '') + '</em></span>' +
           '<span class="synrow__effect">' + effect + '</span>' +
+          (dupNote ? '<span class="synrow__dup">' + dupNote + '</span>' : '') +
         '</span>' +
         '<span class="synrow__pips">' + pips + '</span>' +
         '<span class="synrow__chev" aria-hidden="true"></span>' +

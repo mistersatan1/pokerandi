@@ -44,6 +44,7 @@ node tools/perf.js 4  # 휴대폰 성능 — CPU 4배 느린 갤럭시 흉내로
 | `js/data/music.js` · `js/core/MusicFiles.js` | 배경음악 파일 — 장면별(calm · battle · boss · hidden · immortal · transcend) `assets/music/*.mp3` · 곡별 음량 · 겹침 1초. 없으면 합성(AudioManager). `<audio>` 로만(file:// 가능). 실제 재생 검사 `node tools/musicplay.js` |
 | `js/render/FramePacer.js` | 언제 · 얼마나 곱게 그릴지 — 전투 최대 60fps · 쉬는 중 10fps · 느리면 화질 사다리(해상도 2→1.5→1.25→1→30fps). 게임 규칙 · 시간은 안 건드림 |
 | `js/systems/UnitManager.js` 의 `locked` | 포켓몬 잠금(세션 74) — 재료(조합 · 주문 · 메타몽) · 방출에서 빠진다. 조합식 줄 "0/1 🔒1" 은 `RecipeManager.countsOf()`. 새 "재료 · 방출" 경로를 만들면 `.locked` 를 건너뛸 것(검사: bootsmoke "포켓몬 잠금"). 키 L |
+| `js/systems/SynergyManager.js` | 시너지는 **서로 다른 종(defId) 기준**(세션 77 — 구구 2마리 = 비행 1). 패널은 "비행 1/2 · 구구 ×2는 1종으로". 임계값(`RPD.Synergies`)은 아직 마리 기준 때 값 그대로 — 조정안 A/B/C(`SYN_PRESET`)는 VERSION 세션 77, **고르기 대기** |
 | `Config.storageBase` | 창고 칸 36 고정(세션 76 — 골드 확장 삭제. 이어하기는 max(저장값, 기본값)). 값은 autoplay 의 `storageMax` · `STORAGE_CAP` 으로 쟀다(VERSION 세션 76) |
 | `js/ui/BulkStoreUI.js` · `StorageManager.bulkStore` | 일괄 창고로(세션 75) — 등급 칸은 `GoldShopManager.tierSlotOf`(히든은 [히든] 칸에만) · 잠금 제외 · 약한 순 · 자리 모자라면 일부만 · 되돌리기 'bulk' 1건 |
 | `js/systems/UndoManager.js` | 배치 이동 되돌리기(세션 68) — 이동 · 교체 · 창고로 · 필드로만, 최대 3. 소환 · 조합 · 방출 · 강화 · 상점 · 정예는 안 되돌린다. 화면은 `js/ui/Convenience.js`(Ctrl+Z · 알림) · 정보 바 [되돌리기] |
@@ -141,6 +142,7 @@ node tools/perf.js 4  # 휴대폰 성능 — CPU 4배 느린 갤럭시 흉내로
      검사 uicheck "홈 화면 앱" · bootsmoke "홈 화면 앱" · screenshot 홈 화면 앱 장면(localhost · setOffline · 새 버전 · 아이폰 시트).
      **실기기 확인은 아직**(아이폰 홈 화면 앱과 사파리의 저장소가 갈리는지 포함).
   성능 — 저사양 휴대폰에서 프레임 · 발열 · 배터리 ← **세션 54 완료**(`FramePacer` · `tools/perf.js`. 실기기 확인은 아직 — 헤드리스는 GPU 가 없어 그리기가 실제보다 비싸다)
+- 시너지 종 기준(세션 77): 노멀 클리어 15%→5% · 불멸 없음 벽 넘김 13%→9% · 보스 러시 75%→50% — **임계값 조정안 A/B/C 중 고르기 대기**(추천 B). 보유 창 [타입별] 머리의 시너지 진행(`renderByType`)은 아직 마리 기준 — 바꿀지 대기.
 - 창고 확장 삭제(세션 76): 골드 사용처가 줄어 노멀 클리어 10%→19%(80판) · 불멸 없음 벽 넘김 14%→31% — **벽(`wallStep`)을 되돌릴지 결정 대기**(다른 수치는 안 건드렸다).
 - 판 이어하기(세션 70): 앱을 닫았다 열면 그 라운드를 처음부터 다시 할 수 있다(라운드 재도전) — 막을지 결정 대기.
 - 두 갈래 맵(세션 56 · 57): 불멸 없음은 체력 ×0.97 · 벽 5.4 · 명당 +2 로 맞췄다(8%). **광역 불멸 2마리는 24% 로 목표 35% 에 못 미친다** — 사용자 결정 대기. 보스 러시 · 엔드리스 · 챌린지는 두 갈래 맵에서 아직 안 쟀다.

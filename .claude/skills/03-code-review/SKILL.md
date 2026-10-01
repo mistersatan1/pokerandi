@@ -1,5 +1,5 @@
 ---
-name: code-review
+name: pokerandi-code-review
 description: Claude가 수정하거나 새로 만든 코드를 버그, 회귀, 유지보수성 관점에서 검토한다. 기능 구현 직후와 대규모 수정 후 사용한다.
 ---
 

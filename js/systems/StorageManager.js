@@ -157,29 +157,6 @@
     return res;
   };
 
-  /* ---------- 확장 ---------- */
-
-  StorageManager.expandCost = function () {
-    var bought = (this.capacity - RPD.Config.storageBase) / RPD.Config.storageStep;
-    return Math.round(RPD.Config.storageExpandCost *
-                      Math.pow(RPD.Config.storageExpandGrowth, bought));
-  };
-
-  StorageManager.canExpand = function () {
-    return this.capacity < RPD.Config.storageMax;
-  };
-
-  StorageManager.expand = function () {
-    if (!this.canExpand()) return { ok: false, reason: 'MAX' };
-    var cost = this.expandCost();
-    if (!RPD.GameManager.spendGold(cost, 'storage')) return { ok: false, reason: 'NO_GOLD', cost: cost };
-
-    this.capacity += RPD.Config.storageStep;
-    RPD.bus.emit('storage:changed', this.units);
-    RPD.bus.emit('storage:expanded', { capacity: this.capacity, cost: cost });
-    return { ok: true, capacity: this.capacity, cost: cost };
-  };
-
   /* 필드 + 창고를 합친 보유 현황 — 조합식이 이걸 본다 */
   StorageManager.allUnits = function () {
     return RPD.FieldManager.getUnits().concat(this.units);
@@ -191,7 +168,8 @@
   };
   StorageManager.loadState = function (s) {
     var self = this;
-    this.capacity = s.capacity || RPD.Config.storageBase;
+    // 옛 저장(용량 14 · 확장으로 늘린 값)이 지금 기본값보다 작을 수 있다 — 더 큰 쪽(세션 76 에 골드 확장을 없앴다)
+    this.capacity = Math.max(s.capacity || 0, RPD.Config.storageBase);
     (s.units || []).forEach(function (d) { var u = RPD.UnitManager.revive(d); if (u) self.add(u); });
     RPD.bus.emit('storage:changed', this.units);
   };

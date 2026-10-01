@@ -1806,7 +1806,7 @@ function richRun(opts) {
   const lockedSlot = F.slots.find(s => !s.unlocked && !s.blocked);
   if (lockedSlot) F.unlock(lockedSlot.index);
   const u = F.slots.find(s => s.unit).unit; u.level = 3; u.targetChoice = 'BOSS'; u.kills = 17; u.totalDamage = 12345;
-  RPD.StorageManager.capacity += RPD.Config.storageStep;
+  RPD.StorageManager.capacity += 4;
   RPD.StorageManager.add(RPD.UnitManager.create('bulbasaur'));
   RPD.StorageManager.add(RPD.UnitManager.create('gengar'));
   RPD.SummonManager.tickets = 4; RPD.ShardManager.shards = 23;
@@ -2506,6 +2506,54 @@ check('단일 [창고로] 버튼과 S 단축키는 그대로 · 일괄 창고로
   if (RPD.UndoManager.count() < 1) throw new Error('단일 이동 기록이 안 남는다');
   const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'js', 'ui', 'HudPanels.js'), 'utf8');
   if (/BulkStore/.test(src)) throw new Error('HudPanels 에 일괄 창고로 단축키가 생겼다');
+});
+
+/* ---------- 창고 고정 칸(세션 76 — 골드 확장 삭제) ---------- */
+console.log('\n창고 고정 칸 — 골드 확장 없음');
+check('창고 용량은 새 판에서 Config.storageBase(36) — 확장 함수 · 설정값 · 버튼이 없다', () => {
+  MS.forceMobile = false; RPD.Config.autosave = false;
+  RPD.Game.restart(); RPD.Game.startRun('NORMAL', 'NORMAL');
+  const SG = RPD.StorageManager, C = RPD.Config;
+  if (C.storageBase !== 36 || SG.capacity !== C.storageBase) throw new Error('용량 ' + SG.capacity + ' / storageBase ' + C.storageBase);
+  ['expand', 'canExpand', 'expandCost'].forEach(f => { if (typeof SG[f] === 'function') throw new Error('StorageManager.' + f + ' 가 남아 있다'); });
+  ['storageStep', 'storageMax', 'storageExpandCost', 'storageExpandGrowth'].forEach(k => { if (k in C) throw new Error('Config.' + k + ' 가 남아 있다'); });
+  const html = require('fs').readFileSync(require('path').join(__dirname, '..', 'index.html'), 'utf8');
+  if (/btnExpandStorage/.test(html)) throw new Error('index.html 에 [창고 확장] 버튼이 남아 있다');
+  if (nodes.btnExpandStorage) throw new Error('화면에 [창고 확장] 버튼이 있다');
+  RPD.GameManager.gold = 99999;
+  const gold = RPD.GameManager.gold;
+  RPD.bus.emit('storage:changed', SG.units);
+  if (SG.capacity !== C.storageBase || RPD.GameManager.gold !== gold) throw new Error('골드로 용량이 바뀌었다');
+});
+
+check('창고가 가득 차야 소환이 막힌다 — 필드가 가득 차도 창고에 한 칸이라도 있으면 소환된다', () => {
+  MS.forceMobile = false; RPD.Config.autosave = false;
+  RPD.Game.restart(); RPD.Game.startRun('NORMAL', 'NORMAL');
+  const F = RPD.FieldManager, SG = RPD.StorageManager, GM = RPD.GameManager;
+  GM.gold = 99999; GM.life = 999;
+  F.slots.forEach(sl => { if (!sl.blocked) sl.unlocked = true; });
+  F.slots.forEach(sl => { if (sl.unlocked && !sl.blocked && !sl.unit) F.place(sl.index, RPD.UnitManager.create('pidgey')); });
+  if (F.firstEmpty()) throw new Error('필드가 안 찼다(검사 준비)');
+  while (SG.units.length < SG.capacity - 1) SG.add(RPD.UnitManager.create('rattata'));
+  const r = RPD.SummonManager.summon();
+  if (!r.ok || SG.units.length !== SG.capacity) throw new Error('창고에 한 칸 남았는데 소환이 안 된다: ' + JSON.stringify(r));
+  const gold = GM.gold;
+  const r2 = RPD.SummonManager.summon();
+  if (r2.ok || r2.reason !== 'NO_ROOM') throw new Error('창고가 가득 찼는데 소환됐다/이유: ' + JSON.stringify(r2));
+  if (GM.gold !== gold) throw new Error('막힌 소환에 골드가 나갔다');
+  SG.removeAt(0);
+  if (!RPD.SummonManager.summon().ok) throw new Error('한 칸 비웠는데도 소환이 안 된다');
+});
+
+check('이어하기 — 옛 저장(용량 14)은 새 기본값으로 올려 불러온다 · 더 큰 저장 값은 그대로(max)', () => {
+  const SG = RPD.StorageManager, base = RPD.Config.storageBase;
+  SG.loadState({ capacity: 14, units: [] });
+  if (SG.capacity !== base) throw new Error('옛 저장 14 → ' + SG.capacity + ' (기대 ' + base + ')');
+  SG.loadState({ capacity: 40, units: [] });
+  if (SG.capacity !== 40) throw new Error('더 큰 값이 줄었다: ' + SG.capacity);
+  SG.loadState({ units: [] });
+  if (SG.capacity !== base) throw new Error('용량이 없는 저장 → ' + SG.capacity);
+  SG.reset();
 });
 
 wakePromise.then(() => {

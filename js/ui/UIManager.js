@@ -82,7 +82,6 @@
     el.shardCount = $('shardCount');
     el.storageList = $('storageList');
     el.storageBadge = $('storageBadge');
-    el.expandStorage = $('btnExpandStorage');
     el.nextUnlock = $('statNextUnlock');
     el.synergyBody = $('synergyBody');
     el.shield = $('statShield');
@@ -418,17 +417,6 @@
       });
     }
 
-    if (el.expandStorage) {
-      el.expandStorage.addEventListener('click', function () {
-        var r = RPD.StorageManager.expand();
-        if (!r.ok && r.reason === 'NO_GOLD') {
-          RPD.FxRenderer.text(RPD.VIEW.width / 2, 190, r.cost + '골드가 필요합니다', '#ff8a7a',
-            { size: 15, life: 1.1, jitter: false });
-        }
-        renderStorage();
-      });
-    }
-
     if (el.dexBtn) el.dexBtn.addEventListener('click', showDex);
     if (el.dexClose) el.dexClose.addEventListener('click', hideDex);
 
@@ -684,7 +672,6 @@
     RPD.bus.on('shard:changed', function () {
       if (recipeFilter === 'shards') renderShardShop();
     });
-    RPD.bus.on('storage:expanded', renderStorage);
     RPD.bus.on('field:changed', renderStorage);
     RPD.bus.on('recipe:changed', renderStorage);
     RPD.bus.on('game:reset', function () {
@@ -1768,12 +1755,6 @@
   function renderStorage() {
     var SG = RPD.StorageManager;
     if (el.storageBadge) el.storageBadge.textContent = SG.units.length + '/' + SG.capacity;
-
-    if (el.expandStorage) {
-      var can = SG.canExpand();
-      el.expandStorage.textContent = can ? '확장 ' + SG.expandCost() + 'G' : '최대';
-      el.expandStorage.disabled = !can || !GM.canAfford(SG.expandCost());
-    }
 
     if (!el.storageList) return;
 

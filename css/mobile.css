@@ -258,7 +258,7 @@
   .mtab { min-height: 40px; }
   .pane--action .sidebtn { min-width: 40px; }
   .rf, .tchip, .tierfilter > * { min-height: 40px; min-width: 40px; }
-  .pane--recipes .craftbtn, #btnExpandStorage, #btnDexOpen { min-height: 40px; }
+  .pane--recipes .craftbtn, #btnDexOpen { min-height: 40px; }
   .slotcard__close { width: 40px; height: 40px; font-size: 22px; }
   .tgt__chip, .tgt__all { min-height: 40px; padding: 0 12px; }
   .tgt__chips { gap: 5px; }

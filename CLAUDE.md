@@ -44,6 +44,7 @@ node tools/perf.js 4  # 휴대폰 성능 — CPU 4배 느린 갤럭시 흉내로
 | `js/data/music.js` · `js/core/MusicFiles.js` | 배경음악 파일 — 장면별(calm · battle · boss · hidden · immortal · transcend) `assets/music/*.mp3` · 곡별 음량 · 겹침 1초. 없으면 합성(AudioManager). `<audio>` 로만(file:// 가능). 실제 재생 검사 `node tools/musicplay.js` |
 | `js/render/FramePacer.js` | 언제 · 얼마나 곱게 그릴지 — 전투 최대 60fps · 쉬는 중 10fps · 느리면 화질 사다리(해상도 2→1.5→1.25→1→30fps). 게임 규칙 · 시간은 안 건드림 |
 | `js/systems/UnitManager.js` 의 `locked` | 포켓몬 잠금(세션 74) — 재료(조합 · 주문 · 메타몽) · 방출에서 빠진다. 조합식 줄 "0/1 🔒1" 은 `RecipeManager.countsOf()`. 새 "재료 · 방출" 경로를 만들면 `.locked` 를 건너뛸 것(검사: bootsmoke "포켓몬 잠금"). 키 L |
+| `Config.storageBase` | 창고 칸 36 고정(세션 76 — 골드 확장 삭제. 이어하기는 max(저장값, 기본값)). 값은 autoplay 의 `storageMax` · `STORAGE_CAP` 으로 쟀다(VERSION 세션 76) |
 | `js/ui/BulkStoreUI.js` · `StorageManager.bulkStore` | 일괄 창고로(세션 75) — 등급 칸은 `GoldShopManager.tierSlotOf`(히든은 [히든] 칸에만) · 잠금 제외 · 약한 순 · 자리 모자라면 일부만 · 되돌리기 'bulk' 1건 |
 | `js/systems/UndoManager.js` | 배치 이동 되돌리기(세션 68) — 이동 · 교체 · 창고로 · 필드로만, 최대 3. 소환 · 조합 · 방출 · 강화 · 상점 · 정예는 안 되돌린다. 화면은 `js/ui/Convenience.js`(Ctrl+Z · 알림) · 정보 바 [되돌리기] |
 | `js/core/Haptics.js` · `js/core/Effects.js` | 진동 무늬(설정 `haptics`) · 효과 3단계(보통 · 줄임 · 최소 — 설정 `fx`, 파티클 · 피해 숫자 · 흔들림 · 해상도 · 그리기 fps). **연출 전용 난수 `Effects.rand`** — 연출이 `Math.random` 을 쓰면 게임 난수가 밀린다. `js/systems/` 는 Effects 를 읽지 않는다(검사) |
@@ -140,6 +141,7 @@ node tools/perf.js 4  # 휴대폰 성능 — CPU 4배 느린 갤럭시 흉내로
      검사 uicheck "홈 화면 앱" · bootsmoke "홈 화면 앱" · screenshot 홈 화면 앱 장면(localhost · setOffline · 새 버전 · 아이폰 시트).
      **실기기 확인은 아직**(아이폰 홈 화면 앱과 사파리의 저장소가 갈리는지 포함).
   성능 — 저사양 휴대폰에서 프레임 · 발열 · 배터리 ← **세션 54 완료**(`FramePacer` · `tools/perf.js`. 실기기 확인은 아직 — 헤드리스는 GPU 가 없어 그리기가 실제보다 비싸다)
+- 창고 확장 삭제(세션 76): 골드 사용처가 줄어 노멀 클리어 10%→19%(80판) · 불멸 없음 벽 넘김 14%→31% — **벽(`wallStep`)을 되돌릴지 결정 대기**(다른 수치는 안 건드렸다).
 - 판 이어하기(세션 70): 앱을 닫았다 열면 그 라운드를 처음부터 다시 할 수 있다(라운드 재도전) — 막을지 결정 대기.
 - 두 갈래 맵(세션 56 · 57): 불멸 없음은 체력 ×0.97 · 벽 5.4 · 명당 +2 로 맞췄다(8%). **광역 불멸 2마리는 24% 로 목표 35% 에 못 미친다** — 사용자 결정 대기. 보스 러시 · 엔드리스 · 챌린지는 두 갈래 맵에서 아직 안 쟀다.
 - 봇이 불멸을 스스로 거의 못 만든다 — 사람이 60R 전에 불멸을 갖출 수 있는지는 **플레이로 확인 필요**.

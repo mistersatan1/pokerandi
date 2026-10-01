@@ -96,6 +96,7 @@ function newGame(modeId) {
   CM.reset(); RM.reset(); SH.reset(); BM.reset(); SG.reset(); SK.reset(); R.RewardManager.reset(); R.TraitManager.reset();
   F.init(); GM.reset(modeId, diffId);
   R.SpellManager.reset();
+  if (process.env.STORAGE_CAP) SG.capacity = parseInt(process.env.STORAGE_CAP, 10);   // 실험 — 창고 칸을 덮어쓴다(수요 측정은 아주 크게)
 }
 
 function weakest() {
@@ -220,6 +221,7 @@ function act(stats) {
     stats.deploys++;
   }
 
+  stats.acts++; if (SG.isFull()) stats.fullActs++;   // 창고가 가득 찬 채 행동을 시작한 횟수 — 창고 압박
   // 창고가 차면 재료가 아닌 것부터 방출
   while (SG.isFull()) {
     const need = neededAsMaterial();
@@ -231,12 +233,7 @@ function act(stats) {
     if (idx < 0) idx = 0;
     const u = SG.removeAt(idx);
     SH.add(SH.gainFor(u.tier), 'sell');
-    stats.sells++;
-  }
-
-  // 창고 확장
-  if (SG.canExpand() && GM.gold > SG.expandCost() * 2.5) {
-    if (SG.expand().ok) stats.expands++;
+    stats.sells++; stats.fullSells++;       // 창고가 차서 어쩔 수 없이 낸 방출
   }
 
   // 정예 — 조심스러운 플레이어: 정예가 경로를 다 걷는 동안 보드가 넣을 피해를 어림하고,
@@ -260,7 +257,7 @@ function act(stats) {
   for (let g = 0; g < 30; g++) {
     if (!GM.canAfford(EC.summonCost())) break;
     const r = SM.summon();
-    if (!r.ok) break;
+    if (!r.ok) { if (r.reason === 'NO_ROOM') stats.blocked++; break; }   // 필드 · 창고가 다 차서 막힘
     stats.summons++;
     stats.byTier[r.tier] = (stats.byTier[r.tier] || 0) + 1;
     stats.crafts += craftAll();
@@ -385,7 +382,7 @@ function playOne(modeId) {
     });
   }
   const stats = { special60: null, life61: null, life66: null, finalBoss: null, finalBossFrac: null, syn: null, crafts: 0, spells: 0, summons: 0, shopBuys: 0, elites: 0, eliteWin: 0, eliteLose: 0, eliteGold: 0, sells: 0, slots: 0, upgrades: 0, deploys: 0,
-                  expands: 0, shardBuys: 0, byTier: {}, goldSum: 0, goldN: 0 };
+                  fullSells: 0, blocked: 0, acts: 0, fullActs: 0, storageMax: 0, shardBuys: 0, byTier: {}, goldSum: 0, goldN: 0 };
   curStats = stats;
   WM.begin();
 
@@ -396,6 +393,7 @@ function playOne(modeId) {
     if (GM.state === R.GameState.RUNNING) {
       WM.update(STEP); EM.update(STEP); CM.update(STEP); R.SkillManager.update(STEP); BM.update(STEP);
     }
+    if (SG.units.length > stats.storageMax) stats.storageMax = SG.units.length;
     if (i % 60 === 0) { stats.goldSum += GM.gold; stats.goldN++; }
     if (GM.elapsed - lastAct >= 0.5) {
       /* SPECIES_LOG=파일 — 종별 "필드에 있던 1초당 실제 피해". 누적 피해는 조합 재료로 쓰이면 사라지고
@@ -489,6 +487,13 @@ console.log(`  정예 판당 ${(n / RUNS).toFixed(1)}회 (하급 ${(sum('elite1'
     ` · 정예로 번 골드 판당 ${Math.round(sum('eliteGold') / RUNS)}G`);
 }
 console.log(`  평균 보유 골드 ${Math.round(results.reduce((a, r) => a + r.avgGold, 0) / RUNS)}`);
+{
+  const sum = k => results.reduce((a, r) => a + (r[k] || 0), 0);
+  const mx = results.map(r => r.storageMax).sort((a, b) => a - b);
+  const pct = q => mx[Math.min(mx.length - 1, Math.ceil(q * mx.length) - 1)];
+  console.log(`  창고 사용 최대치(판마다 한 번 재서): 중앙 ${med(mx)} · 95번째 ${pct(0.95)} · 최대 ${mx[mx.length - 1]} (칸 ${SG.capacity} 시작)` +
+    ` · 창고가 가득 찬 채 시작한 행동 ${(sum('fullActs') / Math.max(1, sum('acts')) * 100).toFixed(1)}% · 가득 차서 막힌 소환 판당 ${(sum('blocked') / RUNS).toFixed(2)}회 · 가득 차서 억지 방출 판당 ${(sum('fullSells') / RUNS).toFixed(1)}회`);
+}
 
 console.log('\n라운드별 사망 분포');
 const deaths = {};

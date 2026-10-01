@@ -1428,6 +1428,46 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
   report.push({ bulk: bkReport });
   if (bkProblems.length) process.exitCode = 1;
 
+  /* ㉓ 창고 고정 칸(세션 76) — 골드 확장 삭제 · 기본 36칸. 갤럭시 S24 세로 + PC: 보유 목록 머리의 "창고 n/36" 과 [확장] 버튼이 없는가.
+   * 캡처: 23_storage_{portrait|pc}.png */
+  const stProblems = [], stReport = {};
+  {
+    const bad = w => stProblems.push(w);
+    for (const mode of ['portrait', 'pc']) {
+      const sctx = await browser.newContext(mode === 'pc' ? { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 } : { ...devices['Galaxy S24'], defaultBrowserType: undefined });
+      const sp = await sctx.newPage();
+      const se = [];
+      sp.on('pageerror', e => se.push(e.message));
+      await sp.goto(URL); await sp.waitForTimeout(1000);
+      await sp.evaluate(tbPrep, { wave: 7 });
+      await sp.waitForTimeout(400);
+      await sp.evaluate(() => {
+        const R = window.RPD, SM = R.StorageManager;
+        R.Loop.setPaused(true);
+        const ids = R.PokemonData.list.filter(d => d.summon).slice(0, 22).map(d => d.id);
+        SM.reset();
+        ids.forEach(id => SM.add(R.UnitManager.create(id)));
+        R.bus.emit('storage:changed', SM.units); R.bus.emit('field:changed', {});
+        if (window.innerWidth < 1100) R.HudPanels.setDrawer('owned');
+      });
+      await sp.waitForTimeout(500);
+      const st = await sp.evaluate(() => ({ badge: document.getElementById('storageBadge').textContent, expandBtn: !!document.getElementById('btnExpandStorage'),
+        text: document.querySelector('.pane--owned .pane__head').textContent.replace(/\s+/g, ' ').trim(), cells: document.querySelectorAll('#storageList .scell').length,
+        cfg: window.RPD.Config.storageBase, cap: window.RPD.StorageManager.capacity }));
+      if (st.badge !== '22/36') bad(mode + ': 창고 표시 ' + st.badge);
+      if (st.expandBtn || /확장/.test(st.text)) bad(mode + ': [확장] 이 남아 있다 ' + st.text);
+      if (st.cap !== 36 || st.cfg !== 36) bad(mode + ': 용량 ' + st.cap + '/' + st.cfg);
+      await sp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '23_storage_' + mode + '.png') });
+      stReport[mode] = st;
+      if (se.length) bad(mode + ' 페이지 오류: ' + se[0]);
+      await sctx.close();
+    }
+  }
+  console.log('storage', JSON.stringify(stReport));
+  console.log('storage problems', JSON.stringify(stProblems));
+  report.push({ storage: stReport });
+  if (stProblems.length) process.exitCode = 1;
+
   /* ---------- 홈 화면 앱(세션 53 · 모바일 ④ 세션 71) ----------
    * 설치 · 오프라인은 인터넷 주소에서만 되니, 원본 폴더(dist 아님)를 이 자리에서 작은 웹 서버로 띄워 연다(localhost 는 https 와 같게 친다).
    * 확인: 크롬이 "설치할 수 있다"고 보는가(설치 불가 사유 0) · 서비스 워커 · 오프라인 저장 · 인터넷을 끊고 다시 열어도 켜지고 처음 보는 그림이 나오는가 ·

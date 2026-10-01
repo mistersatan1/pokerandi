@@ -56,6 +56,7 @@
     if (RPD.RecipeBook) RPD.RecipeBook.init();
     if (RPD.DexCard) RPD.DexCard.init();
     if (RPD.GoldShopUI) RPD.GoldShopUI.init();
+    if (RPD.BulkStoreUI) RPD.BulkStoreUI.init();
     if (RPD.EliteUI) RPD.EliteUI.init();
     if (RPD.SpellUI) RPD.SpellUI.init();
     if (RPD.HudPanels) RPD.HudPanels.init();

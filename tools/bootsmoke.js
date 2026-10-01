@@ -2375,6 +2375,139 @@ check('필드의 잠근 포켓몬과 보유 칸에 🔒 가 뜬다 · 정보 바
   if (bar.indexOf('data-ib="lock"') < 0) throw new Error('정보 바에 [잠금] 이 없다');
 });
 
+/* ---------- 일괄 창고로 ---------- */
+console.log('\n일괄 창고로 — 등급별로 필드 → 창고');
+const BK = { sm: RPD.StorageManager, F: RPD.FieldManager, PD: RPD.PokemonData };
+function bkFresh(cap) {
+  MS.forceMobile = false;
+  RPD.Config.autosave = false;
+  RPD.Game.restart(); RPD.Game.startRun('NORMAL', 'NORMAL');
+  RPD.GameManager.life = 999; RPD.GameManager.setWave(30);
+  BK.F.init(); BK.sm.reset();
+  BK.F.slots.forEach(sl => { if (!sl.blocked) sl.unlocked = true; });
+  if (cap != null) BK.sm.capacity = cap;
+}
+function bkPut(defId, n, opt) {
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const sl = BK.F.slots.find(x => x.unlocked && !x.blocked && !x.unit);
+    if (!sl) throw new Error('필드 칸이 모자란다(검사 준비)');
+    const u = RPD.UnitManager.create(defId);
+    if (opt && opt.dps != null) u.dps = opt.dps + i;
+    BK.F.place(sl.index, u); out.push(u);
+  }
+  RPD.UnitManager.recomputeAll();
+  return out;
+}
+const bkOf = t => BK.PD.list.find(d => d.tier === t && !d.hidden && d.id !== 'ditto').id;
+const BK_HIDDEN = BK.PD.list.find(d => d.hidden && ['T3', 'T4', 'T5'].includes(d.tier)) || BK.PD.list.find(d => d.hidden);
+function bkTotal() { return BK.F.getUnits().length + BK.sm.units.length; }
+function bkGroup(id) { return BK.sm.bulkGroups().find(g => g.id === id); }
+
+check('선택한 등급만 창고로 간다 — 다른 등급은 필드에 그대로', () => {
+  bkFresh(30);
+  bkPut(bkOf('T1'), 3); bkPut(bkOf('T2'), 2); bkPut(bkOf('T3'), 1);
+  const before = bkTotal();
+  const r = BK.sm.bulkStore(['T1']);
+  if (r.moved !== 3 || r.noRoom !== 0) throw new Error('결과 ' + JSON.stringify(r));
+  if (BK.sm.units.some(u => u.def.tier !== 'T1') || BK.sm.units.length !== 3) throw new Error('T1 만 가야 한다');
+  if (BK.F.getUnits().filter(u => u.def.tier === 'T1').length) throw new Error('T1 이 필드에 남았다');
+  if (BK.F.getUnits().length !== 3 || bkTotal() !== before) throw new Error('다른 등급이 움직였거나 총수가 바뀌었다');
+  const two = BK.sm.bulkStore(['T2', 'T3']);
+  if (two.moved !== 3 || BK.F.getUnits().length) throw new Error('여러 칸 선택 ' + JSON.stringify(two));
+});
+
+check('히든은 [히든] 칸에만 — 자기 강함 등급 칸에는 안 들어간다(골드 상점과 같은 규칙) · 불멸 · 초월은 [불멸 · 초월] 칸', () => {
+  bkFresh(30);
+  const h = bkPut(BK_HIDDEN.id, 1)[0];
+  const tierId = BK_HIDDEN.tier;
+  bkPut(bkOf(tierId === 'T5' ? 'T5' : tierId), 1);
+  if (bkGroup('HIDDEN').count !== 1 || bkGroup(tierId).count !== 1) throw new Error('칸 개수: 히든 ' + bkGroup('HIDDEN').count + ' · ' + tierId + ' ' + bkGroup(tierId).count);
+  const r = BK.sm.bulkStore([tierId]);
+  if (r.moved !== 1 || BK.sm.units.some(u => u === h)) throw new Error('히든이 강함 등급 칸으로 갔다');
+  const r2 = BK.sm.bulkStore(['HIDDEN']);
+  if (r2.moved !== 1 || !BK.sm.units.includes(h)) throw new Error('[히든] 칸으로 안 갔다');
+  bkPut('mew', 1); bkPut('mewtwo_transcend', 1);
+  if (bkGroup('SPECIAL').count !== 2 || bkGroup('T5').count !== 0) throw new Error('불멸 · 초월 칸 ' + bkGroup('SPECIAL').count);
+  if (BK.sm.bulkStore(['T5']).moved !== 0) throw new Error('[전설] 칸이 불멸을 보냈다');
+  if (BK.sm.bulkStore(['SPECIAL']).moved !== 2) throw new Error('[불멸 · 초월] 칸');
+});
+
+check('잠근 유닛은 건너뛴다 — "잠금 N마리 제외"로 센다', () => {
+  bkFresh(30);
+  const us = bkPut(bkOf('T1'), 4);
+  RPD.UnitManager.setLocked(us[0], true); RPD.UnitManager.setLocked(us[1], true);
+  const g = bkGroup('T1');
+  if (g.count !== 2 || g.locked !== 2) throw new Error('칸: ' + g.count + '/' + g.locked);
+  const r = BK.sm.bulkStore(['T1']);
+  if (r.moved !== 2 || r.locked !== 2) throw new Error(JSON.stringify(r));
+  if (!BK.F.getUnits().includes(us[0]) || !BK.F.getUnits().includes(us[1])) throw new Error('잠근 유닛이 움직였다');
+});
+
+check('창고 자리가 모자라면 들어가는 만큼만(약한 것부터) 보내고 유닛 총수는 그대로', () => {
+  bkFresh(2);
+  const us = bkPut(bkOf('T1'), 5, { dps: 100 });
+  us.forEach((u, i) => { u.dps = 100 + (4 - i) * 10; });   // 먼저 놓인 것이 가장 강하다 — 놓은 순서가 아니라 DPS 순이어야 한다
+  const total = bkTotal();
+  const r = BK.sm.bulkStore(['T1']);
+  if (r.moved !== 2 || r.noRoom !== 3) throw new Error(JSON.stringify(r));
+  if (bkTotal() !== total || BK.F.getUnits().length !== 3 || BK.sm.units.length !== 2) throw new Error('총수 ' + bkTotal() + ' / ' + total);
+  if (!BK.sm.units.includes(us[4]) || !BK.sm.units.includes(us[3])) throw new Error('약한 것부터 가야 한다: ' + BK.sm.units.map(u => u.dps));
+  const again = BK.sm.bulkStore(['T1']);
+  if (again.moved !== 0 || again.noRoom !== 3 || bkTotal() !== total) throw new Error('가득 찬 창고에 또 보냈다 ' + JSON.stringify(again));
+});
+
+check('일괄 창고로는 되돌리기 한 건 — 한 번에 원복', () => {
+  bkFresh(30);
+  RPD.UndoManager.reset();
+  const us = bkPut(bkOf('T1'), 4);
+  const slots = us.map(u => u.slotIndex);
+  BK.sm.bulkStore(['T1']);
+  if (RPD.UndoManager.count() !== 1) throw new Error('기록 ' + RPD.UndoManager.count() + '건 — 1건이어야 한다');
+  const r = RPD.UndoManager.undo();
+  if (!r.ok) throw new Error('되돌리기 실패 ' + r.reason);
+  if (BK.sm.units.length !== 0 || BK.F.getUnits().length !== 4) throw new Error('한 번에 원복이 안 됐다');
+  if (!us.every(u => BK.F.getUnits().includes(u))) throw new Error('같은 개체가 아니다');
+  if (RPD.UndoManager.count() !== 0) throw new Error('원복 뒤 기록이 남았다');
+});
+
+check('선택 창 — 등급마다 "필드 N마리" · 잠금 제외 표시 · 전설 · 히든 · 불멸 · 초월은 한 번 확인 · 일반은 바로', () => {
+  bkFresh(30);
+  const us = bkPut(bkOf('T1'), 3); RPD.UnitManager.setLocked(us[0], true);
+  bkPut(bkOf('T5'), 1);
+  const UIB = RPD.BulkStoreUI, ov = nodes.bulkOverlay;
+  click('btnBulkStore');
+  if (ov.hidden) throw new Error('[일괄 창고로] 를 눌렀는데 창이 안 열린다');
+  const html = panelHtml('bulkList');
+  ['흔함', '안흔함', '특별함', '희귀함', '전설', '히든', '불멸'].forEach(w => { if (html.indexOf(w) < 0) throw new Error('칸 없음: ' + w); });
+  if (html.indexOf('필드 3마리') < 0 || html.indexOf('잠금 1마리 제외') < 0) throw new Error('개수 · 잠금 표시 없음');
+  UIB.picked = { T1: true }; UIB.render();
+  click('btnBulkSend');
+  if (!ov.hidden === false && BK.sm.units.length !== 2) throw new Error('흔함만 골랐는데 바로 안 보냈다');
+  if (BK.sm.units.length !== 2) throw new Error('흔함 2마리가 안 갔다: ' + BK.sm.units.length);
+  if (String(UIB.lastMessage).indexOf('흔함 2마리를 창고로 보냈어요') < 0 || UIB.lastMessage.indexOf('잠금 1마리 제외') < 0) throw new Error('토스트: ' + UIB.lastMessage);
+  click('btnBulkStore');
+  UIB.picked = { T5: true }; UIB.render();
+  click('btnBulkSend');
+  if (BK.sm.units.length !== 2 || nodes.bulkConfirm.hidden) throw new Error('전설은 확인 없이 갔다');
+  click('btnBulkNo');
+  if (BK.sm.units.length !== 2 || !nodes.bulkConfirm.hidden) throw new Error('"아니요" 가 안 먹는다');
+  click('btnBulkSend'); click('btnBulkYes');
+  if (BK.sm.units.length !== 3) throw new Error('확인 뒤에도 안 갔다');
+});
+
+check('단일 [창고로] 버튼과 S 단축키는 그대로 · 일괄 창고로에 단축키를 새로 안 만들었다', () => {
+  bkFresh(30);
+  const u = bkPut(bkOf('T1'), 1)[0];
+  BK.F.select(u.slotIndex);
+  RPD.bus.emit('field:changed', {});
+  click('btnStore');
+  if (BK.sm.units.length !== 1 || BK.F.getUnits().length !== 0) throw new Error('단일 [창고로] 가 달라졌다');
+  if (RPD.UndoManager.count() < 1) throw new Error('단일 이동 기록이 안 남는다');
+  const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'js', 'ui', 'HudPanels.js'), 'utf8');
+  if (/BulkStore/.test(src)) throw new Error('HudPanels 에 일괄 창고로 단축키가 생겼다');
+});
+
 wakePromise.then(() => {
   console.log(`\n────────────────────────────`);
   console.log(failures === 0 ? '부팅 경로 이상 없음' : `부팅 문제 ${failures}건`);

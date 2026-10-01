@@ -101,6 +101,62 @@
     return { ok: true, unit: unit };
   };
 
+  /* ---------- 일괄 창고로 (필드 → 창고, 등급별) ----------
+   * 등급 칸은 골드 상점 · 조합식 [히든] 칩과 같은 규칙(GoldShopManager.tierSlotOf): 히든은 자기 강함 등급이 아니라 [히든] 칸에만,
+   * 불멸 · 초월은 [불멸 · 초월] 칸. 잠긴 개체는 건너뛰고, 약한(DPS 낮은) 것부터 보내며, 창고 자리가 모자라면 들어가는 만큼만 보낸다
+   * (나머지는 필드에 그대로 — 개체는 절대 사라지지 않는다). 되돌리기는 'storage:bulk' 한 건으로 묶는다(UndoManager). */
+  StorageManager.bulkGroups = function () {
+    var G = RPD.GoldShopManager;
+    var groups = G.TIER_SLOTS.map(function (t) {
+      var tier = RPD.Tiers[t.id];
+      return { id: t.id, label: t.label, color: t.color || (tier ? tier.color : RPD.Tiers.T6.color), units: [], locked: 0 };
+    });
+    var at = {};
+    groups.forEach(function (g) { at[g.id] = g; });
+    RPD.FieldManager.slots.forEach(function (s) {
+      if (!s.unit) return;
+      var g = at[G.tierSlotOf(s.unit.def)];
+      if (!g) return;
+      if (s.unit.locked) g.locked += 1; else g.units.push({ unit: s.unit, slot: s.index });
+    });
+    groups.forEach(function (g) {
+      g.units.sort(function (a, b) { return (a.unit.dps - b.unit.dps) || (a.unit.uid > b.unit.uid ? 1 : -1); });
+      g.count = g.units.length;     // 보낼 수 있는 수(잠금 제외)
+    });
+    return groups;
+  };
+
+  /* 고른 칸들을 보낸다. { moved, noRoom, locked, groups:{id:{moved,noRoom,locked}}, items:[{uid,from}] } */
+  StorageManager.bulkStore = function (ids) {
+    var want = {};
+    (ids || []).forEach(function (id) { want[id] = true; });
+    var res = { moved: 0, noRoom: 0, locked: 0, groups: {}, items: [] };
+    var F = RPD.FieldManager, self = this, picked = [];
+    this.bulkGroups().forEach(function (g) {
+      if (!want[g.id]) return;
+      res.groups[g.id] = { moved: 0, noRoom: 0, locked: g.locked };
+      res.locked += g.locked;
+      g.units.forEach(function (x) { picked.push({ g: g, x: x }); });
+    });
+    // 여러 칸을 골랐으면 전체에서 약한 것부터(칸 안에서도 약한 순서는 이미 같다)
+    picked.sort(function (a, b) { return (a.x.unit.dps - b.x.unit.dps) || (a.x.unit.uid > b.x.unit.uid ? 1 : -1); });
+    picked.forEach(function (p) {
+      var u = p.x.unit, gr = res.groups[p.g.id];
+      if (self.isFull()) { gr.noRoom += 1; res.noRoom += 1; return; }
+      var removed = F.remove(p.x.slot);
+      if (!removed) return;
+      if (!self.add(removed)) { F.place(p.x.slot, removed); gr.noRoom += 1; res.noRoom += 1; return; }   // 안전망 — 사라지지 않게 제자리로
+      gr.moved += 1; res.moved += 1;
+      res.items.push({ uid: removed.uid, from: p.x.slot });
+      RPD.bus.emit('storage:stored', { unit: removed, from: p.x.slot, bulk: true });
+    });
+    if (res.moved) {
+      RPD.UnitManager.recomputeAll();
+      RPD.bus.emit('storage:bulk', { items: res.items });
+    }
+    return res;
+  };
+
   /* ---------- 확장 ---------- */
 
   StorageManager.expandCost = function () {

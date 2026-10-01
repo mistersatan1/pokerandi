@@ -444,7 +444,7 @@
         RPD.FieldManager.select(-1);
         HudPanels.toggleMore(false);
         if (RPD.SpellUI) RPD.SpellUI.close();
-        ['ownedPop', 'recipePop', 'audioPop', 'helpOverlay', 'bookOverlay', 'goldShopOverlay', 'eliteOverlay'].forEach(function (id) {
+        ['ownedPop', 'recipePop', 'audioPop', 'helpOverlay', 'bookOverlay', 'goldShopOverlay', 'eliteOverlay', 'bulkOverlay'].forEach(function (id) {
           var n = document.getElementById(id);
           if (n) n.hidden = true;
         });

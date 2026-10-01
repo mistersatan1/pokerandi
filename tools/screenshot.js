@@ -1347,6 +1347,87 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
   report.push({ lock: lkReport });
   if (lkProblems.length) process.exitCode = 1;
 
+  /* ㉒ 일괄 창고로(세션 75) — 갤럭시 S24 세로(실제 손가락) + PC. (a) 선택 창(흔함 · 전설 · 히든 체크, 잠금 제외 표시, 창고 자리 부족 안내)
+   * (b) [보내기] 뒤 토스트 "흔함 N마리를 창고로 보냈어요 (M마리는 창고가 가득 차 남음)". 어긋나면 도구가 실패로 끝난다.
+   * 캡처: 22_bulk_{portrait|pc}_a_dialog · 22_bulk_{portrait|pc}_b_toast */
+  const bkProblems = [], bkReport = {};
+  const bkSetup = () => {
+    const R = window.RPD, F = R.FieldManager, SM = R.StorageManager;
+    F.slots.forEach(x => { if (!x.blocked) x.unlocked = true; });
+    F.slots.forEach(x => { if (x.unit) F.remove(x.index); });
+    SM.reset();
+    const hid = R.PokemonData.list.find(d => d.hidden && d.tier !== 'T2') || R.PokemonData.list.find(d => d.hidden);
+    const t = tier => R.PokemonData.list.find(d => d.tier === tier && !d.hidden && d.id !== 'ditto').id;
+    const put = (id, n) => { const out = []; for (let i = 0; i < n; i++) { const sl = F.slots.find(x => x.unlocked && !x.blocked && !x.unit); const u = R.UnitManager.create(id); F.place(sl.index, u); out.push(u); } return out; };
+    const t1 = put(t('T1'), 5); R.UnitManager.setLocked(t1[0], true);
+    put(t('T2'), 2); put(t('T3'), 1); put(t('T5'), 1); put(hid.id, 1);
+    SM.capacity = 2;       // 자리 2칸 — 흔함 4(잠금 제외)마리 중 2마리만 들어간다
+    R.UnitManager.recomputeAll();
+    R.GameManager.life = 999;
+    R.bus.emit('field:changed', {}); R.bus.emit('storage:changed', SM.units);
+    return { hidden: hid.id };
+  };
+  {
+    const bad = w => bkProblems.push(w);
+    for (const mode of ['portrait', 'pc']) {
+      const bctx = await browser.newContext(mode === 'pc' ? { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 } : { ...devices['Galaxy S24'], defaultBrowserType: undefined });
+      const bp = await bctx.newPage();
+      const be = [];
+      bp.on('pageerror', e => be.push(e.message));
+      await bp.goto(URL); await bp.waitForTimeout(1000);
+      await bp.evaluate(tbPrep, { wave: 7 });
+      await bp.waitForTimeout(500);
+      await bp.evaluate(() => window.RPD.Loop.setPaused(true));
+      await bp.evaluate(bkSetup);
+      if (mode === 'pc') await bp.click('#btnBulkStore');
+      else { await bp.evaluate(() => window.RPD.HudPanels.setDrawer('owned')); await bp.waitForTimeout(400); await bp.tap('#btnBulkStore'); }
+      await bp.waitForTimeout(350);
+      // 흔함 + 히든을 체크(실제 손가락/마우스)
+      for (const id of ['T1', 'HIDDEN']) { if (mode === 'pc') await bp.click('#bulkList input[data-id="' + id + '"]'); else await bp.tap('#bulkList input[data-id="' + id + '"]'); }
+      await bp.waitForTimeout(250);
+      const dlg = await bp.evaluate(() => {
+        const rows = [...document.querySelectorAll('#bulkList .bulkrow')].map(r => r.textContent.replace(/\s+/g, ' ').trim());
+        const o = document.getElementById('bulkOverlay'), r = o.getBoundingClientRect(), send = document.getElementById('btnBulkSend').getBoundingClientRect();
+        const card = o.querySelector('.book__card').getBoundingClientRect();
+        return { rows, summary: document.getElementById('bulkSummary').textContent.replace(/\s+/g, ' '), open: !o.hidden, sendH: Math.round(send.height), sendIn: send.bottom <= innerHeight + 1 && send.top >= 0, cardIn: card.right <= innerWidth + 1,
+          sheet: document.body.getAttribute('data-sheet'), title: (window.RPD.MobileSheet.openSheets() || []).join('/') };
+      });
+      if (!dlg.open) bad(mode + ': 창이 안 열렸다');
+      const cd = await bp.evaluate(() => getComputedStyle(document.getElementById('bulkConfirm')).display);
+      if (cd !== 'none') bad(mode + ': 확인 칸이 처음부터 보인다(' + cd + ')');
+      if (!dlg.rows.some(r => /흔함.*필드 5마리.*잠금 1마리 제외/.test(r))) bad(mode + ': 흔함 줄 ' + JSON.stringify(dlg.rows));
+      if (dlg.rows.length !== 7) bad(mode + ': 칸 ' + dlg.rows.length + '개');
+      if (!/2마리만 보냅니다/.test(dlg.summary)) bad(mode + ': 자리 부족 안내 ' + dlg.summary);
+      if (mode === 'portrait' && (dlg.sendH < 44 || !dlg.sendIn)) bad(mode + ': [보내기] 크기/위치 ' + JSON.stringify(dlg));
+      if (!dlg.cardIn) bad(mode + ': 창이 화면 밖으로 나간다');
+      await bp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '22_bulk_' + mode + '_a_dialog.png') });
+      // 히든이 들어 있어 한 번 확인 — 먼저 확인 문구 · 그 뒤 실행
+      if (mode === 'pc') await bp.click('#btnBulkSend'); else await bp.tap('#btnBulkSend');
+      await bp.waitForTimeout(250);
+      const conf = await bp.evaluate(() => ({ shown: !document.getElementById('bulkConfirm').hidden, display: getComputedStyle(document.getElementById('bulkConfirm')).display, text: document.getElementById('bulkConfirmText').textContent, stored: window.RPD.StorageManager.units.length }));
+      if (!conf.shown || conf.stored !== 0 || conf.display === 'none') bad(mode + ': 히든 포함인데 확인 없이 갔다 ' + JSON.stringify(conf));
+      await bp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '22_bulk_' + mode + '_a2_confirm.png') });
+      const before = await bp.evaluate(() => window.RPD.FieldManager.getUnits().length + window.RPD.StorageManager.units.length);
+      if (mode === 'pc') await bp.click('#btnBulkYes'); else await bp.tap('#btnBulkYes');
+      await bp.waitForTimeout(220);
+      const after = await bp.evaluate(() => ({ total: window.RPD.FieldManager.getUnits().length + window.RPD.StorageManager.units.length, stored: window.RPD.StorageManager.units.map(u => u.def.name), msg: window.RPD.BulkStoreUI.lastMessage,
+        bar: (document.getElementById('infoBar') || {}).textContent || '', open: !document.getElementById('bulkOverlay').hidden, undo: window.RPD.UndoManager.count() }));
+      if (after.total !== before) bad(mode + ': 유닛 총수가 바뀌었다 ' + before + '→' + after.total);
+      if (after.stored.length !== 2 || after.open) bad(mode + ': 결과 ' + JSON.stringify(after));
+      if (!/흔함 · 히든 2마리를 창고로 보냈어요 \(\d마리는 창고가 가득 차 남음\)|흔함 2마리를 창고로 보냈어요 \(\d마리는 창고가 가득 차 남음\)/.test(after.msg || '')) bad(mode + ': 토스트 ' + after.msg);
+      if (mode === 'portrait' && after.bar.indexOf('창고로 보냈어요') < 0) bad('portrait: 정보 바 토스트가 안 보인다 ' + after.bar.slice(0, 80));
+      if (after.undo !== 1) bad(mode + ': 되돌리기 기록 ' + after.undo + '건');
+      await bp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '22_bulk_' + mode + '_b_toast.png') });
+      bkReport[mode] = { dlg, conf, after };
+      if (be.length) bad(mode + ' 페이지 오류: ' + be[0]);
+      await bctx.close();
+    }
+  }
+  console.log('bulk', JSON.stringify(bkReport));
+  console.log('bulk problems', JSON.stringify(bkProblems));
+  report.push({ bulk: bkReport });
+  if (bkProblems.length) process.exitCode = 1;
+
   /* ---------- 홈 화면 앱(세션 53 · 모바일 ④ 세션 71) ----------
    * 설치 · 오프라인은 인터넷 주소에서만 되니, 원본 폴더(dist 아님)를 이 자리에서 작은 웹 서버로 띄워 연다(localhost 는 https 와 같게 친다).
    * 확인: 크롬이 "설치할 수 있다"고 보는가(설치 불가 사유 0) · 서비스 워커 · 오프라인 저장 · 인터넷을 끊고 다시 열어도 켜지고 처음 보는 그림이 나오는가 ·

@@ -69,6 +69,7 @@ self.PRECACHE = {
   "js/systems/UnitManager.js",
   "js/systems/WaveManager.js",
   "js/ui/AppUI.js",
+  "js/ui/BulkStoreUI.js",
   "js/ui/Convenience.js",
   "js/ui/DexCard.js",
   "js/ui/EliteUI.js",

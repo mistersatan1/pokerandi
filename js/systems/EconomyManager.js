@@ -103,9 +103,13 @@
     return Math.max(1, Math.floor(invested * CFG.sellRefundRate));
   };
 
+  /* 잠긴 개체는 방출이 안 된다(세션 74) — 잠금을 풀고 방출. 이동 · 창고 · 강화는 그대로 */
+  EconomyManager.canSell = function (unit) { return !!unit && !unit.locked; };
+
   EconomyManager.sell = function (slotIndex) {
     var slot = RPD.FieldManager.get(slotIndex);
     if (!slot || !slot.unit) return 0;
+    if (slot.unit.locked) return 0;
 
     var unit = slot.unit;
     var refund = this.sellValue(unit);
@@ -120,7 +124,7 @@
    * 창고가 차면 소환도 조합도 막히는데, 예전에는 필드에 올린 뒤에야 버릴 수 있었다. */
   EconomyManager.sellStored = function (storageIndex) {
     var unit = RPD.StorageManager.units[storageIndex];
-    if (!unit) return 0;
+    if (!unit || unit.locked) return 0;
 
     var refund = this.sellValue(unit);
     RPD.StorageManager.removeAt(storageIndex);

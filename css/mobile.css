@@ -288,7 +288,12 @@
   .infobar .ib__acts { gap: 3px; }
   /* 세로: [↶](세션 68)가 들어와 누구 칸이 좁다 — 그림 28 · [↶] 40 · 버튼 최소 44(손가락 기준)로 DPS 가 잘리지 않게(세션 69) */
   .infobar .ib__btn--undo { min-width: 40px; padding: 0; }
-  .ib__who .spr--ib { width: 28px; height: 28px; }
+  /* 잠금(세 번째 손가락 버튼) — 버튼이 다섯이 되어 세로 정보 바에서는 그림을 빼고 이름 · 등급 · DPS 를 지킨다 */
+  /* 버튼이 여섯([되돌리기] · 이동 · 잠금 · 창고로 · 강화 · 방출) — 모두 40px 기준(손가락 최소)으로 줄여 이름 · DPS 가 잘리지 않게 */
+  .infobar .ib__btn { min-width: 40px; padding: 0 2px; }
+  .infobar .ib__btn--lock { min-width: 40px; padding: 0; }
+  .infobar .ib__acts { gap: 2px; }
+  .ib__who .spr--ib { display: none; }
   .ib__who { gap: 4px; }
   .ib__txt { line-height: 1.15; }
   .ib__name { font-size: 12.5px; }
@@ -402,3 +407,7 @@
   .hud__more { left: max(4px, env(safe-area-inset-left)); grid-template-columns: repeat(5, 1fr); }
   .hud .hud__more .iconbtn { width: auto; height: 52px; }
 }
+
+/* 잠금 버튼 — 잠기면 금색 */
+.ib__btn--lock span { font-size: 16px; line-height: 1; }
+.ib__btn--lock.is-on { border-color: #f0b429; color: #f0b429; }

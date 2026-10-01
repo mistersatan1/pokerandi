@@ -283,6 +283,23 @@
       ctx.fillText('+' + unit.level, lvAt.x, lvAt.y);
     }
 
+    // 잠금 — 왼쪽 위 작은 자물쇠(재료 · 방출에서 빠진 포켓몬). 레벨 글자는 오른쪽 위라 겹치지 않는다
+    if (unit.locked) {
+      var lkAt = RPD.Renderer.at(slot.x, slot.y, -slot.size / 2 + 8, -slot.size / 2 + 8);
+      ctx.beginPath();
+      ctx.arc(lkAt.x, lkAt.y, 8, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(12,26,52,0.82)';
+      ctx.fill();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = '#f0b429';
+      ctx.stroke();
+      ctx.font = '900 10px ' + RPD.FONT_STACK;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#ffd23f';
+      ctx.fillText('🔒', lkAt.x, lkAt.y + 0.5);
+    }
+
     // 침묵·기절 — 회색으로 죽이고 X 표시. 색만 바꾸면 작은 칸에서 안 읽힌다.
     if (unit.disabledUntil > RPD.CombatManager.clock) {
       ctx.globalAlpha = 0.45;

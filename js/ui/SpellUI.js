@@ -14,6 +14,7 @@
 
   var FAIL_TEXT = {
     NOT_READY: '…아직 때가 아니다.',
+    LOCKED: '…잠가 둔 포켓몬이 재료에 필요하다.',
     NO_SHARD: '…초월의 조각이 필요하다.',
     ONCE: '…초월은 한 판에 한 번뿐이다.',
     NOT_PLAYING: '게임을 시작한 뒤에 외칠 수 있다.'

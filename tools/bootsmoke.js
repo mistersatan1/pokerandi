@@ -2176,6 +2176,205 @@ check('기록 가져오기 검증 — 빈 글자 · 깨진 JSON · 다른 앱 ·
   if (!old.ok || !old.data.totals || old.data.version !== 2) throw new Error('옛 버전(v1) 기록을 지금 형식으로 못 바꿨다');
 });
 
+/* ---------- 포켓몬 잠금 ---------- */
+console.log('\n포켓몬 잠금 — 재료 · 주문 · 방출에서 빠진다');
+function lockFresh() {
+  MS.forceMobile = false;
+  RPD.Config.autosave = false;
+  RPD.Game.restart();
+  RPD.Game.startRun('NORMAL', 'NORMAL');
+  RPD.GameManager.gold = 99999; RPD.GameManager.life = 999;
+  RPD.GameManager.setWave(30);
+  RPD.FieldManager.init(); RPD.StorageManager.reset();
+}
+const LK_RECIPE = RPD.RecipeData.list.find(r => r.materials.length === 2 && r.materials.every(m => m !== 'ditto' && RPD.PokemonData.get(m).tier === 'T1' && RPD.PokemonData.get(m).summon) && r.materials[0] !== r.materials[1]);
+function lkReady() { RPD.RecipeManager.refresh(); return RPD.RecipeManager.view.some(v => v.resultId === LK_RECIPE.id && v.ready); }
+function lkView() { RPD.RecipeManager.refresh(); return RPD.RecipeManager.view.find(v => v.resultId === LK_RECIPE.id); }
+
+check('잠근 포켓몬은 조합 재료로 안 쓰인다 — 재료가 있어도 조합이 안 된다 · 잠금을 풀면 다시 쓰인다', () => {
+  lockFresh();
+  const a = RPD.UnitManager.create(LK_RECIPE.materials[0]), b = RPD.UnitManager.create(LK_RECIPE.materials[1]);
+  RPD.FieldManager.place(0, a); RPD.StorageManager.add(b);
+  RPD.UnitManager.setLocked(b, true);
+  if (lkReady()) throw new Error('잠근 재료로 완성 가능으로 뜬다');
+  const r = RPD.RecipeManager.craft(LK_RECIPE.id);
+  if (r.ok) throw new Error('잠근 재료로 조합이 됐다');
+  if (RPD.StorageManager.units.indexOf(b) < 0 || !RPD.FieldManager.getUnits().includes(a)) throw new Error('실패했는데 재료가 사라졌다');
+  if (RPD.RecipeManager.craftBest().ok) throw new Error('[조합](craftBest)이 잠근 재료를 골랐다');
+  RPD.UnitManager.setLocked(b, false);
+  if (!lkReady()) throw new Error('잠금을 풀었는데 다시 안 쓰인다');
+  const ok = RPD.RecipeManager.craft(LK_RECIPE.id);
+  if (!ok.ok) throw new Error('잠금 해제 뒤 조합 실패: ' + ok.reason);
+});
+
+check('조합 결과는 잠기지 않는다 — 재료의 잠금을 물려받지 않는다(잠그지 않은 재료만 쓰이므로 결과도 새 개체)', () => {
+  lockFresh();
+  const a = RPD.UnitManager.create(LK_RECIPE.materials[0]), b = RPD.UnitManager.create(LK_RECIPE.materials[1]);
+  const spare = RPD.UnitManager.create(LK_RECIPE.materials[0]);
+  RPD.FieldManager.place(0, a); RPD.FieldManager.place(1, b); RPD.StorageManager.add(spare);
+  RPD.UnitManager.setLocked(spare, true);     // 같은 종을 하나 더 잠가 둔다 — 이건 안 쓰여야 한다
+  RPD.RecipeManager.refresh();
+  const r = RPD.RecipeManager.craft(LK_RECIPE.id);
+  if (!r.ok) throw new Error('조합 실패 ' + r.reason);
+  const res = RPD.FieldManager.getUnits().concat(RPD.StorageManager.units).filter(u => u.defId === LK_RECIPE.id);
+  if (res.length !== 1 || res[0].locked) throw new Error('결과가 잠겨 있다/없다: ' + res.map(u => u.locked));
+  if (!RPD.StorageManager.units.includes(spare) || !spare.locked) throw new Error('잠근 여분이 소모되거나 잠금이 풀렸다');
+});
+
+check('재료 집계는 잠근 개체를 뺀다 — "0/1 🔒1" 로 잠금 때문에 모자란 것을 알린다', () => {
+  lockFresh();
+  const a = RPD.UnitManager.create(LK_RECIPE.materials[0]), b = RPD.UnitManager.create(LK_RECIPE.materials[1]);
+  RPD.FieldManager.place(0, a); RPD.StorageManager.add(b);
+  RPD.UnitManager.setLocked(b, true);
+  const cs = RPD.RecipeManager.countsOf();
+  if ((cs.usable[b.defId] || 0) !== 0 || cs.locked[b.defId] !== 1) throw new Error('집계: ' + JSON.stringify(cs));
+  const v = lkView();
+  const m = v.materials.find(x => x.id === b.defId);
+  if (m.owned || m.lockedShort !== 1 || v.lockedShortCount !== 1) throw new Error('view: ' + JSON.stringify(m));
+  RPD.bus.emit('field:changed', {});
+  clickTab('all');
+  const html = panelHtml('recipeList');
+  if (html.indexOf('rmat__lk') < 0 || html.indexOf('🔒1') < 0) throw new Error('조합식 줄에 "🔒1" 이 없다');
+  RPD.UnitManager.setLocked(b, false);
+  RPD.bus.emit('field:changed', {});
+  if (panelHtml('recipeList').indexOf('🔒1</span>') >= 0 && lkView().lockedShortCount) throw new Error('잠금을 풀었는데 표시가 남았다');
+});
+
+check('잠근 메타몽은 대신하지 않는다 — 풀면 대신한다', () => {
+  lockFresh();
+  const a = RPD.UnitManager.create(LK_RECIPE.materials[0]), d = RPD.UnitManager.create('ditto');
+  RPD.FieldManager.place(0, a); RPD.StorageManager.add(d);
+  RPD.UnitManager.setLocked(d, true);
+  if (lkReady()) throw new Error('잠근 메타몽이 재료를 대신했다');
+  if (RPD.RecipeManager.craft(LK_RECIPE.id).ok) throw new Error('잠근 메타몽으로 조합됐다');
+  RPD.UnitManager.setLocked(d, false);
+  if (!lkReady()) throw new Error('풀었는데 메타몽이 대신하지 않는다');
+});
+
+check('잠근 포켓몬은 주문 재료로도 안 쓰인다(check · cast) — 풀면 외칠 수 있다', () => {
+  lockFresh();
+  RPD.SaveManager.data.spells = {};
+  const sp = RPD.SpellData.forResult('pikachu');
+  const us = sp.materials.map(id => RPD.UnitManager.create(id));
+  us.forEach(u => RPD.StorageManager.add(u));
+  RPD.UnitManager.setLocked(us[0], true);
+  const c = RPD.SpellManager.check(sp);
+  if (c.ok) throw new Error('잠근 재료로 주문이 가능하다고 나온다');
+  const r = RPD.SpellManager.cast(sp.phrase);
+  if (r.ok) throw new Error('잠근 재료로 주문이 걸렸다');
+  if (RPD.StorageManager.units.length !== us.length) throw new Error('실패했는데 재료가 사라졌다');
+  RPD.UnitManager.setLocked(us[0], false);
+  if (!RPD.SpellManager.cast(sp.phrase).ok) throw new Error('풀었는데 주문이 안 걸린다');
+  const res = RPD.FieldManager.getUnits().concat(RPD.StorageManager.units).filter(u => u.defId === 'pikachu');
+  if (res.length !== 1 || res[0].locked) throw new Error('주문 결과가 잠겨 있다');
+});
+
+check('잠근 포켓몬은 방출할 수 없다 — 필드 · 창고 · 버튼(잠금 해제 후 방출)', () => {
+  lockFresh();
+  const f = RPD.UnitManager.create('pidgey'), s = RPD.UnitManager.create('rattata');
+  RPD.FieldManager.place(0, f); RPD.StorageManager.add(s);
+  RPD.UnitManager.setLocked(f, true); RPD.UnitManager.setLocked(s, true);
+  const gold = RPD.GameManager.gold;
+  if (RPD.EconomyManager.sell(0) !== 0 || !RPD.FieldManager.getUnits().includes(f)) throw new Error('잠근 필드 개체가 팔렸다');
+  if (RPD.EconomyManager.sellStored(0) !== 0 || !RPD.StorageManager.units.includes(s)) throw new Error('잠근 창고 개체가 팔렸다');
+  if (RPD.GameManager.gold !== gold) throw new Error('골드가 바뀌었다');
+  RPD.FieldManager.select(0);
+  RPD.UIManager.refreshActionButtons && RPD.UIManager.refreshActionButtons();
+  RPD.bus.emit('field:changed', {});
+  if (!nodes.btnSell.disabled) throw new Error('[방출] 버튼이 안 잠겼다');
+  if (String(nodes.sellValue.textContent).indexOf('잠금 해제 후 방출') < 0) throw new Error('안내 글: ' + nodes.sellValue.textContent);
+  RPD.UnitManager.setLocked(f, false);
+  if (RPD.EconomyManager.sell(0) <= 0) throw new Error('잠금을 풀었는데 못 판다');
+});
+
+check('잠금은 이동 · 창고 · 배치 · 강화 · 다시 계산을 거쳐도 남는다 — 이동 · 교체 · 강화는 그대로 된다', () => {
+  lockFresh();
+  const u = RPD.UnitManager.create('pidgey');
+  RPD.FieldManager.place(0, u);
+  RPD.UnitManager.setLocked(u, true);
+  RPD.UnitManager.recomputeAll();
+  if (!u.locked) throw new Error('recompute 뒤 잠금이 풀렸다');
+  if (!RPD.StorageManager.store(0).ok || !u.locked) throw new Error('창고로 보낸 뒤 잠금이 풀렸다');
+  const d = RPD.StorageManager.deploy(RPD.StorageManager.units.indexOf(u), 1);
+  if (!d.ok || !u.locked || RPD.FieldManager.get(1).unit !== u) throw new Error('배치가 안 되거나 잠금이 풀렸다');
+  const other = RPD.UnitManager.create('rattata'); RPD.FieldManager.place(2, other);
+  const mv = RPD.FieldManager.move ? RPD.FieldManager.move(1, 3) : null;   // 빈 칸으로 옮기기
+  if (mv && mv.ok === false) throw new Error('잠근 개체가 안 옮겨진다');
+  const lv = u.level;
+  const up = RPD.EconomyManager.upgrade(RPD.FieldManager.slots.find(s => s.unit === u).index);
+  if (!up.ok || u.level !== lv + 1 || !u.locked) throw new Error('잠근 개체 강화: ' + JSON.stringify(up));
+  const back = RPD.UnitManager.revive(RPD.UnitManager.serialize(u));
+  if (!back.locked) throw new Error('저장 · 복원(serialize/revive) 뒤 잠금이 풀렸다');
+  const plain = RPD.UnitManager.serialize(RPD.UnitManager.create('pidgey'));
+  if ('locked' in plain) throw new Error('안 잠근 개체의 저장본에 locked 가 남는다(옛 저장과 같은 모양이어야 한다)');
+  if (RPD.UnitManager.revive(plain).locked) throw new Error('옛 저장본이 잠겨 불러와진다');
+});
+
+check('판 이어하기 — 잠금이 저장 · 복원된다(필드 · 창고)', () => {
+  lockFresh();
+  RPD.Config.autosave = true; RS.blocked = false;
+  RPD.Game.restart(); RPD.Game.startRun('NORMAL', 'NORMAL');
+  RPD.GameManager.life = 999;
+  const f = RPD.UnitManager.create('pidgey'), s = RPD.UnitManager.create('rattata');
+  RPD.FieldManager.place(0, f); RPD.StorageManager.add(s);
+  RPD.UnitManager.setLocked(f, true); RPD.UnitManager.setLocked(s, true);
+  RPD.bus.emit('wave:started', RPD.WaveManager.plan);
+  const r = RS.read();
+  RPD.Config.autosave = false;
+  if (!r.ok) throw new Error('저장이 안 됐다: ' + r.reason);
+  RS.restore(r.data);
+  RS.pending = null;
+  const fu = RPD.FieldManager.getUnits().find(u => u.defId === 'pidgey'), su = RPD.StorageManager.units.find(u => u.defId === 'rattata');
+  if (!fu || !fu.locked) throw new Error('필드 개체의 잠금이 안 돌아왔다');
+  if (!su || !su.locked) throw new Error('창고 개체의 잠금이 안 돌아왔다');
+  RS.clear();
+});
+
+check('잠금 버튼 · L 단축키 — 고른 칸의 잠금을 뒤집고 버튼 글이 [잠금]/[잠금 해제] 로 바뀐다', () => {
+  lockFresh();
+  const u = RPD.UnitManager.create('pidgey');
+  RPD.FieldManager.place(0, u);
+  RPD.FieldManager.select(0);
+  RPD.bus.emit('field:changed', {});
+  if (nodes.btnLock.disabled) throw new Error('칸을 골랐는데 [잠금] 이 꺼져 있다');
+  if (nodes.lockName.textContent !== '잠금') throw new Error('처음 글: ' + nodes.lockName.textContent);
+  click('btnLock');
+  if (!u.locked || nodes.lockName.textContent !== '잠금 해제') throw new Error('눌렀는데 안 잠긴다/글 안 바뀐다');
+  click('btnLock');
+  if (u.locked || nodes.lockName.textContent !== '잠금') throw new Error('다시 눌렀는데 안 풀린다');
+  RPD.FieldManager.select(-1);
+  RPD.bus.emit('field:changed', {});
+  if (!nodes.btnLock.disabled) throw new Error('칸을 안 골랐는데 [잠금] 이 켜져 있다');
+});
+
+check('L 단축키가 다른 단축키와 겹치지 않는다(HOTKEYS · 방출 X · 배치 F 와 별개)', () => {
+  const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'js', 'ui', 'HudPanels.js'), 'utf8');
+  const hk = src.match(/var HOTKEYS = \{([\s\S]*?)\};/);
+  if (!hk) throw new Error('HOTKEYS 를 못 찾았다');
+  if (/['"]l['"]\s*:/.test(hk[1])) throw new Error('HOTKEYS 에 이미 l 이 있다');
+  if ((src.match(/key === 'l'/g) || []).length !== 1) throw new Error("key === 'l' 분기가 한 곳이 아니다");
+});
+
+check('필드의 잠근 포켓몬과 보유 칸에 🔒 가 뜬다 · 정보 바 [잠금] 버튼(휴대폰)', () => {
+  lockFresh();
+  const u = RPD.UnitManager.create('pidgey'), s = RPD.UnitManager.create('rattata');
+  RPD.FieldManager.place(0, u); RPD.StorageManager.add(s);
+  RPD.UnitManager.setLocked(s, true);
+  RPD.bus.emit('storage:changed', RPD.StorageManager.units);
+  RPD.bus.emit('field:changed', {});
+  if (panelHtml('storageList').indexOf('scell__lock') < 0) throw new Error('보유 칸에 🔒 가 없다');
+  RPD.UnitManager.setLocked(s, false);
+  RPD.bus.emit('field:changed', {});
+  if (panelHtml('storageList').indexOf('scell__lock') >= 0) throw new Error('풀었는데 🔒 가 남았다(캐시)');
+  MS.forceMobile = true;
+  RPD.FieldManager.select(0);
+  RPD.bus.emit('field:changed', {});
+  MS.renderBar();
+  const bar = panelHtml('infoBar');
+  MS.forceMobile = false;
+  if (bar.indexOf('data-ib="lock"') < 0) throw new Error('정보 바에 [잠금] 이 없다');
+});
+
 wakePromise.then(() => {
   console.log(`\n────────────────────────────`);
   console.log(failures === 0 ? '부팅 경로 이상 없음' : `부팅 문제 ${failures}건`);

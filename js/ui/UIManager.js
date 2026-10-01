@@ -60,6 +60,9 @@
     el.summonCost = $('summonCost');
 
     el.sell = $('btnSell');
+    el.lock = $('btnLock');
+    el.lockName = $('lockName');
+    el.lockHint = $('lockHint');
     el.store = $('btnStore');
     el.storeHint = $('storeHint');
     el.tierFilter = $('tierFilter');
@@ -189,10 +192,15 @@
       });
     }
 
+    if (el.lock) {
+      el.lock.addEventListener('click', function () { toggleLockSelected(); });
+    }
+
     if (el.sell) {
       el.sell.addEventListener('click', function () {
         var slot = F.getSelected();
         if (!slot || !slot.unit) return;
+        if (slot.unit.locked) { lockedSay(slot.x, slot.y - 20); return; }
         var refund = RPD.EconomyManager.sell(slot.index);
         if (refund > 0) {
           RPD.FxRenderer.text(slot.x, slot.y - 20, '+' + refund, '#f0b429',
@@ -344,9 +352,18 @@
           if (r.ok) closeOwnedPop(); else openOwnedPop(def);
           return;
         }
+        if (b.dataset.act === 'lock') {   // 창고 개체 한 마리의 잠금 토글 — 칩마다 한 마리
+          var li = parseInt(b.dataset.i, 10), lu = RPD.StorageManager.units[li];
+          if (lu && lu.defId === def) RPD.UnitManager.toggleLock(lu);
+          openOwnedPop(def);
+          return;
+        }
         if (b.dataset.act === 'sell') {
-          var si = RPD.StorageManager.indexOfSpecies(def);
-          if (si < 0) return;
+          var si = unlockedStoredIndex(def);
+          if (si < 0) {
+            RPD.FxRenderer.text(RPD.VIEW.width / 2, 190, '잠금 해제 후 방출', '#f0b429', { size: 15, life: 1.1, jitter: false });
+            return;
+          }
           RPD.EconomyManager.sellStored(si);
           if (RPD.StorageManager.indexOfSpecies(def) >= 0 || F.getUnits().some(function (u) { return u.defId === def; })) {
             openOwnedPop(def);
@@ -1054,7 +1071,7 @@
         UI.sprite(def, 'spr--card') +
         '<div class="sc__who">' +
           '<span class="sc__tier">' + tier.label + ' · ' + (u.roleLabel || u.role) + '</span>' +
-          '<span class="sc__name">' + u.name + '</span>' +
+          '<span class="sc__name">' + u.name + (u.locked ? ' <span class="sc__lock" title="잠금 — 재료 · 방출에서 제외">🔒</span>' : '') + '</span>' +
           '<span class="typerow">' + types + '</span>' +
         '</div>' +
       '</div>' +
@@ -1122,6 +1139,26 @@
 
   /* ---------- 소환 ---------- */
 
+  /* ---------- 포켓몬 잠금 — 잠근 개체는 재료 · 방출에서 빠진다(규칙은 UnitManager.setLocked 외 각 매니저) ---------- */
+  function lockedSay(x, y) {
+    RPD.FxRenderer.text(x, y, '잠금 해제 후 방출', '#f0b429', { size: 14, life: 1.0, jitter: false });
+  }
+  function lockFx(unit, x, y) {
+    RPD.FxRenderer.text(x, y, unit.locked ? '🔒 잠금' : '🔓 잠금 해제', unit.locked ? '#f0b429' : '#bcd', { size: 14, life: 0.9, jitter: false });
+  }
+  /* L · [잠금] — 필드에서 고른 칸이 먼저, 없으면 열려 있는 보유 창의 개체(창고에 있는 것 우선 아니라 잠금 상태를 한 번에 뒤집을 대상) */
+  function toggleLockSelected() {
+    var slot = F.getSelected();
+    if (slot && slot.unit) {
+      RPD.UnitManager.toggleLock(slot.unit);
+      lockFx(slot.unit, slot.x, slot.y - 20);
+      refreshActionButtons();
+      return true;
+    }
+    return false;
+  }
+  UIManager.toggleLockSelected = toggleLockSelected;
+
   function refreshActionButtons() {
     var playable = GM.isPlayable();
     var slot = F.getSelected();
@@ -1170,18 +1207,28 @@
       }
     }
 
+    var isLocked = !!(hasUnit && slot.unit.locked);
+    if (el.lock) {
+      el.lock.disabled = !hasUnit;
+      el.lock.classList.toggle('is-locked', isLocked);
+      if (el.lockName) el.lockName.textContent = isLocked ? '잠금 해제' : '잠금';
+      if (el.lockHint) el.lockHint.textContent = !hasUnit ? '칸 선택' : (isLocked ? '🔒 잠김' : '재료 · 방출 제외');
+      if (el.lock.setAttribute) el.lock.setAttribute('aria-pressed', String(isLocked));
+    }
     if (el.sell) {
-      el.sell.disabled = !playable || !hasUnit;
+      el.sell.disabled = !playable || !hasUnit || isLocked;
       if (el.sellValue) {
-        el.sellValue.textContent = hasUnit
-          ? '+' + RPD.EconomyManager.sellValue(slot.unit) + 'G' : '칸 선택';
+        el.sellValue.textContent = !hasUnit ? '칸 선택'
+          : isLocked ? '잠금 해제 후 방출'
+          : '+' + RPD.EconomyManager.sellValue(slot.unit) + 'G';
       }
     }
     // 휴대폰 정보 바(MobileSheet)가 같은 버튼 상태를 그대로 따라 그린다 — 규칙을 두 번 쓰지 않게(세션 65)
     RPD.bus.emit('ui:actions', {
       upgrade: { disabled: !el.upgrade || el.upgrade.disabled, cost: el.upgradeCost ? el.upgradeCost.textContent : '' },
       store: { disabled: !el.store || el.store.disabled },
-      sell: { disabled: !el.sell || el.sell.disabled, value: el.sellValue ? el.sellValue.textContent : '' }
+      sell: { disabled: !el.sell || el.sell.disabled, value: el.sellValue ? el.sellValue.textContent : '' },
+      lock: { on: isLocked, disabled: !hasUnit }
     });
   }
 
@@ -1395,11 +1442,12 @@
       var m = materials[i];
       if (at[m.id] == null) {
         at[m.id] = out.length;
-        out.push({ id: m.id, name: m.name, need: 0, ownedSlots: 0 });
+        out.push({ id: m.id, name: m.name, need: 0, ownedSlots: 0, lockedShort: 0 });
       }
       var g = out[at[m.id]];
       g.need += 1;
       if (m.owned) g.ownedSlots += 1;
+      g.lockedShort += m.lockedShort || 0;
     }
     out.forEach(function (g) { g.owned = g.ownedSlots >= g.need; });
     return out;
@@ -1435,6 +1483,7 @@
   function knows(sp) { return !!(RPD.SaveManager.knowsSpell && RPD.SaveManager.knowsSpell(sp.id)); }
   function spellViews(counts, withUnknown) {
     if (!RPD.SpellData || !RPD.SpellManager) return [];
+    var lockedAll = RPD.RecipeManager.countsOf().locked;
     /* 필드 조합식에는 "히든"만 올린다 — 불멸·초월은 조합 사전에서만 본다(재료가 전설급이라
      * 판 하나에 몇 번 안 쓰고, 여기 섞이면 진짜 조합식 줄이 파묻힌다).
      * [전체] · 등급 칩에는 **발견한 것만**. [히든] 칩(withUnknown)에서는 미발견까지 전부 — 조합 사전과 같은 모양으로
@@ -1448,7 +1497,9 @@
         used[m] = (used[m] || 0) + 1;
         var owned = (counts[m] || 0) >= used[m];
         if (!owned) missing += 1;
-        return { id: m, name: RPD.PokemonData.get(m).name, owned: owned };
+        // 잠근 개체가 이 칸을 채울 수 있었다면 1 — 조합식 줄이 "0/1 🔒1" 로 알린다
+        var lk = !owned && (lockedAll[m] || 0) >= used[m] - (counts[m] || 0) ? 1 : 0;
+        return { id: m, name: RPD.PokemonData.get(m).name, owned: owned, lockedShort: lk };
       });
       var ok = RPD.SpellManager.check(sp).ok;
       var known = knows(sp);
@@ -1477,9 +1528,7 @@
   var recipePopTrail = [];
 
   function ownedCounts() {
-    var counts = {};
-    RPD.StorageManager.allUnits().forEach(function (u) { counts[u.defId] = (counts[u.defId] || 0) + 1; });
-    return counts;
+    return RPD.RecipeManager.countsOf().usable;   // 잠근 개체는 뺀 재료 수
   }
 
   function openRecipePop(defId, trail) {
@@ -1509,7 +1558,7 @@
             '" title="' + (secret ? '아직 모르는 재료' : m.name + (md.hidden ? ' — 히든: 채팅 주문으로 만든다' : ' 조합식 보기')) + '">' +
             (secret ? UI.shadow(md, 'spr--rp') : UI.sprite(md, 'spr--rp')) +
             '<span class="rp__matName">' + (secret ? '???' : m.name + (md.hidden ? ' 🔒' : '')) + (m.need > 1 ? ' ×' + m.need : '') + '</span>' +
-            '<span class="rp__matN">' + matCount(m.id, counts) + '/' + m.need + '</span>' +
+            '<span class="rp__matN">' + matCount(m.id, counts) + '/' + m.need + lockNote(m) + '</span>' +
             (craftable ? '<span class="rp__more">' + (md.hidden ? '주문 ›' : '조합 ›') + '</span>' : '') +
           '</button>';
         }).join('<span class="rplus">+</span>') +
@@ -1696,8 +1745,9 @@
     var order = [];
     function add(u, inStore) {
       var g = groups[u.defId];
-      if (!g) { g = groups[u.defId] = { def: u.def, total: 0, stored: 0, field: 0 }; order.push(u.defId); }
+      if (!g) { g = groups[u.defId] = { def: u.def, total: 0, stored: 0, field: 0, locked: 0 }; order.push(u.defId); }
       g.total += 1;
+      if (u.locked) g.locked += 1;
       if (inStore) g.stored += 1; else g.field += 1;
     }
     F.getUnits().forEach(function (u) { add(u, false); });
@@ -1740,7 +1790,7 @@
     }
 
     var sig = ownedSort + '#' + rows.map(function (r) {
-      return r.id + r.g.field + '/' + r.g.stored + (r.mat ? 'm' : '');
+      return r.id + r.g.field + '/' + r.g.stored + (r.g.locked ? 'L' + r.g.locked : '') + (r.mat ? 'm' : '');
     }).join('|');
     if (sig === ownedSig && el.storageList.innerHTML) return;
     ownedSig = sig;
@@ -1806,6 +1856,7 @@
         (r.g.stored ? ' · 창고 ' + r.g.stored : '') + (r.mat ? ' · 조합 재료' : '') + '">' +
         RPD.UI.sprite(r.g.def, 'spr--cell') +
         '<span class="scell__n">' + r.g.total + '</span>' +
+        (r.g.locked ? '<span class="scell__lock" title="잠근 ' + r.g.locked + '마리">🔒' + (r.g.locked > 1 ? r.g.locked : '') + '</span>' : '') +
         (r.g.stored ? '<span class="scell__store">창고 ' + r.g.stored + '</span>' : '') +
       '</button>';
   }
@@ -1840,6 +1891,19 @@
       '</li>';
     }).join('');
 
+    var sellable = unlockedStoredIndex(defId) >= 0;
+    /* 창고 개체마다 [🔒] 칩 — 같은 종이 여러 마리여도 한 마리씩 잠근다(필드에 있는 개체는 필드에서 골라 L) */
+    var lockChips = '';
+    var storedAll = RPD.StorageManager.units.map(function (u, i) { return { u: u, i: i }; })
+      .filter(function (x) { return x.u.defId === defId; });
+    if (storedAll.length) {
+      lockChips = '<div class="lockchips" aria-label="창고 개체 잠금">' + storedAll.map(function (x, n) {
+        return '<button type="button" class="lockchip' + (x.u.locked ? ' is-locked' : '') + '" data-act="lock" data-i="' + x.i +
+          '" aria-pressed="' + !!x.u.locked + '" title="' + (x.u.locked ? '잠금 해제' : '재료 · 방출에서 제외') + '">' +
+          (x.u.locked ? '🔒' : '🔓') + ' 창고 ' + (n + 1) + ' Lv' + x.u.level + '</button>';
+      }).join('') + '</div>';
+    }
+
     el.ownedPop.dataset.def = defId;
     el.ownedPop.innerHTML =
       '<button type="button" class="op__close" data-act="close" aria-label="닫기">×</button>' +
@@ -1854,9 +1918,10 @@
       '<div class="op__acts">' +
         '<button type="button" class="btn btn--primary" data-act="deploy"' + (g.stored ? '' : ' disabled') + '>필드에 배치</button>' +
         '<button type="button" class="btn btn--ghost" data-act="select"' + (g.field ? '' : ' disabled') + '>필드에서 보기</button>' +
-        '<button type="button" class="btn btn--danger" data-act="sell"' + (g.stored ? '' : ' disabled') + '>창고에서 방출' +
-          (g.stored ? ' <b>+' + RPD.EconomyManager.sellValue(storedUnitOf(defId)) + 'G</b>' : '') + '</button>' +
-      '</div>' +
+        '<button type="button" class="btn btn--danger" data-act="sell"' + (sellable ? '' : ' disabled') + '>' +
+          (g.stored && !sellable ? '잠금 해제 후 방출' : '창고에서 방출') +
+          (sellable ? ' <b>+' + RPD.EconomyManager.sellValue(storedUnitOf(defId)) + 'G</b>' : '') + '</button>' +
+      '</div>' + lockChips +
       (uses ? '<p class="op__label">재료로 쓰이는 조합식 <span>아래 조합식 목록도 이 개체로 좁혀졌습니다</span></p>' +
               '<ul class="op__uses">' + uses + '</ul>'
             : '<p class="op__label">재료로 쓰이는 조합식이 없습니다</p>');
@@ -1866,8 +1931,14 @@
     if (uses) setSpeciesFilter(defId);
   }
 
+  /* 방출은 잠기지 않은 창고 개체 중 첫 번째 — 전부 잠겼으면 -1 */
+  function unlockedStoredIndex(defId) {
+    var us = RPD.StorageManager.units;
+    for (var i = 0; i < us.length; i++) if (us[i].defId === defId && !us[i].locked) return i;
+    return -1;
+  }
   function storedUnitOf(defId) {
-    var i = RPD.StorageManager.indexOfSpecies(defId);
+    var i = unlockedStoredIndex(defId);
     return i >= 0 ? RPD.StorageManager.units[i] : null;
   }
 
@@ -1961,8 +2032,7 @@
 
     renderTierFilter();
 
-    var ownedNow = {};
-    RPD.StorageManager.allUnits().forEach(function (u) { ownedNow[u.defId] = (ownedNow[u.defId] || 0) + 1; });
+    var ownedNow = RPD.RecipeManager.countsOf().usable;   // 잠근 개체는 뺀다
     var all = list.concat(spellViews(ownedNow, recipeTier === 'HIDDEN'));
 
     var shown;
@@ -2004,14 +2074,14 @@
       el.recipeCount.textContent = ready.length ? '완성 가능 ' + ready.length : (list.length ? list.length + '개' : '');
     }
 
-    var counts = {};
-    RPD.StorageManager.allUnits().forEach(function (u) { counts[u.defId] = (counts[u.defId] || 0) + 1; });
+    var cs = RPD.RecipeManager.countsOf();   // 잠근 개체는 재료로 못 쓰므로 빼고 센다 — 모자란 만큼 "🔒N" 으로 알린다(잠금)
+    var counts = cs.usable, lockedCounts = cs.locked;
 
     /* 재료 보유 수만으로는 부족하다 — 히든 재료 하나를 "막 발견"해도 보유 수는 그대로일 수 있어서,
      * 발견 여부(matSecret)를 서명에 넣지 않으면 방금 드러난 이름·그림을 다시 안 그려서 계속 가려 보인다. */
     var sig = recipeFilter + recipeTier + recipeSpecies + GM.isPlayable() + '#' + shown.map(function (v) {
       return v.key + (v.ready ? 'R' : '') + (v.discovered ? 'D' : '') + (v.spell ? 'S' : '') +
-        v.materials.map(function (m) { return (counts[m.id] || 0) + (matSecret(m.id) ? 'u' : 'k'); }).join(',');
+        v.materials.map(function (m) { return (counts[m.id] || 0) + (lockedCounts[m.id] ? 'L' + lockedCounts[m.id] : '') + (matSecret(m.id) ? 'u' : 'k'); }).join(',');
     }).join('|');
     if (sig === recipeSig && el.recipeList.innerHTML) return;
     recipeSig = sig;
@@ -2028,7 +2098,7 @@
 
     var UI = RPD.UI;
     el.recipeList.innerHTML = shown.map(function (v) {
-      if (v.spell) return spellRowHtml(v, counts);
+      if (v.spell) return spellRowHtml(v, counts, lockedCounts);
       var tierInfo = RPD.Tiers[v.resultTier];
       var have = 0;
       v.materials.forEach(function (m) { if (m.owned) have += 1; });
@@ -2045,7 +2115,7 @@
           (secret ? UI.shadow(def, 'spr--mat') : UI.sprite(def, 'spr--mat')) + lockTag(g.id) +
           (g.need > 1 ? '<span class="rmat__x">×' + g.need + '</span>' : '') +
           (ditto ? '<span class="rmat__ditto" title="메타몽이 대신합니다">메타몽</span>' : '') +
-          '<span class="rmat__n">' + Math.min(c, 99) + '<small>/' + g.need + '</small></span>' +
+          '<span class="rmat__n">' + Math.min(c, 99) + '<small>/' + g.need + '</small>' + lockNote(g) + '</span>' +
           '<span class="rmat__name">' + (secret ? '???' : g.name) + '</span>' +
         '</span>';
       }).join('<span class="rplus">+</span>');
@@ -2075,7 +2145,11 @@
   /* 필드 조합식의 히든 줄 — [전체] · 등급 칩에는 발견한 것만, [히든] 칩에는 미발견도(결과만 그림자 + ???).
    * 그래도 재료 쪽에 "다른" 미발견 히든이 끼어 있을 수 있어(예: 상위 히든이 하위 히든을 재료로 쓸 때)
    * 그 재료만은 여전히 그림자로 가린다. */
-  function spellRowHtml(v, counts) {
+  /* 잠금 때문에 모자란 재료 — "0/1 🔒1" (잠근 개체가 칸을 채울 수 있었던 수). 모자라지 않으면 안 보인다 */
+  function lockNote(g) {
+    return g.lockedShort ? '<span class="rmat__lk" title="잠근 포켓몬 ' + g.lockedShort + '마리 — 잠금을 풀면 재료로 쓸 수 있다">🔒' + g.lockedShort + '</span>' : '';
+  }
+  function spellRowHtml(v, counts, lockedCounts) {
     var UI = RPD.UI, sp = v.spell, def = RPD.PokemonData.get(v.resultId);
     var tierInfo = RPD.Tiers[v.resultTier];
     var have = v.materials.filter(function (m) { return m.owned; }).length;
@@ -2087,7 +2161,7 @@
         '" title="' + (secret ? '아직 모르는 재료' : g.name + (g.need > 1 ? ' ×' + g.need : '')) + ' — ' + c + '마리 보유' + (secret ? '' : ' · 누르면 조합식') + '">' +
         (secret ? UI.shadow(md, 'spr--mat') : UI.sprite(md, 'spr--mat')) + lockTag(g.id) +
         (g.need > 1 ? '<span class="rmat__x">×' + g.need + '</span>' : '') +
-        '<span class="rmat__n">' + Math.min(c, 99) + '<small>/' + g.need + '</small></span>' +
+        '<span class="rmat__n">' + Math.min(c, 99) + '<small>/' + g.need + '</small>' + lockNote(g) + '</span>' +
         '<span class="rmat__name">' + (secret ? '???' : g.name) + '</span></span>';
     }).join('<span class="rplus">+</span>');
     /* 미발견 결과 — 조합 사전과 같은 그림자 + ???. 결과 칸에 data-def 를 안 달아 눌러도 조합식 창이 안 열린다

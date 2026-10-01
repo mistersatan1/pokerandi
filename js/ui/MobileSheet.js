@@ -259,9 +259,10 @@
           '<span class="ib__dps">DPS ' + RPD.Utils.formatNumber(Math.round(u.dps)) + '</span></span></span></div>' +
         '<div class="ib__acts">' +
           btn('move', '이동', '', false) +
+          btn('lock', A.lock && A.lock.on ? '🔒' : '🔓', A.lock && A.lock.on ? '해제' : '잠금', A.lock ? A.lock.disabled : false, 'ib__btn--lock' + (A.lock && A.lock.on ? ' is-on' : '')) +
           btn('store', '창고로', '', A.store ? A.store.disabled : false) +
           btn('upgrade', '강화', A.upgrade ? A.upgrade.cost : '', A.upgrade ? A.upgrade.disabled : false) +
-          btn('sell', '방출', A.sell ? A.sell.value : '', A.sell ? A.sell.disabled : false, 'ib__btn--danger') +
+          btn('sell', '방출', A.lock && A.lock.on ? '🔒' : (A.sell ? A.sell.value : ''), A.sell ? A.sell.disabled : false, 'ib__btn--danger') +
         '</div>';
     } else if (s) {
       var k = U.slotKind(s);
@@ -304,6 +305,7 @@
       var a = t.getAttribute('data-ib');
       if (a === 'move') M.startMove();
       else if (a === 'cancel') M.cancelMove();
+      else if (a === 'lock') clickById('btnLock');
       else if (a === 'store') clickById('btnStore');
       else if (a === 'upgrade') clickById('btnUpgrade');
       else if (a === 'sell') clickById('btnSell');

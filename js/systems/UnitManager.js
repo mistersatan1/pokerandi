@@ -68,6 +68,10 @@
       kills: 0,
       goldEarned: 0,
 
+      /* 잠금(세션 74) — 조합 · 주문 재료로 안 쓰이고 방출이 안 된다. 이동 · 창고 · 강화 · 상점은 그대로.
+       * 개체 객체에 붙어 있어서 필드 ↔ 창고 이동 · 강화 · recompute 를 거쳐도 유지된다. 조합 · 주문으로 새로 생긴 개체는 늘 false. */
+      locked: false,
+
       // 실효 스탯 — recompute 가 채운다
       attack: 0, attackSpeed: 0, range: 0, critRate: 0, critDamage: 0
     };
@@ -304,6 +308,19 @@
     return best;
   };
 
+  /* ---------- 잠금(세션 74) ---------- */
+  UnitManager.setLocked = function (unit, on) {
+    if (!unit) return false;
+    on = !!on;
+    if (!!unit.locked === on) return on;
+    unit.locked = on;
+    // 조합식 · 보유 목록 · 정보 바가 다시 그린다(RecipeManager 는 field:changed 를 듣는다)
+    RPD.bus.emit('unit:lock', { unit: unit, locked: on });
+    RPD.bus.emit('field:changed');
+    return on;
+  };
+  UnitManager.toggleLock = function (unit) { return this.setLocked(unit, !(unit && unit.locked)); };
+
   /* ---------- 판 이어하기(RunSave · 세션 70) ----------
    * 개체는 이것만 남긴다 — uid · 실효 스탯 · 스킬 상태는 create 로 다시 만들고 recompute 가 채운다.
    * targetChoice(칸에서 직접 고른 공격 대상)도 남긴다 — 사람이 고른 것이라 이어할 때 잃으면 안 된다. */
@@ -311,6 +328,7 @@
     var o = { defId: u.defId, level: u.level || 0, investedGold: u.investedGold || 0, kills: u.kills || 0,
               totalDamage: u.totalDamage || 0, goldEarned: u.goldEarned || 0 };
     if (u.targetChoice) o.targetChoice = u.targetChoice;
+    if (u.locked) o.locked = true;   // 잠금(세션 74) — 없으면 false(옛 저장도 그대로 읽힌다)
     return o;
   };
   UnitManager.revive = function (o) {
@@ -319,6 +337,7 @@
     u.level = o.level || 0; u.investedGold = o.investedGold || 0; u.kills = o.kills || 0;
     u.totalDamage = o.totalDamage || 0; u.goldEarned = o.goldEarned || 0;
     if (o.targetChoice) u.targetChoice = o.targetChoice;
+    u.locked = !!o.locked;
     applyTargeting(u);
     this.recompute(u, 0);
     return u;

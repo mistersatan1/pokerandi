@@ -455,6 +455,9 @@
         handled = !!(sel && sel.unit && RPD.UnitManager.cycleTargeting(sel.unit));
       } else if (key === 'f') {
         handled = clickIf(document.querySelector('#ownedPop:not([hidden]) [data-act="deploy"]'));
+      } else if (key === 'l') {
+        // 잠금 — 고른 칸의 포켓몬을 재료 · 방출에서 빼거나 되돌린다
+        handled = clickIf(document.getElementById('btnLock'));
       } else if (key === 'x' || key === 'delete') {
         var slot = RPD.FieldManager.getSelected();
         handled = slot && slot.unit

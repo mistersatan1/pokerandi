@@ -1249,6 +1249,104 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
   report.push({ hud: m5Report });
   if (m5Problems.length) process.exitCode = 1;
 
+  /* ㉑ 포켓몬 잠금(세션 74) — 갤럭시 S24 세로(실제 손가락) + PC. 잠근 포켓몬: 필드 🔒 · 정보 바 [잠금] · 방출 막힘 · 조합식 줄 "0/1 🔒1".
+   * 어긋나면 도구가 실패로 끝난다. 캡처: 21_lock_{portrait|pc}_a_field · 21_lock_{portrait|pc}_b_recipe */
+  const lkProblems = [], lkReport = {};
+  const lkSetup = () => {
+    const R = window.RPD, F = R.FieldManager;
+    const rec = R.RecipeData.list.find(x => x.materials.length === 2 && x.materials[0] !== x.materials[1] && x.materials.every(m => R.PokemonData.get(m).summon && R.PokemonData.get(m).tier === 'T1'));
+    const free = F.slots.find(x => x.unlocked && !x.blocked && !x.unit);
+    F.place(free.index, R.UnitManager.create(rec.materials[0]));
+    const b = R.UnitManager.create(rec.materials[1]); R.StorageManager.add(b); R.UnitManager.setLocked(b, true);   // 필드엔 하나, 둘째는 창고에서 잠김
+    R.RecipeManager.refresh();
+    R.bus.emit('field:changed', {}); R.bus.emit('storage:changed', R.StorageManager.units);
+    return { id: rec.id, a: rec.materials[0], b: rec.materials[1], slot: F.slots.find(x => x.unit && x.unit.defId === 'charizard').index };
+  };
+  const lkRowProbe = () => {
+    const rows = [...document.querySelectorAll('#recipeList .rrow')].filter(r => r.querySelector('.rmat__lk'));
+    return rows.map(r => ({ txt: r.querySelector('.rmat.is-missing .rmat__n') ? r.querySelector('.rmat.is-missing .rmat__n').textContent.replace(/\s+/g, '') : '', lk: r.querySelector('.rmat__lk').textContent.trim() }));
+  };
+  {
+    const bad = w => lkProblems.push(w);
+    // ---- 세로 휴대폰 ----
+    const lctx = await browser.newContext({ ...devices['Galaxy S24'], defaultBrowserType: undefined });
+    const lp = await lctx.newPage();
+    const le = [];
+    lp.on('pageerror', e => le.push(e.message));
+    await lp.goto(URL); await lp.waitForTimeout(1000);
+    await lp.evaluate(tbPrep, { wave: 7 });
+    await lp.waitForTimeout(600);
+    await lp.evaluate(() => window.RPD.Loop.setPaused(true));
+    const info = await lp.evaluate(lkSetup);
+    await lp.evaluate(i => window.RPD.FieldManager.select(i.slot), info); await lp.waitForTimeout(200);
+    await lp.tap('#infoBar [data-ib="lock"]'); await lp.waitForTimeout(250);
+    const pr = await lp.evaluate(i => {
+      const R = window.RPD, u = R.FieldManager.get(i.slot).unit, bar = document.getElementById('infoBar');
+      const bs = [...bar.querySelectorAll('.ib__btn')].map(b => { const r = b.getBoundingClientRect(); return { a: b.getAttribute('data-ib'), w: Math.round(r.width), h: Math.round(r.height) }; });
+      const who = bar.querySelector('.ib__who'), br = bar.getBoundingClientRect();
+      const sell = bar.querySelector('[data-ib="sell"]');
+      return { locked: u.locked, bs, overflowX: bar.scrollWidth > bar.clientWidth + 1, sellDisabled: sell.disabled, sellText: sell.textContent.replace(/\s+/g, ''),
+        nameCut: [...bar.querySelectorAll('.ib__name, .ib__meta')].some(n => n.scrollWidth > n.clientWidth + 1), whoW: Math.round(who.getBoundingClientRect().width),
+        pageOverflow: document.documentElement.scrollWidth > window.innerWidth + 1 };
+    }, info);
+    if (!pr.locked) bad('세로: [잠금] 을 눌렀는데 안 잠겼다');
+    if (!pr.sellDisabled) bad('세로: 잠겼는데 [방출] 이 안 막혔다');
+    const lockBtn = pr.bs.find(b => b.a === 'lock');
+    if (!lockBtn || lockBtn.w < 40 || lockBtn.h < 40) bad('세로: [잠금] 버튼 크기 ' + JSON.stringify(lockBtn));
+    if (pr.overflowX) bad('세로: 정보 바가 가로로 넘친다');
+    if (pr.nameCut) bad('세로: 정보 바 글이 잘린다');
+    if (pr.pageOverflow) bad('세로: 화면이 가로로 밀린다');
+    await lp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '21_lock_portrait_a_field.png') });
+    await lp.evaluate(() => window.RPD.HudPanels.setDrawer('recipes')); await lp.waitForTimeout(450);
+    await lp.evaluate(() => { const b = document.querySelector('#recipeFilter [data-filter="all"]'); if (b) b.click(); });
+    await lp.waitForTimeout(300);
+    const rows = await lp.evaluate(lkRowProbe);
+    if (!rows.some(r => /^0\/1/.test(r.txt) && /🔒1/.test(r.lk))) bad('세로: 조합식 줄에 "0/1 🔒1" 이 없다 ' + JSON.stringify(rows.slice(0, 3)));
+    await lp.evaluate(() => { const r = document.querySelector('#recipeList .rrow:has(.rmat__lk)'); if (r) r.scrollIntoView({ block: 'center' }); });
+    await lp.waitForTimeout(200);
+    await lp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '21_lock_portrait_b_recipe.png') });
+    await lp.tap('#infoBar [data-ib="lock"]').catch(() => {});
+    lkReport.portrait = { bar: pr, rows: rows.slice(0, 2) };
+    if (le.length) bad('세로 페이지 오류: ' + le[0]);
+    await lctx.close();
+
+    // ---- PC ----
+    const pctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+    const pp = await pctx.newPage();
+    const pe = [];
+    pp.on('pageerror', e => pe.push(e.message));
+    await pp.goto(URL); await pp.waitForTimeout(1000);
+    await pp.evaluate(tbPrep, { wave: 7 });
+    await pp.waitForTimeout(600);
+    await pp.evaluate(() => window.RPD.Loop.setPaused(true));
+    const pinfo = await pp.evaluate(lkSetup);
+    await pp.evaluate(i => window.RPD.FieldManager.select(i.slot), pinfo); await pp.waitForTimeout(200);
+    await pp.keyboard.press('l'); await pp.waitForTimeout(250);   // 단축키 L
+    const pc = await pp.evaluate(i => {
+      const R = window.RPD, u = R.FieldManager.get(i.slot).unit;
+      return { locked: u.locked, sellDisabled: document.getElementById('btnSell').disabled, sellText: document.getElementById('sellValue').textContent,
+        lockName: document.getElementById('lockName').textContent, card: (document.getElementById('slotCard') || document.body).textContent.indexOf('🔒') >= 0 };
+    }, pinfo);
+    if (!pc.locked) bad('PC: L 키로 안 잠겼다');
+    if (!pc.sellDisabled || pc.sellText.indexOf('잠금 해제 후 방출') < 0) bad('PC: 방출 막힘/안내 ' + JSON.stringify(pc));
+    if (pc.lockName !== '잠금 해제') bad('PC: 버튼 글 ' + pc.lockName);
+    await pp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '21_lock_pc_a_field.png') });
+    await pp.evaluate(() => { const b = document.querySelector('#recipeFilter [data-filter="all"]'); if (b) b.click(); });
+    await pp.waitForTimeout(300);
+    const prow = await pp.evaluate(lkRowProbe);
+    if (!prow.some(r => /^0\/1/.test(r.txt) && /🔒1/.test(r.lk))) bad('PC: 조합식 줄에 "0/1 🔒1" 이 없다 ' + JSON.stringify(prow.slice(0, 3)));
+    await pp.evaluate(() => { const r = document.querySelector('#recipeList .rrow:has(.rmat__lk)'); if (r) r.scrollIntoView({ block: 'center' }); });
+    await pp.waitForTimeout(200);
+    await pp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '21_lock_pc_b_recipe.png') });
+    lkReport.pc = { state: pc, rows: prow.slice(0, 2) };
+    if (pe.length) bad('PC 페이지 오류: ' + pe[0]);
+    await pctx.close();
+  }
+  console.log('lock', JSON.stringify(lkReport));
+  console.log('lock problems', JSON.stringify(lkProblems));
+  report.push({ lock: lkReport });
+  if (lkProblems.length) process.exitCode = 1;
+
   /* ---------- 홈 화면 앱(세션 53 · 모바일 ④ 세션 71) ----------
    * 설치 · 오프라인은 인터넷 주소에서만 되니, 원본 폴더(dist 아님)를 이 자리에서 작은 웹 서버로 띄워 연다(localhost 는 https 와 같게 친다).
    * 확인: 크롬이 "설치할 수 있다"고 보는가(설치 불가 사유 0) · 서비스 워커 · 오프라인 저장 · 인터넷을 끊고 다시 열어도 켜지고 처음 보는 그림이 나오는가 ·

@@ -35,17 +35,18 @@
   };
 
   /* 재료를 필드·창고에서 찾는다. 같은 재료 두 번이면 두 마리. 창고 먼저. */
-  function findUnits(materials) {
+  /* 잠긴 개체(세션 74)는 재료로 안 쓴다 — withLocked 면 잠금을 무시하고 찾는다("잠금 때문에 안 된다"를 알리려고) */
+  function findUnits(materials, withLocked) {
     var SM = RPD.StorageManager, F = RPD.FieldManager;
     var usedS = {}, usedF = {}, out = [];
     for (var i = 0; i < materials.length; i++) {
       var want = materials[i], found = null;
       for (var k = 0; k < SM.units.length && !found; k++) {
-        if (!usedS[k] && SM.units[k].defId === want) { usedS[k] = true; found = { where: 'store', unit: SM.units[k] }; }
+        if (!usedS[k] && (withLocked || !SM.units[k].locked) && SM.units[k].defId === want) { usedS[k] = true; found = { where: 'store', unit: SM.units[k] }; }
       }
       for (var s = 0; s < F.slots.length && !found; s++) {
         var u = F.slots[s].unit;
-        if (!usedF[s] && u && u.defId === want) { usedF[s] = true; found = { where: 'field', slot: s, unit: u }; }
+        if (!usedF[s] && u && (withLocked || !u.locked) && u.defId === want) { usedF[s] = true; found = { where: 'field', slot: s, unit: u }; }
       }
       if (!found) return null;
       out.push(found);
@@ -59,7 +60,7 @@
       if (this.transcendShards < 1) return { ok: false, reason: 'NO_SHARD' };
     }
     var found = findUnits(spell.materials);
-    if (!found) return { ok: false, reason: 'NOT_READY' };
+    if (!found) return { ok: false, reason: findUnits(spell.materials, true) ? 'LOCKED' : 'NOT_READY' };
     return { ok: true, found: found };
   };
 

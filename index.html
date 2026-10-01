@@ -75,6 +75,7 @@
             <dt>S</dt><dd>창고로 (고른 칸)</dd>
             <dt>F</dt><dd>필드로 (보유 창에서 고른 포켓몬)</dd>
             <dt>X · Del</dt><dd>방출 (고른 칸 · 보유 창)</dd>
+            <dt>L</dt><dd>잠금 · 잠금 해제</dd>
             <dt>C</dt><dd>조합 (가장 좋은 것)</dd>
             <dt>1 · 2 · 3</dt><dd>배속</dd>
             <dt>P</dt><dd>일시정지</dd>
@@ -264,7 +265,8 @@
               <tr><td><kbd>T</kbd></td><td>공격 대상 바꾸기 — 출구 앞 · 보스 · 센 적 · 약한 적 · 갓 나온 순서. 정보 카드에서 칩을 눌러도 되고, [모두 이렇게]는 모든 포켓몬(앞으로 뽑을 것 포함)에 적용</td></tr>
               <tr><td><kbd>S</kbd></td><td>창고로 — 필드에서 고른 포켓몬</td></tr>
               <tr><td><kbd>F</kbd></td><td>필드로 — 보유 창에서 고른 포켓몬을 빈 칸에</td></tr>
-              <tr><td><kbd>X</kbd> <kbd>Del</kbd></td><td>방출 — 고른 칸, 없으면 보유 창의 창고 개체</td></tr>
+              <tr><td><kbd>X</kbd> <kbd>Del</kbd></td><td>방출 — 고른 칸, 없으면 보유 창의 창고 개체 (잠근 포켓몬은 안 됨)</td></tr>
+              <tr><td><kbd>L</kbd></td><td>잠금 — 고른 칸(또는 보유 창에서 고른 개체)을 재료 · 방출에서 제외 / 해제</td></tr>
               <tr><td><kbd>C</kbd></td><td>조합 — 지금 만들 수 있는 것 중 가장 높은 등급</td></tr>
               <tr><td><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></td><td>게임 속도</td></tr>
               <tr><td><kbd>P</kbd></td><td>일시정지 · 이어하기</td></tr>
@@ -370,6 +372,12 @@
               <span class="ico ico--box"></span>
               <span class="sidebtn__name">창고로</span>
               <span class="sidebtn__cost" id="storeHint">—</span>
+            </button>
+            <button type="button" class="sidebtn" id="btnLock" disabled>
+              <kbd class="kbd">L</kbd>
+              <span class="ico ico--lock" aria-hidden="true">🔒</span>
+              <span class="sidebtn__name" id="lockName">잠금</span>
+              <span class="sidebtn__cost" id="lockHint">칸 선택</span>
             </button>
             <button type="button" class="sidebtn sidebtn--danger" id="btnSell" disabled>
               <kbd class="kbd">X</kbd>

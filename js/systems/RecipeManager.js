@@ -27,16 +27,31 @@
 
   /* 필드와 창고를 합쳐서 센다. 창고에 있는 재료도 조합에 쓸 수 있어야
    * "일단 모아 두고 나중에 조합한다"가 성립한다. */
+  /* 잠금(세션 74) — 잠긴 개체는 재료로 안 쓰이니 "쓸 수 있는 수"에서 빼고, 따로 센다("0/1 🔒1" 표시 · 모자란 이유 안내).
+   * 메타몽 대체도 같다: 잠긴 메타몽은 대신하지 않는다. */
+  function allUnits() {
+    return RPD.StorageManager ? RPD.StorageManager.allUnits() : F.getUnits();
+  }
   function countOnField() {
     var counts = {};
-    var units = RPD.StorageManager
-      ? RPD.StorageManager.allUnits()
-      : F.getUnits();
+    var units = allUnits();
     for (var i = 0; i < units.length; i++) {
+      if (units[i].locked) continue;
       counts[units[i].defId] = (counts[units[i].defId] || 0) + 1;
     }
     return counts;
   }
+  function countLocked() {
+    var counts = {};
+    var units = allUnits();
+    for (var i = 0; i < units.length; i++) {
+      if (!units[i].locked) continue;
+      counts[units[i].defId] = (counts[units[i].defId] || 0) + 1;
+    }
+    return counts;
+  }
+  /* UI 가 쓴다 — { usable: 종별 쓸 수 있는 수, locked: 종별 잠긴 수 } */
+  RecipeManager.countsOf = function () { return { usable: countOnField(), locked: countLocked() }; };
 
   /* 재료를 보유 개체에 하나씩 대응시킨다.
    * 안흔함은 같은 흔함 2마리(캐터피 ×2)라, 재료 칸마다 따로 세야 한다 —
@@ -48,10 +63,10 @@
     return !!d && d.tier === 'T1';
   }
 
-  function resolveMaterials(recipe, counts) {
-    var have = [], missing = [], owned = [], viaDitto = [], usedAs = [];
+  function resolveMaterials(recipe, counts, lockedCounts) {
+    var have = [], missing = [], owned = [], viaDitto = [], usedAs = [], lockedShort = [];
     var n = recipe.materials.length, i;
-    for (i = 0; i < n; i++) { owned.push(false); viaDitto.push(false); usedAs.push(null); }
+    for (i = 0; i < n; i++) { owned.push(false); viaDitto.push(false); usedAs.push(null); lockedShort.push(0); }
     for (i = 0; i < n; i++) {
       var m = recipe.materials[i];
       if (counts[m] > 0) { have.push(m); counts[m] -= 1; owned[i] = true; usedAs[i] = m; }
@@ -68,7 +83,19 @@
         }
       }
     }
-    return { have: have, missing: missing, owned: owned, viaDitto: viaDitto, usedAs: usedAs };
+    /* 잠금 때문에 모자란 칸 — 남은 빈 칸마다 그 종의 잠긴 개체가 있으면 그만큼("0/1 🔒1"). 흔함이 모자란데 잠긴 메타몽만 있으면 그것도 한 번 */
+    var lockedLeft = {}, k;
+    for (k in (lockedCounts || {})) lockedLeft[k] = lockedCounts[k];
+    var dittoLockNoted = false;
+    for (i = 0; i < n; i++) {
+      if (owned[i]) continue;
+      var want = recipe.materials[i];
+      if (lockedLeft[want] > 0) { lockedShort[i] = 1; lockedLeft[want] -= 1; }
+      else if (!dittoLockNoted && isCommon(want) && lockedLeft[DITTO] > 0 && recipe.materials.indexOf(DITTO) < 0 && !viaDitto.some(Boolean)) {
+        lockedShort[i] = 1; lockedLeft[DITTO] -= 1; dittoLockNoted = true;
+      }
+    }
+    return { have: have, missing: missing, owned: owned, viaDitto: viaDitto, usedAs: usedAs, lockedShort: lockedShort };
   }
 
   /* ---------- 목록 만들기 ---------- */
@@ -80,11 +107,12 @@
     var round = RPD.GameManager.wave || 1;
     var list = RPD.RecipeData.availableAt(round);
     var out = [];
+    var lockedCounts = countLocked();
 
     for (var i = 0; i < list.length; i++) {
       var recipe = list[i];
       var counts = countOnField();
-      var r = resolveMaterials(recipe, counts);
+      var r = resolveMaterials(recipe, counts, lockedCounts);
       var result = RPD.PokemonData.get(recipe.id);
       if (!result) continue;
 
@@ -99,9 +127,10 @@
         discovered: !!this.discovered[recipe.id],
         materials: recipe.materials.map(function (m, idx) {
           return { id: m, name: RPD.RecipeData.labelOf(m), owned: r.owned[idx], viaDitto: r.viaDitto[idx],
-                   hidden: RPD.PokemonData.isHidden(m), usedAs: r.usedAs[idx] };
+                   hidden: RPD.PokemonData.isHidden(m), usedAs: r.usedAs[idx], lockedShort: r.lockedShort[idx] };
         }),
         missingCount: r.missing.length,
+        lockedShortCount: r.lockedShort.reduce(function (a, b) { return a + b; }, 0),   // 잠금 때문에 모자란 칸 수
         ready: r.missing.length === 0
       });
     }
@@ -162,7 +191,7 @@
       // 창고 먼저(필드에서 싸우는 개체를 덜 빼앗는다)
       if (SM) {
         for (var k = 0; k < SM.units.length; k++) {
-          if (usedStore[k]) continue;
+          if (usedStore[k] || SM.units[k].locked) continue;   // 잠긴 개체는 재료가 아니다(세션 74)
           if (SM.units[k].defId === want) { found = { where: 'store', at: k }; usedStore[k] = true; break; }
         }
       }
@@ -172,7 +201,7 @@
         for (var s = 0; s < F.slots.length; s++) {
           if (usedField[s]) continue;
           var unit = F.slots[s].unit;
-          if (unit && unit.defId === want && (bestS < 0 || unit.level < F.slots[bestS].unit.level)) bestS = s;
+          if (unit && !unit.locked && unit.defId === want && (bestS < 0 || unit.level < F.slots[bestS].unit.level)) bestS = s;
         }
         if (bestS >= 0) { found = { where: 'field', at: bestS }; usedField[bestS] = true; }
       }
@@ -188,13 +217,13 @@
     var ditto = null;
     if (SM) {
       for (var d = 0; d < SM.units.length; d++) {
-        if (!usedStore[d] && SM.units[d].defId === DITTO) { ditto = { where: 'store', at: d, ditto: true }; break; }
+        if (!usedStore[d] && !SM.units[d].locked && SM.units[d].defId === DITTO) { ditto = { where: 'store', at: d, ditto: true }; break; }
       }
     }
     if (!ditto) {
       for (var f = 0; f < F.slots.length; f++) {
         var u = F.slots[f].unit;
-        if (!usedField[f] && u && u.defId === DITTO) { ditto = { where: 'field', at: f, ditto: true }; break; }
+        if (!usedField[f] && u && !u.locked && u.defId === DITTO) { ditto = { where: 'field', at: f, ditto: true }; break; }
       }
     }
     if (!ditto) return null;

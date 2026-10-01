@@ -56,7 +56,10 @@
    * tiers 는 오름차순. SynergyManager 가 보유 수 이하의 최대 단계를 적용한다.
    * bonus 의 키는 SynergyManager.bonus 가 그대로 들고 있는 이름과 같다.
    */
-  /* 시너지 — 10종만 둔다.
+  /* 세션 77: 시너지를 "서로 다른 종" 기준으로 세게 되어 임계값을 한 칸씩 낮췄다(조정안 B — 상위 단계 −1, 독 · 노말 첫 단계 3→2).
+   * 측정은 VERSION.md 세션 77. 아래 설명 속 "몇 마리" 는 옛 마리 기준 때 적은 것이다.
+   *
+   * 시너지 — 10종만 둔다.
    *
    * v1 은 17종이었는데 30판 측정에서 6종이 한 번도 안 켜졌다. 표에만 있고
    * 플레이어가 영영 못 보는 규칙은 없는 것보다 나쁘다. 화면만 복잡해진다.
@@ -68,29 +71,29 @@
   RPD.Synergies = {
     FIRE: [
       { count: 2, label: '화상 피해 +40%', bonus: { burnMul: 1.4 } },
-      { count: 4, label: '화상 피해 +100%', bonus: { burnMul: 2.0 } }
+      { count: 3, label: '화상 피해 +100%', bonus: { burnMul: 2.0 } }
     ],
     WATER: [
       { count: 2, label: '감속 +10%p', bonus: { slowAdd: 0.10 } },
-      { count: 4, label: '감속 +22%p · 지속 +0.8초', bonus: { slowAdd: 0.22, slowDurationAdd: 0.8 } }
+      { count: 3, label: '감속 +22%p · 지속 +0.8초', bonus: { slowAdd: 0.22, slowDurationAdd: 0.8 } }
     ],
     ELECTRIC: [
       { count: 2, label: '연쇄 대상 +1', bonus: { chainAdd: 1 } },
-      { count: 4, label: '연쇄 대상 +2 · 감쇠 완화', bonus: { chainAdd: 2, chainDecayAdd: 0.2 } }
+      { count: 3, label: '연쇄 대상 +2 · 감쇠 완화', bonus: { chainAdd: 2, chainDecayAdd: 0.2 } }
     ],
     GROUND: [
       { count: 2, label: '광역 반경 +25%', bonus: { splashRadiusMul: 1.25 } },
-      { count: 4, label: '광역 반경 +55% · 부수 피해 +25%', bonus: { splashRadiusMul: 1.55, splashDamageAdd: 0.25 } }
+      { count: 3, label: '광역 반경 +55% · 부수 피해 +25%', bonus: { splashRadiusMul: 1.55, splashDamageAdd: 0.25 } }
     ],
     FLYING: [
       // 세션 49: +12 · 26 · 42% → +8 · 16 · 26%. 팀 전체 공속이라 94% 의 보드에서 켜져 비행 종 실전 피해가 등급 중앙의 1.6~2.8배였다.
       { count: 2, label: '공격속도 +8%', bonus: { attackSpeedMul: 1.08 } },
-      { count: 4, label: '공격속도 +16%', bonus: { attackSpeedMul: 1.16 } },
-      { count: 6, label: '공격속도 +26%', bonus: { attackSpeedMul: 1.26 } }
+      { count: 3, label: '공격속도 +16%', bonus: { attackSpeedMul: 1.16 } },
+      { count: 5, label: '공격속도 +26%', bonus: { attackSpeedMul: 1.26 } }
     ],
     FIGHTING: [
       { count: 2, label: '보스 피해 +20%', bonus: { bossDamageAdd: 0.20 } },
-      { count: 4, label: '보스 피해 +45%', bonus: { bossDamageAdd: 0.45 } }
+      { count: 3, label: '보스 피해 +45%', bonus: { bossDamageAdd: 0.45 } }
     ],
     GRASS: [
       { count: 2, label: '골드 획득 +15%', bonus: { goldMul: 1.15 } },
@@ -101,33 +104,33 @@
      * 독 21종 · 노말 11종 · 벌레 10종 · 페어리 4종 — 뽑히는 족족 "시너지 없음"이었다.
      * 효과는 각 타입의 고유 효과(TypeParams)와 같은 축을 키운다. */
     POISON: [
-      { count: 3, label: '독 피해 +25%',            bonus: { poisonMul: 1.25 } },
-      { count: 6, label: '독 피해 +55% · 최대 6스택', bonus: { poisonMul: 1.55, poisonStackAdd: 1 } },
-      { count: 9, label: '독 피해 +95% · 최대 7스택', bonus: { poisonMul: 1.95, poisonStackAdd: 2 } }
+      { count: 2, label: '독 피해 +25%',            bonus: { poisonMul: 1.25 } },
+      { count: 5, label: '독 피해 +55% · 최대 6스택', bonus: { poisonMul: 1.55, poisonStackAdd: 1 } },
+      { count: 8, label: '독 피해 +95% · 최대 7스택', bonus: { poisonMul: 1.95, poisonStackAdd: 2 } }
     ],
     BUG: [
       { count: 2, label: '소환 비용 -10%', bonus: { summonCostMul: 0.90 } },
-      { count: 4, label: '소환 비용 -20%', bonus: { summonCostMul: 0.80 } },
-      { count: 6, label: '소환 비용 -32%', bonus: { summonCostMul: 0.68 } }
+      { count: 3, label: '소환 비용 -20%', bonus: { summonCostMul: 0.80 } },
+      { count: 5, label: '소환 비용 -32%', bonus: { summonCostMul: 0.68 } }
     ],
     NORMAL: [
-      { count: 3, label: '치명타율 +10%',              bonus: { critRateAdd: 0.10 } },
-      { count: 6, label: '치명타율 +20% · 피해 +25%',   bonus: { critRateAdd: 0.20, critDamageAdd: 0.25 } },
-      { count: 9, label: '치명타율 +32% · 피해 +50%',   bonus: { critRateAdd: 0.32, critDamageAdd: 0.50 } }
+      { count: 2, label: '치명타율 +10%',              bonus: { critRateAdd: 0.10 } },
+      { count: 5, label: '치명타율 +20% · 피해 +25%',   bonus: { critRateAdd: 0.20, critDamageAdd: 0.25 } },
+      { count: 8, label: '치명타율 +32% · 피해 +50%',   bonus: { critRateAdd: 0.32, critDamageAdd: 0.50 } }
     ],
     /* 1세대 확장으로 개체가 생긴 타입 — 에스퍼·고스트·드래곤은 되살리고 바위·얼음·강철을 새로 둔다. */
     PSYCHIC: [
       { count: 2, label: '방어 무시 20%', bonus: { armorPierceRatio: 0.20 } },
-      { count: 4, label: '방어 무시 40%', bonus: { armorPierceRatio: 0.40 } },
-      { count: 6, label: '방어 무시 60%', bonus: { armorPierceRatio: 0.60 } }
+      { count: 3, label: '방어 무시 40%', bonus: { armorPierceRatio: 0.40 } },
+      { count: 5, label: '방어 무시 60%', bonus: { armorPierceRatio: 0.60 } }
     ],
     ROCK: [
       { count: 2, label: '광역 피해 +15%', bonus: { splashDamageAdd: 0.15 } },
-      { count: 4, label: '광역 피해 +35%', bonus: { splashDamageAdd: 0.35 } }
+      { count: 3, label: '광역 피해 +35%', bonus: { splashDamageAdd: 0.35 } }
     ],
     ICE: [
       { count: 2, label: '빙결 확률 +5%', bonus: { freezeChanceAdd: 0.05 } },
-      { count: 4, label: '빙결 확률 +10% · 빙결 +0.5초', bonus: { freezeChanceAdd: 0.10, freezeDurationAdd: 0.5 } }
+      { count: 3, label: '빙결 확률 +10% · 빙결 +0.5초', bonus: { freezeChanceAdd: 0.10, freezeDurationAdd: 0.5 } }
     ],
     GHOST: [
       { count: 2, label: '체력 8% 이하 즉사', bonus: { executeAdd: 0.08 } },
@@ -142,7 +145,7 @@
     ],
     FAIRY: [
       { count: 2, label: '버프 효과 +30%',           bonus: { auraMul: 1.30 } },
-      { count: 4, label: '버프 효과 +60% · 라이프 보호막', bonus: { auraMul: 1.60, lifeShield: 10 } }
+      { count: 3, label: '버프 효과 +60% · 라이프 보호막', bonus: { auraMul: 1.60, lifeShield: 10 } }
     ]
   };
 

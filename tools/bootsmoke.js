@@ -2609,6 +2609,18 @@ check('같은 종은 강화 레벨 · 잠금 · 위치가 달라도 1종 — 다
   if (!t || t.types.indexOf('FIRE') < 0) throw new Error('초월 리자몽 타입');
 });
 
+check('임계값은 조정안 B — 상위 단계 −1 · 독 · 노말 첫 단계 2(세션 77)', () => {
+  const want = { FIRE: [2, 3], WATER: [2, 3], ELECTRIC: [2, 3], GROUND: [2, 3], FLYING: [2, 3, 5], FIGHTING: [2, 3], GRASS: [2, 3], POISON: [2, 5, 8],
+    BUG: [2, 3, 5], NORMAL: [2, 5, 8], PSYCHIC: [2, 3, 5], ROCK: [2, 3], ICE: [2, 3], GHOST: [2, 3], DRAGON: [2, 3], STEEL: [2], FAIRY: [2, 3] };
+  const bad = Object.keys(want).filter(t => RPD.Synergies[t].map(x => x.count).join() !== want[t].join());
+  if (bad.length || Object.keys(RPD.Synergies).length !== Object.keys(want).length) throw new Error('다른 임계값: ' + bad.join(', '));
+  synFresh();
+  synPut('pidgey', 1); synPut('pidgeotto', 1);
+  if (SY.countOf('FLYING') !== 2 || SY.bonus.attackSpeedMul <= 1) throw new Error('비행 2종이면 켜져야 한다');
+  synPut('pidgeot', 1);
+  if (syn('FLYING').tierIndex !== 1) throw new Error('비행 3종은 2단계: ' + syn('FLYING').tierIndex);
+});
+
 check('시너지 패널 — "비행 1/2" 와 "구구 ×2는 1종으로" 로 왜 안 켜졌는지 보인다', () => {
   synFresh();
   synPut('pidgey', 2);

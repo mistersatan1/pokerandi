@@ -1192,6 +1192,63 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
   report.push({ resume: m4Report });
   if (m4Problems.length) process.exitCode = 1;
 
+  /* ⑳ HUD 표시 버그 둘(세션 72) — PC. (a) 31~40R 에 "다음 보스 보상" 칩이 40R 초월의 조각까지 그려지는가 · 40R 보스를 잡으면 보상 카드가 뜨는가
+   * (b) 상단 "N R 뒤 등급" 이 소환 없이 라운드만 바뀌어도 맞는가(23R "2R 뒤 희귀함" → 61R 숨김). 어긋나면 도구가 실패로 끝난다.
+   * 캡처: 20_hud_a_next_reward_40R · 20_hud_b_reward_card_40R · 20_hud_c_next_unlock_23R · 20_hud_d_next_unlock_61R */
+  const m5Problems = [], m5Report = {};
+  {
+    const bad = w => m5Problems.push(w);
+    const c6 = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+    const p6 = await c6.newPage();
+    const e6 = [];
+    p6.on('pageerror', e => e6.push(e.message));
+    p6.on('console', m => { if (m.type() === 'error') e6.push(m.text()); });
+    await p6.goto(URL); await p6.waitForTimeout(1000);
+    await p6.evaluate(() => {
+      const R = window.RPD;
+      if (R.TutorialManager && R.TutorialManager.skip) R.TutorialManager.skip();
+      document.querySelectorAll('.modepick, .result, .help, .book').forEach(o => o.hidden = true);
+      R.RunSave.clear(); R.Game.startRun('NORMAL', 'NORMAL'); R.Loop.setPaused(true);
+      R.GameManager.life = 999;
+    });
+    const shot6 = n => p6.screenshot({ path: require('path').join(__dirname, '..', 'dist', '20_hud_' + n + '.png'), clip: { x: 0, y: 0, width: 1440, height: 330 } });
+    // (c) 23R — 소환 없이 라운드만 이동
+    await p6.evaluate(() => window.RPD.GameManager.setWave(23)); await p6.waitForTimeout(250);
+    m5Report.unlock23 = await p6.evaluate(() => { const n = document.getElementById('statNextUnlock'); return { hidden: n.hidden, text: n.textContent }; });
+    if (m5Report.unlock23.hidden || m5Report.unlock23.text !== '2R 뒤 희귀함') bad('23R 다음 해금: ' + JSON.stringify(m5Report.unlock23));
+    await shot6('c_next_unlock_23R');
+    // (d) 61R
+    await p6.evaluate(() => window.RPD.GameManager.setWave(61)); await p6.waitForTimeout(250);
+    m5Report.unlock61 = await p6.evaluate(() => { const n = document.getElementById('statNextUnlock'); return { hidden: n.hidden || getComputedStyle(n).display === 'none', text: n.textContent }; });
+    if (!m5Report.unlock61.hidden) bad('61R 인데 다음 해금이 보인다: ' + JSON.stringify(m5Report.unlock61));
+    await shot6('d_next_unlock_61R');
+    // (a) 33R — 다음 보스 보상(40R · 초월의 조각)
+    await p6.evaluate(() => window.RPD.GameManager.setWave(33)); await p6.waitForTimeout(250);
+    m5Report.chip = await p6.evaluate(() => { const n = document.getElementById('nextReward'); return { shown: getComputedStyle(n).display !== 'none', text: n.textContent.replace(/\s+/g, ' ') }; });
+    if (!m5Report.chip.shown || !/40R 보스 보상/.test(m5Report.chip.text) || !/초월의 조각/.test(m5Report.chip.text)) bad('33R 다음 보스 보상 칩: ' + JSON.stringify(m5Report.chip));
+    await shot6('a_next_reward_40R');
+    // (b) 40R 보스 처치 — 실제로 보스를 잡아 보상 카드(PC)가 뜨는가
+    m5Report.card = await p6.evaluate(() => new Promise(res => {
+      const R = window.RPD;
+      R.GameManager.setWave(40); R.WaveManager.startRound(40);
+      R.Loop.setPaused(false);
+      setTimeout(() => {
+        const boss = R.EnemyManager.enemies.find(e => e.isBoss);   // 라운드가 열린 뒤 실제 보스(방어가 있어 넉넉히 때린다)
+        if (boss) R.EnemyManager.damage(boss, boss.maxHp * 10, {});
+        setTimeout(() => { const c = document.getElementById('rewardPop'); res({ boss: !!boss, shown: !c.hidden, text: c.textContent.replace(/\s+/g, ' ') }); }, 400);
+      }, 1500);   // 보스가 나올 때까지(스폰 간격)
+    }));
+    if (!m5Report.card.shown || !/초월의 조각/.test(m5Report.card.text)) bad('40R 보스 처치 보상 카드: ' + JSON.stringify(m5Report.card));
+    await p6.screenshot({ path: require('path').join(__dirname, '..', 'dist', '20_hud_b_reward_card_40R.png') });
+    m5Report.errors = e6.slice(0, 3);
+    if (e6.length) bad('페이지 오류: ' + e6[0]);
+    await c6.close();
+  }
+  console.log('hud', JSON.stringify(m5Report));
+  console.log('hud problems', JSON.stringify(m5Problems));
+  report.push({ hud: m5Report });
+  if (m5Problems.length) process.exitCode = 1;
+
   /* ---------- 홈 화면 앱(세션 53 · 모바일 ④ 세션 71) ----------
    * 설치 · 오프라인은 인터넷 주소에서만 되니, 원본 폴더(dist 아님)를 이 자리에서 작은 웹 서버로 띄워 연다(localhost 는 https 와 같게 친다).
    * 확인: 크롬이 "설치할 수 있다"고 보는가(설치 불가 사유 0) · 서비스 워커 · 오프라인 저장 · 인터넷을 끊고 다시 열어도 켜지고 처음 보는 그림이 나오는가 ·

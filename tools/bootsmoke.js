@@ -1750,6 +1750,41 @@ check('앱을 벗어나면(visibilitychange hidden · pagehide) 일시정지 + �
   MS.forceMobile = false;
 });
 
+/* ---------- 다음 해금 표시 — 라운드가 바뀌면 바로 갱신(세션 72) ---------- */
+check('상단 "N R 뒤 등급" — 소환 없이 라운드만 바뀌어도 맞게 갱신된다(23R "2R 뒤 희귀함" → 61R 는 숨김)', () => {
+  const GM = RPD.GameManager, el = nodes.statNextUnlock;
+  RPD.Game.restart();
+  GM.setWave(23);
+  if (el.hidden || el.textContent !== '2R 뒤 희귀함') throw new Error('23R: ' + el.hidden + ' ' + el.textContent);
+  GM.setWave(24);
+  if (el.textContent !== '1R 뒤 희귀함') throw new Error('24R(소환 없이): ' + el.textContent);
+  GM.setWave(61);
+  if (!el.hidden) throw new Error('61R 인데 남아 있다: ' + el.textContent);
+  GM.setWave(33);
+  if (!el.hidden) throw new Error('33R(전설까지 열림): ' + el.textContent);
+  GM.setWave(1);
+  if (el.hidden || el.textContent !== '8R 뒤 안흔함') throw new Error('1R: ' + el.hidden + ' ' + el.textContent);
+  RPD.Game.restart();
+});
+
+check('PC 보스 보상 칩 · 카드 — 40R 보상(초월의 조각)도 오류 없이 그려진다(31~40R 칩 · 40R 처치 카드)', () => {
+  const RM = RPD.RewardManager, GM = RPD.GameManager, H = RPD.HudPanels;
+  const errs = [], real = console.error; console.error = (...a) => errs.push(a.join(' '));
+  try {
+    RPD.Game.restart(); MS.forceMobile = false;
+    GM.setWave(33);                                       // 다음 보스 = 40R
+    const chip = String(nodes.nextReward.innerHTML);
+    if (chip.indexOf('40R 보스 보상') < 0 || chip.indexOf('초월의 조각') < 0) throw new Error('다음 보상 칩: ' + chip.slice(0, 160));
+    const entry = { wave: 40, items: RM.rewardsFor(40, GM.mode).slice() };
+    if (!entry.items.some(i => i.kind === 'item')) throw new Error('전제: 40R 보상에 item 이 없다');
+    nodes.rewardPop.hidden = true;
+    RPD.bus.emit('reward:granted', entry);
+    if (nodes.rewardPop.hidden || String(nodes.rewardPop.innerHTML).indexOf('초월의 조각') < 0) throw new Error('40R 처치 카드가 안 떴다');
+    nodes.rewardPop.hidden = true;
+  } finally { console.error = real; RPD.Game.restart(); }
+  if (errs.length) throw new Error('오류: ' + errs[0].slice(0, 140));
+});
+
 /* ---------- 판 이어하기(세션 70) ---------- */
 console.log('\n판 이어하기 — 자동 저장 · 복원');
 const RS = RPD.RunSave, RUI = RPD.ResumeUI;

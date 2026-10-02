@@ -432,3 +432,11 @@
   .lgcard__plus { display: none; }
   .lgcard__name { font-size: 15px; }
 }
+
+/* 보스 이름표(세션 86) — 휴대폰은 작게 · 한 줄씩(필드 위쪽을 덜 가리게) */
+@media (max-width: 1099.98px) {
+  .bossintro { min-width: 0; width: max-content; max-width: 88%; padding: 5px 14px 6px; }
+  .bossintro__name { font-size: 17px; }
+  .bossintro__threat { font-size: 10.5px; }
+  .bossintro__kicker { font-size: 9.5px; }
+}

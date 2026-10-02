@@ -94,6 +94,7 @@
     el.dexBonus = $('dexBonus');
 
     el.reveal = $('summonReveal');
+    el.craftCard = $('craftCard');
     el.revealRarity = $('revealRarity');
     el.revealArt = $('revealArt');
     el.revealName = $('revealName');
@@ -2276,25 +2277,12 @@
     var tierInfo = RPD.Tiers[p.tier] || RPD.Tiers.T1;
     var u = p.unit;
 
-    RPD.FxRenderer.ring(u.x, u.y, tierInfo.color, 56, 0.8);
-    RPD.FxRenderer.text(u.x, u.y - 30, u.name, tierInfo.color,
-      { size: 17, life: 1.2, jitter: false });
+    // 결과 칸의 링 · 터짐은 CraftFx(세션 87). 여기서는 이름 글자 · 결과 칸 옆 카드만
+    if (u.slotIndex >= 0) RPD.FxRenderer.text(u.x, u.y - 30, u.name, tierInfo.color, { size: 17, life: 1.2, jitter: false });
 
-    // 처음 만든 결과물과 상위 등급만 크게 알린다
-    var big = p.firstTime || RPD.TIER_ORDER.indexOf(p.tier) >= 2;
-    if (big && el.reveal) {
-      el.revealRarity.textContent = p.firstTime ? '새 조합 발견' : '조합 완성';
-      el.revealRarity.style.color = tierInfo.color;
-      el.revealName.textContent = u.name;
-      if (el.revealArt) el.revealArt.innerHTML = RPD.UI.sprite(u.def, 'spr--reveal');
-      el.reveal.style.setProperty && el.reveal.style.setProperty('--tier', tierInfo.color);
-      el.revealRole.textContent = tierInfo.label + ' · ' + (u.roleLabel || '');
-      el.reveal.style.borderColor = tierInfo.color;
-      el.reveal.classList.remove('is-on');
-      void el.reveal.offsetWidth;
-      el.reveal.classList.add('is-on');
-      RPD.FxRenderer.flash(tierInfo.color, 0.22);
-    }
+    /* 처음 만든 결과물 · 희귀함 이상만 카드로 알린다 — 화면 한가운데(필드를 덮음)가 아니라 결과 칸 바로 위에(세션 87) */
+    var big = p.firstTime || RPD.tierRank(p.tier) >= 3;   // tierRank: T1 0 … T4 3 · T5 이상 4
+    if (big) showCraftCard(u, tierInfo, p.firstTime);
     renderSlotPanel({ slot: F.getSelected() });
     refreshActionButtons();
   }
@@ -2399,28 +2387,44 @@
   function onSummonResult(r) {
     if (!r.ok) return;
     refreshActionButtons();
-    
 
+    /* 소환은 판당 약 190번 — 화면 한가운데 카드(1.9초)를 띄우면 흐름이 끊긴다(세션 87). 칸 위 이름 글자만, 특별함은 조금 크게.
+     * 칸 위 터짐은 CraftFx · 등급 링은 UnitRenderer · 아래 독의 작은 알림은 HudPanels 가 그대로 한다 */
     var tier = RPD.Tiers[r.tier] || RPD.Tiers.T1;
     var order = RPD.TIER_ORDER.indexOf(r.tier);
-
-    // 에픽 이상만 크게 연출한다. 매번 터뜨리면 정작 좋은 게 나와도 감흥이 없다.
-    if (order >= 2 && el.reveal) {
-      el.revealRarity.textContent = tier.label;
-      el.revealRarity.style.color = tier.color;
-      el.revealName.textContent = r.unit.name;
-      if (el.revealArt) el.revealArt.innerHTML = RPD.UI.sprite(r.unit.def, 'spr--reveal');
-      el.reveal.style.setProperty && el.reveal.style.setProperty('--tier', tier.color);
-      el.revealRole.textContent = r.unit.roleLabel || r.unit.role;
-      el.reveal.style.borderColor = tier.color;
-      el.reveal.classList.remove('is-on');
-      void el.reveal.offsetWidth;
-      el.reveal.classList.add('is-on');
-      RPD.FxRenderer.flash(tier.color, order >= 3 ? 0.3 : 0.16);
-    } else {
+    if (r.unit.slotIndex >= 0) {
       RPD.FxRenderer.text(r.unit.x, r.unit.y - 26, r.unit.name, tier.color,
-        { size: 13, life: 0.9, jitter: false });
+        { size: order >= 2 ? 16 : 13, life: order >= 2 ? 1.1 : 0.9, jitter: false });
     }
+  }
+
+  /* 결과 칸 바로 위 카드(세션 87) — 칸이 없으면(창고로) 필드 아래쪽 가운데. 클릭을 막지 않는다 */
+  var craftCardTimer = null;
+  function showCraftCard(u, tierInfo, first) {
+    var c = el.craftCard;
+    if (!c) return;
+    c.innerHTML = RPD.UI.sprite(u.def, 'spr--craftcard') +
+      '<span class="craftcard__txt"><span class="craftcard__kicker">' + (first ? '새 조합 발견!' : '조합 완성') + '</span>' +
+      '<span class="craftcard__name">' + u.name + '</span>' +
+      '<span class="craftcard__tier">' + tierInfo.label + (u.slotIndex < 0 ? ' · 창고로' : '') + '</span></span>';
+    if (c.style && c.style.setProperty) c.style.setProperty('--tier', tierInfo.color);
+    var board = c.parentNode, bw = (board && board.clientWidth) || 0, bh = (board && board.clientHeight) || 0;
+    var x, y, below = false;
+    if (u.slotIndex >= 0 && RPD.Renderer.toCanvasCss) {
+      var pt = RPD.Renderer.toCanvasCss(u.x, u.y), half = 34 * pt.scale;
+      x = pt.x; y = pt.y - half;
+      if (y < 90) { y = pt.y + half; below = true; }   // 위쪽 끝 칸이면 아래에
+    } else { x = bw / 2; y = bh - 40; }
+    var cw = c.offsetWidth || 200;
+    if (bw) x = Math.max(cw / 2 + 6, Math.min(bw - cw / 2 - 6, x));
+    if (c.style) { c.style.left = Math.round(x) + 'px'; c.style.top = Math.round(y) + 'px'; }
+    if (c.classList) {
+      c.classList.toggle('is-below', below);
+      c.classList.toggle('is-first', !!first);
+      c.classList.remove('is-on'); void c.offsetWidth; c.classList.add('is-on');
+    }
+    if (craftCardTimer) clearTimeout(craftCardTimer);
+    craftCardTimer = setTimeout(function () { if (c.classList) c.classList.remove('is-on'); }, 1700);
   }
 
   /* ---------- 배너 / 결과 ---------- */

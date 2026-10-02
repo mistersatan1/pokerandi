@@ -81,7 +81,10 @@
     RPD.bus.on('render:resize', function () { frameCache = {}; });
     RPD.bus.on('field:placed', function (p) {
       var u = p && p.unit;
-      if (u && (RANK[u.tier] || 1) >= 4) u._sheenAt = nowSec();
+      if (u && (RANK[u.tier] || 1) >= 4) {
+        u._sheenAt = nowSec();
+        if (RPD.FramePacer && RPD.FramePacer.wake) RPD.FramePacer.wake();   // 쉬는 중(초당 10장)에도 0.7초 쓸림이 끊기지 않게(세션 87에 찾음)
+      }
     });
 
     RPD.bus.on('summon:result', function (r) {

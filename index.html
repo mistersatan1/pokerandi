@@ -130,6 +130,8 @@
       <div class="bossintro" id="bossIntro" aria-live="polite"></div>
       <div class="nextreward" id="nextReward" title="보스를 잡으면 받는 보상"></div>
       <div class="rewardpop" id="rewardPop" aria-live="polite" hidden></div>
+      <!-- 조합 결과 카드(세션 87) — 결과 칸 바로 위에 잠깐. UIManager.showCraftCard -->
+      <div class="craftcard" id="craftCard" aria-live="polite"></div>
       <div class="reveal" id="summonReveal" aria-live="polite">
         <span class="reveal__art" id="revealArt"></span>
         <span class="reveal__rarity" id="revealRarity"></span>
@@ -664,6 +666,7 @@
 <script src="js/render/MapRenderer.js"></script>
 <script src="js/render/FxRenderer.js"></script>
 <script src="js/render/BossIntro.js"></script>
+<script src="js/render/CraftFx.js"></script>
 <script src="js/render/UnitRenderer.js"></script>
 <script src="js/render/EnemyRenderer.js"></script>
 <script src="js/render/AttackFxRenderer.js"></script>

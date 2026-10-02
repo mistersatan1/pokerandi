@@ -282,6 +282,8 @@
     var battleSlots = fieldSlots.filter(function (i) { return !F.isCheer(i); });
     var keep = battleSlots.length ? bestSlot(battleSlots) : null;
 
+    // 연출용 — 재료가 있던 자리(필드 칸 좌표 · 창고에서 온 수). 규칙엔 안 쓴다(세션 87 · CraftFx 가 결과 칸으로 모이는 빛을 그린다)
+    var fromXY = fieldSlots.map(function (i) { var sl = F.get(i); return { x: sl.x, y: sl.y }; });
     for (var f = 0; f < fieldSlots.length; f++) F.remove(fieldSlots[f]);
     // 창고는 인덱스가 밀리므로 뒤에서부터 지운다
     var storeIdx = mats.filter(function (m) { return m.where === 'store'; })
@@ -313,7 +315,8 @@
 
     RPD.bus.emit('recipe:crafted', {
       unit: made, slotIndex: keep === null ? -1 : keep, tier: made.tier,
-      materials: recipe.materials, route: recipe.route, firstTime: isFirst
+      materials: recipe.materials, route: recipe.route, firstTime: isFirst,
+      from: fromXY, fromStore: mats.length - fromXY.length
     });
     this.refresh();
     return { ok: true, unit: made, slotIndex: keep, toStorage: keep === null, firstTime: isFirst, route: recipe.route };

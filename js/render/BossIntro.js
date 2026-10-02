@@ -23,6 +23,7 @@
     I.t0 = now();
     I.active = true;
     I.shaken = false;
+    if (RPD.FramePacer && RPD.FramePacer.wake) RPD.FramePacer.wake();
   };
   I.cleared = function (boss) {
     var GM = RPD.GameManager;

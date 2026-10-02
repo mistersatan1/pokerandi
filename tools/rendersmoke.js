@@ -265,6 +265,25 @@ run('보스 등장 연출(세션 86) — 비네팅 · 입구 경고 · 처치 �
   if (BI.isBusy()) throw new Error('reset 뒤에도 남았다');
 });
 
+run('조합 · 소환 연출(세션 87) — 모이는 빛줄기 · 등급만큼 터짐 · 효과 최소 · 끝나면 비운다', () => {
+  const C = RPD.CraftFx;
+  C.reset();
+  const u = { x: 300, y: 300, slotIndex: 3 };
+  C.craft({ unit: u, tier: 'T5', from: [{ x: 100, y: 100 }, { x: 500, y: 200 }], fromStore: 1 });
+  C.summon(u, 'T3');
+  if (C.jobs.length !== 2 || C.jobs[0].from.length !== 3) throw new Error('연출 ' + C.jobs.length);
+  const l0 = calls.lineTo || 0;
+  C.draw(ctx);                                         // 첫 프레임에 시계가 선다
+  C.jobs[0].t0 -= 0.15; C.draw(ctx);                   // 모이는 중
+  if (!((calls.lineTo || 0) > l0)) throw new Error('빛줄기를 안 그렸다');
+  C.jobs.forEach(j => { j.t0 -= 0.25; });
+  if (RPD.Effects) { RPD.Effects.force('minimal'); C.draw(ctx); RPD.Effects.force(null); }
+  C.draw(ctx);
+  C.jobs.forEach(j => { j.t0 -= 5; });
+  C.draw(ctx);
+  if (C.isBusy()) throw new Error('끝났는데 남았다');
+});
+
 run('조합 재료가 되는 칸이 강조된다', () => {
   // v1 의 자유 합성(fusion:changed) 자리를 v2 의 조합식이 대신한다
   RPD.FieldManager.init();

@@ -38,6 +38,7 @@ self.PRECACHE = {
   "js/main.js",
   "js/render/AttackFxRenderer.js",
   "js/render/BossIntro.js",
+  "js/render/CraftFx.js",
   "js/render/EnemyRenderer.js",
   "js/render/FramePacer.js",
   "js/render/FxRenderer.js",

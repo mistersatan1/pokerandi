@@ -3047,6 +3047,44 @@ check('보스 이름표 — 등장하면 이름 · 위협 한 줄이 뜨고 라�
   RPD.BossIntro.reset();
 });
 
+/* ---------- 조합 성공 · 소환 연출(세션 87 · 리디자인 ③) ---------- */
+check('조합 연출 — 재료 자리가 실려 오고 결과 칸으로 모이는 연출 · 처음 만든 조합은 결과 칸 옆 카드 · 화면 가운데 카드는 안 뜬다', () => {
+  lockFresh();
+  const F = RPD.FieldManager, PD = RPD.PokemonData;
+  RPD.RecipeManager.discovered = {};
+  const r = RPD.RecipeData.list.find(x => PD.get(x.id).tier === 'T3' && !PD.get(x.id).hidden && x.materials.length >= 2 && x.materials.every(m => !PD.get(m).hidden && m !== 'ditto'));
+  const open = F.slots.filter(s => s.unlocked && s.zone !== 'cheer');
+  RPD.StorageManager.add(RPD.UnitManager.create(r.materials[0]));
+  r.materials.slice(1).forEach((m, i) => F.place(open[i * 5].index, RPD.UnitManager.create(m)));
+  let got = null; const h = p => { got = p; };
+  RPD.bus.on('recipe:crafted', h);
+  RPD.CraftFx.reset(); nodes.summonReveal.classList.remove('is-on'); nodes.craftCard.classList.remove('is-on');
+  const res = RPD.RecipeManager.craft(r.id);
+  RPD.bus.off('recipe:crafted', h);
+  if (!res.ok || !got) throw new Error('조합 실패 ' + res.reason);
+  if (got.from.length !== r.materials.length - 1 || got.fromStore !== 1) throw new Error('재료 자리 ' + JSON.stringify({ from: got.from, store: got.fromStore }));
+  if (!RPD.CraftFx.isBusy() || RPD.CraftFx.jobs[0].from.length !== r.materials.length) throw new Error('모이는 연출이 안 시작했다');
+  if (!nodes.craftCard.classList.contains('is-on') || !/새 조합 발견/.test(nodes.craftCard.innerHTML)) throw new Error('결과 칸 카드 ' + nodes.craftCard.innerHTML);
+  if (nodes.summonReveal.classList.contains('is-on')) throw new Error('화면 가운데 카드가 떴다');
+  RPD.CraftFx.reset();
+});
+
+check('소환 템포 — 특별함 소환도 화면 가운데 카드 없이 칸 위에서만(흔함은 칸 위 연출도 없음)', () => {
+  lockFresh();
+  const PD = RPD.PokemonData;
+  RPD.CraftFx.reset(); nodes.summonReveal.classList.remove('is-on');
+  const t3 = RPD.UnitManager.create(PD.list.find(d => d.tier === 'T3' && d.summon && !d.hidden).id);
+  RPD.SummonManager.autoPlace(t3);
+  RPD.bus.emit('summon:result', { ok: true, unit: t3, tier: 'T3', cost: 0, toStorage: false });
+  if (nodes.summonReveal.classList.contains('is-on')) throw new Error('특별함 소환에 가운데 카드가 떴다');
+  if (RPD.CraftFx.jobs.length !== 1) throw new Error('칸 위 연출 ' + RPD.CraftFx.jobs.length);
+  const t1 = RPD.UnitManager.create(PD.list.find(d => d.tier === 'T1' && d.summon).id);
+  RPD.SummonManager.autoPlace(t1);
+  RPD.bus.emit('summon:result', { ok: true, unit: t1, tier: 'T1', cost: 0, toStorage: false });
+  if (RPD.CraftFx.jobs.length !== 1) throw new Error('흔함 소환에도 터짐이 붙었다');
+  RPD.CraftFx.reset();
+});
+
 wakePromise.then(() => {
   console.log(`\n────────────────────────────`);
   console.log(failures === 0 ? '부팅 경로 이상 없음' : `부팅 문제 ${failures}건`);

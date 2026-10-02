@@ -258,7 +258,7 @@
   .mtab { min-height: 40px; }
   .pane--action .sidebtn { min-width: 40px; }
   .rf, .tchip, .tierfilter > * { min-height: 40px; min-width: 40px; }
-  .pane--recipes .craftbtn, #btnExpandStorage, #btnDexOpen { min-height: 40px; }
+  .pane--recipes .craftbtn, #btnDexOpen { min-height: 40px; }
   .slotcard__close { width: 40px; height: 40px; font-size: 22px; }
   .tgt__chip, .tgt__all { min-height: 40px; padding: 0 12px; }
   .tgt__chips { gap: 5px; }
@@ -392,6 +392,8 @@
   .ib__craft small { color: var(--muted); font-weight: 700; }
   .ib__toast { background: var(--panel-3); border: 1px solid var(--line-2); color: var(--text); animation: sheetUp .2s ease-out; }
   .ib__toast b { color: var(--gold-hi); }
+  /* 긴 알림(일괄 창고로 결과 등)은 두 줄까지 — 한 줄 말줄임이면 "(…가득 차 남음)" 이 잘린다(세션 75) */
+  .ib__toast { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; text-align: center; line-height: 1.2; font-size: 12px; padding: 4px 10px; }
 
   /* ☰ 메뉴 — [더보기]를 누르면 툴바 위로(세로: 화면 너비 · 가로: 오른쪽 줄) */
   .hud__more { position: fixed; top: auto; left: auto; right: max(4px, env(safe-area-inset-right)); bottom: var(--more-bottom, 120px); }
@@ -411,3 +413,22 @@
 /* 잠금 버튼 — 잠기면 금색 */
 .ib__btn--lock span { font-size: 16px; line-height: 1; }
 .ib__btn--lock.is-on { border-color: #f0b429; color: #f0b429; }
+
+/* 일괄 창고로 시트(세션 75) — 시트가 낮아 설명을 빼고 줄을 조금 줄여 목록이 보이게 */
+@media (max-width: 1099.98px) {
+  .bulk .gshop__hint { display: none; }
+  .bulkrow { min-height: 42px; padding: 4px 10px; }
+  .bulk__summary { font-size: 11.5px; }
+}
+
+/* 전설 추천 시트(세션 78) — 설명은 빼고 카드가 보이게 */
+@media (max-width: 1099.98px) {
+  .legend .gshop__hint { display: none; }
+  .legendbtn { min-height: 40px; }
+  .spr--lg { width: 40px; height: 40px; }
+  .lgcard { padding: 6px 8px; gap: 4px; }
+  .lgchip { padding: 2px 6px 2px 2px; font-size: 11.5px; gap: 2px; }
+  .spr--lgchip { width: 24px; height: 24px; }
+  .lgcard__plus { display: none; }
+  .lgcard__name { font-size: 15px; }
+}

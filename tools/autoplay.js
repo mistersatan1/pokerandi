@@ -90,12 +90,30 @@ const { StorageManager: SG, GameManager: GM, FieldManager: F, EnemyManager: EM, 
         PokemonData: PD } = R;
 const STEP = R.Config.fixedStep;
 
+/* SYN_PRESET=A|B|C — 시너지 임계값 실험(세션 77, 종 기준 규칙에서 난이도 비교용). 게임 파일은 안 바꾸고 이 실행 안에서만 덮어쓴다.
+ *   A 상위 단계만 −1(첫 단계 유지) · B A + 첫 단계도 −1(최소 2) · C B + 3단계 타입의 최고 단계 한 칸 더 −1 */
+function applySynPreset() {
+  const P = process.env.SYN_PRESET;
+  if (!P) return;
+  for (const t of Object.keys(R.Synergies)) {
+    const tiers = R.Synergies[t], orig = tiers.map(x => x.count);
+    let c = orig.slice();
+    if (P === 'A' || P === 'B' || P === 'C') c = c.map((v, i) => i === 0 ? v : v - 1);
+    if (P === 'B' || P === 'C') c[0] = Math.max(2, c[0] - 1);
+    if (P === 'C' && c.length === 3) c[2] -= 1;
+    for (let i = 1; i < c.length; i++) c[i] = Math.max(c[i], c[i - 1] + 1);
+    tiers.forEach((x, i) => { x.count = c[i]; });
+  }
+}
+applySynPreset();
+
 function newGame(modeId) {
   const diffId = process.argv[4] || 'NORMAL';
   EM.reset(); WM.reset(); EC.reset(); ST.reset(); SM.reset();
   CM.reset(); RM.reset(); SH.reset(); BM.reset(); SG.reset(); SK.reset(); R.RewardManager.reset(); R.TraitManager.reset();
   F.init(); GM.reset(modeId, diffId);
   R.SpellManager.reset();
+  if (process.env.STORAGE_CAP) SG.capacity = parseInt(process.env.STORAGE_CAP, 10);   // 실험 — 창고 칸을 덮어쓴다(수요 측정은 아주 크게)
 }
 
 function weakest() {
@@ -220,6 +238,7 @@ function act(stats) {
     stats.deploys++;
   }
 
+  stats.acts++; if (SG.isFull()) stats.fullActs++;   // 창고가 가득 찬 채 행동을 시작한 횟수 — 창고 압박
   // 창고가 차면 재료가 아닌 것부터 방출
   while (SG.isFull()) {
     const need = neededAsMaterial();
@@ -231,12 +250,7 @@ function act(stats) {
     if (idx < 0) idx = 0;
     const u = SG.removeAt(idx);
     SH.add(SH.gainFor(u.tier), 'sell');
-    stats.sells++;
-  }
-
-  // 창고 확장
-  if (SG.canExpand() && GM.gold > SG.expandCost() * 2.5) {
-    if (SG.expand().ok) stats.expands++;
+    stats.sells++; stats.fullSells++;       // 창고가 차서 어쩔 수 없이 낸 방출
   }
 
   // 정예 — 조심스러운 플레이어: 정예가 경로를 다 걷는 동안 보드가 넣을 피해를 어림하고,
@@ -260,7 +274,7 @@ function act(stats) {
   for (let g = 0; g < 30; g++) {
     if (!GM.canAfford(EC.summonCost())) break;
     const r = SM.summon();
-    if (!r.ok) break;
+    if (!r.ok) { if (r.reason === 'NO_ROOM') stats.blocked++; break; }   // 필드 · 창고가 다 차서 막힘
     stats.summons++;
     stats.byTier[r.tier] = (stats.byTier[r.tier] || 0) + 1;
     stats.crafts += craftAll();
@@ -308,6 +322,31 @@ function act(stats) {
 }
 
 let curStats = null, eliteHooked = false;
+/* 시너지 표본(1초마다) — 같은 보드를 "마리 기준"과 "종 기준"으로 모두 세어 본다(세션 77).
+ * 실제 게임 규칙이 어느 쪽이든 두 값을 같이 남기니, 규칙을 바꾼 전·후 판을 같은 잣대로 비교할 수 있다.
+ * synActual = 게임이 실제로 켠 시너지 수(SynergyManager). 타입별 켜진 비율은 synType[타입] = { u: 마리 기준, s: 종 기준, a: 실제 }. */
+function sampleSynergy(stats) {
+  const units = F.getUnits();
+  if (!units.length) return;
+  const perType = {};
+  for (const u of units) for (const t of (u.types || [])) {
+    const rec = perType[t] || (perType[t] = { n: 0, species: new Set() });
+    rec.n += 1; rec.species.add(u.defId);
+  }
+  const reached = (tiers, c) => tiers.some(x => c >= x.count);
+  const actual = new Set(R.SynergyManager.active.filter(a => a.tierIndex >= 0).map(a => a.typeId));
+  stats.synN++;
+  let au = 0, as = 0;
+  for (const t of Object.keys(R.Synergies)) {
+    const rec = perType[t], tiers = R.Synergies[t];
+    const ru = !!rec && reached(tiers, rec.n), rs = !!rec && reached(tiers, rec.species.size);
+    if (ru) au++; if (rs) as++;
+    const o = stats.synType[t] || (stats.synType[t] = { u: 0, s: 0, a: 0 });
+    if (ru) o.u++; if (rs) o.s++; if (actual.has(t)) o.a++;
+  }
+  stats.synActUnits += au; stats.synActSpecies += as; stats.synActual += actual.size;
+}
+
 function playOne(modeId) {
   gameNo++;
   newGame(modeId);
@@ -385,7 +424,7 @@ function playOne(modeId) {
     });
   }
   const stats = { special60: null, life61: null, life66: null, finalBoss: null, finalBossFrac: null, syn: null, crafts: 0, spells: 0, summons: 0, shopBuys: 0, elites: 0, eliteWin: 0, eliteLose: 0, eliteGold: 0, sells: 0, slots: 0, upgrades: 0, deploys: 0,
-                  expands: 0, shardBuys: 0, byTier: {}, goldSum: 0, goldN: 0 };
+                  synN: 0, synActUnits: 0, synActSpecies: 0, synActual: 0, synType: {}, fullSells: 0, blocked: 0, acts: 0, fullActs: 0, storageMax: 0, shardBuys: 0, byTier: {}, goldSum: 0, goldN: 0 };
   curStats = stats;
   WM.begin();
 
@@ -396,7 +435,11 @@ function playOne(modeId) {
     if (GM.state === R.GameState.RUNNING) {
       WM.update(STEP); EM.update(STEP); CM.update(STEP); R.SkillManager.update(STEP); BM.update(STEP);
     }
-    if (i % 60 === 0) { stats.goldSum += GM.gold; stats.goldN++; }
+    if (SG.units.length > stats.storageMax) stats.storageMax = SG.units.length;
+    if (i % 60 === 0) {
+      stats.goldSum += GM.gold; stats.goldN++;
+      sampleSynergy(stats);
+    }
     if (GM.elapsed - lastAct >= 0.5) {
       /* SPECIES_LOG=파일 — 종별 "필드에 있던 1초당 실제 피해". 누적 피해는 조합 재료로 쓰이면 사라지고
        * 필드에 있던 시간도 제각각이라, 0.5초마다 차이만 모은다. */
@@ -489,6 +532,21 @@ console.log(`  정예 판당 ${(n / RUNS).toFixed(1)}회 (하급 ${(sum('elite1'
     ` · 정예로 번 골드 판당 ${Math.round(sum('eliteGold') / RUNS)}G`);
 }
 console.log(`  평균 보유 골드 ${Math.round(results.reduce((a, r) => a + r.avgGold, 0) / RUNS)}`);
+{
+  const sum = k => results.reduce((a, r) => a + (r[k] || 0), 0);
+  const n = sum('synN');
+  console.log(`  시너지 — 판당 켜진 수(1초 표본 평균): 마리 기준 ${(sum('synActUnits') / n).toFixed(2)} · 종 기준 ${(sum('synActSpecies') / n).toFixed(2)} · 게임이 실제로 켠 ${(sum('synActual') / n).toFixed(2)}`);
+  const types = Object.keys(R.Synergies);
+  const agg = t => results.reduce((a, r) => { const o = (r.synType || {})[t] || { u: 0, s: 0, a: 0 }; a.u += o.u; a.s += o.s; a.a += o.a; return a; }, { u: 0, s: 0, a: 0 });
+  console.log('  타입별 켜진 비율(마리 기준 / 종 기준 / 실제): ' + types.map(t => { const o = agg(t); return `${R.Types[t].label}(${R.Synergies[t].map(x => x.count).join('/')}) ${(o.u / n * 100).toFixed(0)}/${(o.s / n * 100).toFixed(0)}/${(o.a / n * 100).toFixed(0)}%`; }).join(' · '));
+}
+{
+  const sum = k => results.reduce((a, r) => a + (r[k] || 0), 0);
+  const mx = results.map(r => r.storageMax).sort((a, b) => a - b);
+  const pct = q => mx[Math.min(mx.length - 1, Math.ceil(q * mx.length) - 1)];
+  console.log(`  창고 사용 최대치(판마다 한 번 재서): 중앙 ${med(mx)} · 95번째 ${pct(0.95)} · 최대 ${mx[mx.length - 1]} (칸 ${SG.capacity} 시작)` +
+    ` · 창고가 가득 찬 채 시작한 행동 ${(sum('fullActs') / Math.max(1, sum('acts')) * 100).toFixed(1)}% · 가득 차서 막힌 소환 판당 ${(sum('blocked') / RUNS).toFixed(2)}회 · 가득 차서 억지 방출 판당 ${(sum('fullSells') / RUNS).toFixed(1)}회`);
+}
 
 console.log('\n라운드별 사망 분포');
 const deaths = {};

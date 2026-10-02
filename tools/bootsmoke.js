@@ -1806,7 +1806,7 @@ function richRun(opts) {
   const lockedSlot = F.slots.find(s => !s.unlocked && !s.blocked);
   if (lockedSlot) F.unlock(lockedSlot.index);
   const u = F.slots.find(s => s.unit).unit; u.level = 3; u.targetChoice = 'BOSS'; u.kills = 17; u.totalDamage = 12345;
-  RPD.StorageManager.capacity += RPD.Config.storageStep;
+  RPD.StorageManager.capacity += 4;
   RPD.StorageManager.add(RPD.UnitManager.create('bulbasaur'));
   RPD.StorageManager.add(RPD.UnitManager.create('gengar'));
   RPD.SummonManager.tickets = 4; RPD.ShardManager.shards = 23;
@@ -2324,9 +2324,10 @@ check('판 이어하기 — 잠금이 저장 · 복원된다(필드 · 창고)',
   if (!r.ok) throw new Error('저장이 안 됐다: ' + r.reason);
   RS.restore(r.data);
   RS.pending = null;
-  const fu = RPD.FieldManager.getUnits().find(u => u.defId === 'pidgey'), su = RPD.StorageManager.units.find(u => u.defId === 'rattata');
-  if (!fu || !fu.locked) throw new Error('필드 개체의 잠금이 안 돌아왔다');
-  if (!su || !su.locked) throw new Error('창고 개체의 잠금이 안 돌아왔다');
+  // 판 시작 때 무작위로 받는 흔함이 같은 종(구구 · 꼬렛)일 수 있다 — "그 종 중 잠긴 개체가 하나 있는가"로 본다(세션 78: find 가 받은 개체를 집어 가끔 떨어졌다)
+  const fl = RPD.FieldManager.getUnits().filter(u => u.defId === 'pidgey'), sl = RPD.StorageManager.units.filter(u => u.defId === 'rattata');
+  if (fl.filter(u => u.locked).length !== 1) throw new Error('필드 개체의 잠금이 안 돌아왔다');
+  if (sl.filter(u => u.locked).length !== 1) throw new Error('창고 개체의 잠금이 안 돌아왔다');
   RS.clear();
 });
 
@@ -2373,6 +2374,371 @@ check('필드의 잠근 포켓몬과 보유 칸에 🔒 가 뜬다 · 정보 바
   const bar = panelHtml('infoBar');
   MS.forceMobile = false;
   if (bar.indexOf('data-ib="lock"') < 0) throw new Error('정보 바에 [잠금] 이 없다');
+});
+
+/* ---------- 일괄 창고로 ---------- */
+console.log('\n일괄 창고로 — 등급별로 필드 → 창고');
+const BK = { sm: RPD.StorageManager, F: RPD.FieldManager, PD: RPD.PokemonData };
+function bkFresh(cap) {
+  MS.forceMobile = false;
+  RPD.Config.autosave = false;
+  RPD.Game.restart(); RPD.Game.startRun('NORMAL', 'NORMAL');
+  RPD.GameManager.life = 999; RPD.GameManager.setWave(30);
+  BK.F.init(); BK.sm.reset();
+  BK.F.slots.forEach(sl => { if (!sl.blocked) sl.unlocked = true; });
+  if (cap != null) BK.sm.capacity = cap;
+}
+function bkPut(defId, n, opt) {
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const sl = BK.F.slots.find(x => x.unlocked && !x.blocked && !x.unit);
+    if (!sl) throw new Error('필드 칸이 모자란다(검사 준비)');
+    const u = RPD.UnitManager.create(defId);
+    if (opt && opt.dps != null) u.dps = opt.dps + i;
+    BK.F.place(sl.index, u); out.push(u);
+  }
+  RPD.UnitManager.recomputeAll();
+  return out;
+}
+const bkOf = t => BK.PD.list.find(d => d.tier === t && !d.hidden && d.id !== 'ditto').id;
+const BK_HIDDEN = BK.PD.list.find(d => d.hidden && ['T3', 'T4', 'T5'].includes(d.tier)) || BK.PD.list.find(d => d.hidden);
+function bkTotal() { return BK.F.getUnits().length + BK.sm.units.length; }
+function bkGroup(id) { return BK.sm.bulkGroups().find(g => g.id === id); }
+
+check('선택한 등급만 창고로 간다 — 다른 등급은 필드에 그대로', () => {
+  bkFresh(30);
+  bkPut(bkOf('T1'), 3); bkPut(bkOf('T2'), 2); bkPut(bkOf('T3'), 1);
+  const before = bkTotal();
+  const r = BK.sm.bulkStore(['T1']);
+  if (r.moved !== 3 || r.noRoom !== 0) throw new Error('결과 ' + JSON.stringify(r));
+  if (BK.sm.units.some(u => u.def.tier !== 'T1') || BK.sm.units.length !== 3) throw new Error('T1 만 가야 한다');
+  if (BK.F.getUnits().filter(u => u.def.tier === 'T1').length) throw new Error('T1 이 필드에 남았다');
+  if (BK.F.getUnits().length !== 3 || bkTotal() !== before) throw new Error('다른 등급이 움직였거나 총수가 바뀌었다');
+  const two = BK.sm.bulkStore(['T2', 'T3']);
+  if (two.moved !== 3 || BK.F.getUnits().length) throw new Error('여러 칸 선택 ' + JSON.stringify(two));
+});
+
+check('히든은 [히든] 칸에만 — 자기 강함 등급 칸에는 안 들어간다(골드 상점과 같은 규칙) · 불멸 · 초월은 [불멸 · 초월] 칸', () => {
+  bkFresh(30);
+  const h = bkPut(BK_HIDDEN.id, 1)[0];
+  const tierId = BK_HIDDEN.tier;
+  bkPut(bkOf(tierId === 'T5' ? 'T5' : tierId), 1);
+  if (bkGroup('HIDDEN').count !== 1 || bkGroup(tierId).count !== 1) throw new Error('칸 개수: 히든 ' + bkGroup('HIDDEN').count + ' · ' + tierId + ' ' + bkGroup(tierId).count);
+  const r = BK.sm.bulkStore([tierId]);
+  if (r.moved !== 1 || BK.sm.units.some(u => u === h)) throw new Error('히든이 강함 등급 칸으로 갔다');
+  const r2 = BK.sm.bulkStore(['HIDDEN']);
+  if (r2.moved !== 1 || !BK.sm.units.includes(h)) throw new Error('[히든] 칸으로 안 갔다');
+  bkPut('mew', 1); bkPut('mewtwo_transcend', 1);
+  if (bkGroup('SPECIAL').count !== 2 || bkGroup('T5').count !== 0) throw new Error('불멸 · 초월 칸 ' + bkGroup('SPECIAL').count);
+  if (BK.sm.bulkStore(['T5']).moved !== 0) throw new Error('[전설] 칸이 불멸을 보냈다');
+  if (BK.sm.bulkStore(['SPECIAL']).moved !== 2) throw new Error('[불멸 · 초월] 칸');
+});
+
+check('잠근 유닛은 건너뛴다 — "잠금 N마리 제외"로 센다', () => {
+  bkFresh(30);
+  const us = bkPut(bkOf('T1'), 4);
+  RPD.UnitManager.setLocked(us[0], true); RPD.UnitManager.setLocked(us[1], true);
+  const g = bkGroup('T1');
+  if (g.count !== 2 || g.locked !== 2) throw new Error('칸: ' + g.count + '/' + g.locked);
+  const r = BK.sm.bulkStore(['T1']);
+  if (r.moved !== 2 || r.locked !== 2) throw new Error(JSON.stringify(r));
+  if (!BK.F.getUnits().includes(us[0]) || !BK.F.getUnits().includes(us[1])) throw new Error('잠근 유닛이 움직였다');
+});
+
+check('창고 자리가 모자라면 들어가는 만큼만(약한 것부터) 보내고 유닛 총수는 그대로', () => {
+  bkFresh(2);
+  const us = bkPut(bkOf('T1'), 5, { dps: 100 });
+  us.forEach((u, i) => { u.dps = 100 + (4 - i) * 10; });   // 먼저 놓인 것이 가장 강하다 — 놓은 순서가 아니라 DPS 순이어야 한다
+  const total = bkTotal();
+  const r = BK.sm.bulkStore(['T1']);
+  if (r.moved !== 2 || r.noRoom !== 3) throw new Error(JSON.stringify(r));
+  if (bkTotal() !== total || BK.F.getUnits().length !== 3 || BK.sm.units.length !== 2) throw new Error('총수 ' + bkTotal() + ' / ' + total);
+  if (!BK.sm.units.includes(us[4]) || !BK.sm.units.includes(us[3])) throw new Error('약한 것부터 가야 한다: ' + BK.sm.units.map(u => u.dps));
+  const again = BK.sm.bulkStore(['T1']);
+  if (again.moved !== 0 || again.noRoom !== 3 || bkTotal() !== total) throw new Error('가득 찬 창고에 또 보냈다 ' + JSON.stringify(again));
+});
+
+check('일괄 창고로는 되돌리기 한 건 — 한 번에 원복', () => {
+  bkFresh(30);
+  RPD.UndoManager.reset();
+  const us = bkPut(bkOf('T1'), 4);
+  const slots = us.map(u => u.slotIndex);
+  BK.sm.bulkStore(['T1']);
+  if (RPD.UndoManager.count() !== 1) throw new Error('기록 ' + RPD.UndoManager.count() + '건 — 1건이어야 한다');
+  const r = RPD.UndoManager.undo();
+  if (!r.ok) throw new Error('되돌리기 실패 ' + r.reason);
+  if (BK.sm.units.length !== 0 || BK.F.getUnits().length !== 4) throw new Error('한 번에 원복이 안 됐다');
+  if (!us.every(u => BK.F.getUnits().includes(u))) throw new Error('같은 개체가 아니다');
+  if (RPD.UndoManager.count() !== 0) throw new Error('원복 뒤 기록이 남았다');
+});
+
+check('선택 창 — 등급마다 "필드 N마리" · 잠금 제외 표시 · 전설 · 히든 · 불멸 · 초월은 한 번 확인 · 일반은 바로', () => {
+  bkFresh(30);
+  const us = bkPut(bkOf('T1'), 3); RPD.UnitManager.setLocked(us[0], true);
+  bkPut(bkOf('T5'), 1);
+  const UIB = RPD.BulkStoreUI, ov = nodes.bulkOverlay;
+  click('btnBulkStore');
+  if (ov.hidden) throw new Error('[일괄 창고로] 를 눌렀는데 창이 안 열린다');
+  const html = panelHtml('bulkList');
+  ['흔함', '안흔함', '특별함', '희귀함', '전설', '히든', '불멸'].forEach(w => { if (html.indexOf(w) < 0) throw new Error('칸 없음: ' + w); });
+  if (html.indexOf('필드 3마리') < 0 || html.indexOf('잠금 1마리 제외') < 0) throw new Error('개수 · 잠금 표시 없음');
+  UIB.picked = { T1: true }; UIB.render();
+  click('btnBulkSend');
+  if (!ov.hidden === false && BK.sm.units.length !== 2) throw new Error('흔함만 골랐는데 바로 안 보냈다');
+  if (BK.sm.units.length !== 2) throw new Error('흔함 2마리가 안 갔다: ' + BK.sm.units.length);
+  if (String(UIB.lastMessage).indexOf('흔함 2마리를 창고로 보냈어요') < 0 || UIB.lastMessage.indexOf('잠금 1마리 제외') < 0) throw new Error('토스트: ' + UIB.lastMessage);
+  click('btnBulkStore');
+  UIB.picked = { T5: true }; UIB.render();
+  click('btnBulkSend');
+  if (BK.sm.units.length !== 2 || nodes.bulkConfirm.hidden) throw new Error('전설은 확인 없이 갔다');
+  click('btnBulkNo');
+  if (BK.sm.units.length !== 2 || !nodes.bulkConfirm.hidden) throw new Error('"아니요" 가 안 먹는다');
+  click('btnBulkSend'); click('btnBulkYes');
+  if (BK.sm.units.length !== 3) throw new Error('확인 뒤에도 안 갔다');
+});
+
+check('단일 [창고로] 버튼과 S 단축키는 그대로 · 일괄 창고로에 단축키를 새로 안 만들었다', () => {
+  bkFresh(30);
+  const u = bkPut(bkOf('T1'), 1)[0];
+  BK.F.select(u.slotIndex);
+  RPD.bus.emit('field:changed', {});
+  click('btnStore');
+  if (BK.sm.units.length !== 1 || BK.F.getUnits().length !== 0) throw new Error('단일 [창고로] 가 달라졌다');
+  if (RPD.UndoManager.count() < 1) throw new Error('단일 이동 기록이 안 남는다');
+  const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'js', 'ui', 'HudPanels.js'), 'utf8');
+  if (/BulkStore/.test(src)) throw new Error('HudPanels 에 일괄 창고로 단축키가 생겼다');
+});
+
+/* ---------- 창고 고정 칸(세션 76 — 골드 확장 삭제) ---------- */
+console.log('\n창고 고정 칸 — 골드 확장 없음');
+check('창고 용량은 새 판에서 Config.storageBase(36) — 확장 함수 · 설정값 · 버튼이 없다', () => {
+  MS.forceMobile = false; RPD.Config.autosave = false;
+  RPD.Game.restart(); RPD.Game.startRun('NORMAL', 'NORMAL');
+  const SG = RPD.StorageManager, C = RPD.Config;
+  if (C.storageBase !== 36 || SG.capacity !== C.storageBase) throw new Error('용량 ' + SG.capacity + ' / storageBase ' + C.storageBase);
+  ['expand', 'canExpand', 'expandCost'].forEach(f => { if (typeof SG[f] === 'function') throw new Error('StorageManager.' + f + ' 가 남아 있다'); });
+  ['storageStep', 'storageMax', 'storageExpandCost', 'storageExpandGrowth'].forEach(k => { if (k in C) throw new Error('Config.' + k + ' 가 남아 있다'); });
+  const html = require('fs').readFileSync(require('path').join(__dirname, '..', 'index.html'), 'utf8');
+  if (/btnExpandStorage/.test(html)) throw new Error('index.html 에 [창고 확장] 버튼이 남아 있다');
+  if (nodes.btnExpandStorage) throw new Error('화면에 [창고 확장] 버튼이 있다');
+  RPD.GameManager.gold = 99999;
+  const gold = RPD.GameManager.gold;
+  RPD.bus.emit('storage:changed', SG.units);
+  if (SG.capacity !== C.storageBase || RPD.GameManager.gold !== gold) throw new Error('골드로 용량이 바뀌었다');
+});
+
+check('창고가 가득 차야 소환이 막힌다 — 필드가 가득 차도 창고에 한 칸이라도 있으면 소환된다', () => {
+  MS.forceMobile = false; RPD.Config.autosave = false;
+  RPD.Game.restart(); RPD.Game.startRun('NORMAL', 'NORMAL');
+  const F = RPD.FieldManager, SG = RPD.StorageManager, GM = RPD.GameManager;
+  GM.gold = 99999; GM.life = 999;
+  F.slots.forEach(sl => { if (!sl.blocked) sl.unlocked = true; });
+  F.slots.forEach(sl => { if (sl.unlocked && !sl.blocked && !sl.unit) F.place(sl.index, RPD.UnitManager.create('pidgey')); });
+  if (F.firstEmpty()) throw new Error('필드가 안 찼다(검사 준비)');
+  while (SG.units.length < SG.capacity - 1) SG.add(RPD.UnitManager.create('rattata'));
+  const r = RPD.SummonManager.summon();
+  if (!r.ok || SG.units.length !== SG.capacity) throw new Error('창고에 한 칸 남았는데 소환이 안 된다: ' + JSON.stringify(r));
+  const gold = GM.gold;
+  const r2 = RPD.SummonManager.summon();
+  if (r2.ok || r2.reason !== 'NO_ROOM') throw new Error('창고가 가득 찼는데 소환됐다/이유: ' + JSON.stringify(r2));
+  if (GM.gold !== gold) throw new Error('막힌 소환에 골드가 나갔다');
+  SG.removeAt(0);
+  if (!RPD.SummonManager.summon().ok) throw new Error('한 칸 비웠는데도 소환이 안 된다');
+});
+
+check('이어하기 — 옛 저장(용량 14)은 새 기본값으로 올려 불러온다 · 더 큰 저장 값은 그대로(max)', () => {
+  const SG = RPD.StorageManager, base = RPD.Config.storageBase;
+  SG.loadState({ capacity: 14, units: [] });
+  if (SG.capacity !== base) throw new Error('옛 저장 14 → ' + SG.capacity + ' (기대 ' + base + ')');
+  SG.loadState({ capacity: 40, units: [] });
+  if (SG.capacity !== 40) throw new Error('더 큰 값이 줄었다: ' + SG.capacity);
+  SG.loadState({ units: [] });
+  if (SG.capacity !== base) throw new Error('용량이 없는 저장 → ' + SG.capacity);
+  SG.reset();
+});
+
+/* ---------- 시너지 — 서로 다른 종 기준(세션 77) ---------- */
+console.log('\n시너지 — 서로 다른 종 기준');
+function synFresh() {
+  MS.forceMobile = false; RPD.Config.autosave = false;
+  RPD.Game.restart(); RPD.Game.startRun('NORMAL', 'NORMAL');
+  RPD.GameManager.life = 999;
+  RPD.FieldManager.init(); RPD.StorageManager.reset();
+  RPD.FieldManager.slots.forEach(sl => { if (!sl.blocked) sl.unlocked = true; });
+}
+function synPut(id, n) {
+  const out = [];
+  for (let i = 0; i < (n || 1); i++) {
+    const sl = RPD.FieldManager.slots.find(x => x.unlocked && !x.blocked && !x.unit);
+    const u = RPD.UnitManager.create(id); RPD.FieldManager.place(sl.index, u); out.push(u);
+  }
+  RPD.UnitManager.recomputeAll();
+  return out;
+}
+const SY = RPD.SynergyManager;
+const syn = typeId => SY.active.find(a => a.typeId === typeId);
+
+check('구구 2마리 = 비행 1 · 구구 + 피죤 = 비행 2 — 종 기준', () => {
+  synFresh();
+  synPut('pidgey', 2);
+  if (SY.countOf('FLYING') !== 1) throw new Error('구구 2마리 비행 = ' + SY.countOf('FLYING') + ' (기대 1)');
+  if (SY.unitCountOf('FLYING') !== 2) throw new Error('마리 수 ' + SY.unitCountOf('FLYING'));
+  if (SY.bonus.attackSpeedMul !== 1) throw new Error('비행 1종인데 시너지가 켜졌다(공속 ' + SY.bonus.attackSpeedMul + ')');
+  synPut('pidgeotto', 1);
+  if (SY.countOf('FLYING') !== 2) throw new Error('구구 + 피죤 비행 = ' + SY.countOf('FLYING') + ' (기대 2)');
+  if (!(SY.bonus.attackSpeedMul > 1) || !syn('FLYING') || syn('FLYING').tierIndex < 0) throw new Error('비행 2종이면 켜져야 한다');
+});
+
+check('이중 타입은 두 타입 모두 +1 — 노말·비행 구구 → 노말 1 · 비행 1', () => {
+  synFresh();
+  synPut('pidgey', 1);
+  if (SY.countOf('NORMAL') !== 1 || SY.countOf('FLYING') !== 1) throw new Error('노말 ' + SY.countOf('NORMAL') + ' / 비행 ' + SY.countOf('FLYING'));
+  synPut('pidgey', 1);
+  if (SY.countOf('NORMAL') !== 1 || SY.countOf('FLYING') !== 1) throw new Error('같은 종을 더 올렸는데 늘었다');
+});
+
+check('같은 종은 강화 레벨 · 잠금 · 위치가 달라도 1종 — 다른 종(초월 폼 포함)은 따로 센다', () => {
+  synFresh();
+  const [a, b, c] = synPut('pidgey', 3);
+  a.level = 3; RPD.UnitManager.setLocked(b, true);
+  RPD.UnitManager.recomputeAll();
+  if (SY.countOf('FLYING') !== 1) throw new Error('레벨 · 잠금이 달라 다른 종으로 셌다: ' + SY.countOf('FLYING'));
+  synFresh();
+  synPut('charizard', 1); synPut('charizard_transcend', 1);
+  if (SY.countOf('FIRE') !== 2) throw new Error('초월 폼은 다른 종: 불꽃 ' + SY.countOf('FIRE') + ' (기대 2)');
+  const t = RPD.PokemonData.get('charizard_transcend');
+  if (!t || t.types.indexOf('FIRE') < 0) throw new Error('초월 리자몽 타입');
+});
+
+check('임계값은 조정안 B — 상위 단계 −1 · 독 · 노말 첫 단계 2(세션 77)', () => {
+  const want = { FIRE: [2, 3], WATER: [2, 3], ELECTRIC: [2, 3], GROUND: [2, 3], FLYING: [2, 3, 5], FIGHTING: [2, 3], GRASS: [2, 3], POISON: [2, 5, 8],
+    BUG: [2, 3, 5], NORMAL: [2, 5, 8], PSYCHIC: [2, 3, 5], ROCK: [2, 3], ICE: [2, 3], GHOST: [2, 3], DRAGON: [2, 3], STEEL: [2], FAIRY: [2, 3] };
+  const bad = Object.keys(want).filter(t => RPD.Synergies[t].map(x => x.count).join() !== want[t].join());
+  if (bad.length || Object.keys(RPD.Synergies).length !== Object.keys(want).length) throw new Error('다른 임계값: ' + bad.join(', '));
+  synFresh();
+  synPut('pidgey', 1); synPut('pidgeotto', 1);
+  if (SY.countOf('FLYING') !== 2 || SY.bonus.attackSpeedMul <= 1) throw new Error('비행 2종이면 켜져야 한다');
+  synPut('pidgeot', 1);
+  if (syn('FLYING').tierIndex !== 1) throw new Error('비행 3종은 2단계: ' + syn('FLYING').tierIndex);
+});
+
+check('시너지 패널 — "비행 1/2" 와 "구구 ×2는 1종으로" 로 왜 안 켜졌는지 보인다', () => {
+  synFresh();
+  synPut('pidgey', 2);
+  RPD.bus.emit('field:changed', {});
+  const html = panelHtml('synergyBody');
+  if (html.indexOf('1/2') < 0) throw new Error('"1/2" 가 없다');
+  if (html.indexOf('구구 ×2는 1종으로') < 0) throw new Error('중복 안내가 없다');
+  if (html.indexOf('1종 더') < 0) throw new Error('"1종 더 → …" 가 없다');
+  synPut('pidgeotto', 1);
+  RPD.bus.emit('field:changed', {});
+  const on = panelHtml('synergyBody');
+  if (on.indexOf('구구 ×2는 1종으로') < 0) throw new Error('켜진 뒤에도 중복 안내는 남아야 한다');
+});
+
+/* ---------- 전설 추천(세션 78) ---------- */
+console.log('\n전설 추천 — LegendAdvisor');
+const LA = RPD.LegendAdvisor;
+function laFresh(knowAll) {
+  MS.forceMobile = false; RPD.Config.autosave = false;
+  RPD.Game.restart(); RPD.Game.startRun('NORMAL', 'NORMAL');
+  RPD.GameManager.life = 999; RPD.GameManager.setWave(20);
+  RPD.FieldManager.init(); RPD.StorageManager.reset();
+  RPD.ShardManager.shards = 0;
+  RPD.SaveManager.data.spells = {};
+  if (knowAll) RPD.SpellData.list.forEach(sp => { RPD.SaveManager.data.spells[sp.id] = 1; });
+  LA.invalidate();
+}
+function laGive(ids) { ids.forEach(id => RPD.StorageManager.add(RPD.UnitManager.create(id))); RPD.RecipeManager.refresh(); }
+
+check('재료를 다 가진 전설이 "지금 바로 조합 가능"으로 1위', () => {
+  laFresh(true);
+  laGive(['vulpix', 'rapidash', 'magmar']);       // 나인테일
+  const r = LA.compute();
+  if (!r.top.length || r.top[0].id !== 'ninetales' || !r.top[0].ready || r.top[0].expected !== 0) throw new Error('1위 ' + JSON.stringify(r.top[0] && { id: r.top[0].id, ready: r.top[0].ready }));
+  if (r.list.filter(x => x.ready).length !== 1) throw new Error('지금 바로가 하나여야 한다');
+});
+
+check('재료 하나 모자란 전설이 둘 모자란 것보다 위 — 리자몽(두두 −1) > 윈디(독침붕 · 마그마 −2)', () => {
+  laFresh(true);
+  laGive(['charmeleon', 'rapidash', 'growlithe']);
+  const r = LA.compute();
+  const a = r.list.findIndex(x => x.id === 'charizard'), b = r.list.findIndex(x => x.id === 'arcanine');
+  const ca = r.list[a].chips.reduce((n, c) => n + c.missing, 0), cb = r.list[b].chips.reduce((n, c) => n + c.missing, 0);
+  if (ca !== 1 || cb !== 2) throw new Error('모자란 수 ' + ca + ' / ' + cb);
+  if (!(a >= 0 && b >= 0 && a < b)) throw new Error('순서 리자몽 ' + a + ' · 윈디 ' + b);
+  if (!(r.list[a].expected < r.list[b].expected)) throw new Error('기대 소환 ' + r.list[a].expected + ' / ' + r.list[b].expected);
+});
+
+check('잠긴 유닛은 보유로 안 친다 — 잠그면 "지금 바로"가 아니고, 풀면 다시', () => {
+  laFresh(true);
+  laGive(['vulpix', 'rapidash', 'magmar']);
+  const u = RPD.StorageManager.units.find(x => x.defId === 'magmar');
+  RPD.UnitManager.setLocked(u, true);
+  let r = LA.compute(), n = r.list.find(x => x.id === 'ninetales');
+  if (!n || n.ready || n.chips.find(c => c.id === 'magmar').missing !== 1) throw new Error('잠긴 마그마를 보유로 셌다');
+  RPD.UnitManager.setLocked(u, false);
+  r = LA.compute(); n = r.list.find(x => x.id === 'ninetales');
+  if (!n.ready) throw new Error('잠금을 풀었는데 지금 바로가 아니다');
+});
+
+check('미발견 히든이 든 전설은 후보에서 빠지고 HTML 어디에도 이름이 안 나온다 · "N종은 제외" 한 줄', () => {
+  laFresh(false);
+  laGive(['vulpix', 'rapidash', 'magmar', 'charmeleon']);
+  const r = LA.compute();
+  const shown = new Set(r.list.map(x => x.id));
+  const excluded = LA.candidates().filter(id => !shown.has(id));
+  if (!r.hiddenExcluded || excluded.length !== r.hiddenExcluded) throw new Error('제외 수 ' + r.hiddenExcluded + ' / ' + excluded.length);
+  click('btnLegend');
+  if (nodes.legendOverlay.hidden) throw new Error('[전설 추천] 창이 안 열린다');
+  RPD.LegendAdvisorUI.render();
+  const html = panelHtml('legendList') + ' ' + String(nodes.legendNote.textContent) + ' ' + JSON.stringify(r);
+  const secretNames = RPD.PokemonData.list.filter(d => d.hidden).map(d => d.name).concat(excluded.map(id => RPD.PokemonData.get(id).name));
+  const leak = secretNames.filter(nm => html.indexOf(nm) >= 0);
+  if (leak.length) throw new Error('이름이 새었다: ' + leak.join(', '));
+  const leakId = excluded.concat(RPD.PokemonData.list.filter(d => d.hidden).map(d => d.id)).filter(id => html.indexOf('"' + id + '"') >= 0);
+  if (leakId.length) throw new Error('id 가 새었다: ' + leakId.join(', '));
+  if (String(nodes.legendNote.textContent).indexOf('숨은 재료가 필요한 전설 ' + r.hiddenExcluded + '종은 제외') < 0) throw new Error('안내: ' + nodes.legendNote.textContent);
+  click('btnLegendClose');
+});
+
+check('기대 소환 수 — 같은 보유에서 실제 pickSpecies 로 재료가 모일 때까지 200번 돌린 평균과 ±15% 안 · 계산 5초 안', () => {
+  laFresh(true);
+  laGive(['charmeleon', 'rapidash', 'growlithe']);
+  const t0 = Date.now();
+  const r = LA.compute({ force: true });
+  const ms = Date.now() - t0;
+  if (ms > 5000) throw new Error('계산 ' + ms + 'ms');
+  const SM = RPD.SummonManager;
+  const pick = r.list.filter(x => !x.ready && isFinite(x.expected) && x.expected > 0).slice(0, 3);
+  if (pick.length < 3) throw new Error('비교할 후보가 모자란다');
+  pick.forEach(x => {
+    let tot = 0;
+    for (let i = 0; i < 200; i++) {
+      const left = Object.assign({}, x.leaves);
+      let rem = Object.values(left).reduce((a, b) => a + b, 0), d = 0;
+      while (rem > 0 && d < 20000) {
+        d++;
+        const sp = SM.pickSpecies(RPD.Utils.weightedPick(SM.currentOdds()));
+        if (left[sp] > 0) { left[sp]--; rem--; }
+      }
+      tot += d;
+    }
+    const sim = tot / 200, diff = Math.abs(x.expected / sim - 1);
+    if (diff > 0.15) throw new Error(x.id + ' 계산 ' + x.expected.toFixed(1) + ' · 실제 ' + sim.toFixed(1) + ' (' + (diff * 100).toFixed(1) + '%)');
+  });
+});
+
+check('같은 보유면 다시 계산하지 않는다(캐시) · 화면이 안 흔들린다(고정 시드) · 추천은 골드 · 조각 · 보유를 바꾸지 않는다', () => {
+  laFresh(true);
+  laGive(['charmeleon', 'rapidash']);
+  RPD.ShardManager.shards = 60; RPD.GameManager.gold = 777;
+  const a = LA.compute(), b = LA.compute();
+  if (a !== b) throw new Error('캐시를 안 썼다');
+  const c = LA.compute({ force: true });
+  if (JSON.stringify(c.top.map(x => [x.id, x.expected])) !== JSON.stringify(a.top.map(x => [x.id, x.expected]))) throw new Error('다시 계산하니 숫자가 바뀐다');
+  if (RPD.ShardManager.shards !== 60 || RPD.GameManager.gold !== 777 || RPD.StorageManager.units.length !== 2) throw new Error('추천이 무언가를 썼다');
+  if (!c.list.some(x => x.shardsUsed > 0)) throw new Error('조각 60 이 있는데 조각을 쓰는 안이 없다');
 });
 
 wakePromise.then(() => {

@@ -190,6 +190,39 @@
       </div>
       <div class="spellscene" id="spellScene" hidden></div>
 
+      <div class="book gshop legend" id="legendOverlay" hidden>
+        <div class="book__card pane gshop__card">
+          <div class="book__head">
+            <h2 class="pane__title">★ 전설 추천</h2>
+            <span class="gshop__hint">지금 보유한 포켓몬(잠근 것 제외)으로 가장 빨리 만들 수 있는 전설 — 앞으로 필요한 소환 수가 적은 순</span>
+            <button type="button" class="help__close" id="btnLegendClose" aria-label="닫기">×</button>
+          </div>
+          <div class="legend__list" id="legendList"></div>
+          <p class="legend__note" id="legendNote"></p>
+        </div>
+      </div>
+
+      <div class="book gshop bulk" id="bulkOverlay" hidden>
+        <div class="book__card pane gshop__card">
+          <div class="book__head">
+            <h2 class="pane__title">일괄 창고로</h2>
+            <span class="gshop__hint">고른 등급의 필드 포켓몬을 약한 것부터 창고로 · 잠근 포켓몬은 제외 · 히든은 [히든] 칸에만</span>
+            <button type="button" class="help__close" id="btnBulkClose" aria-label="닫기">×</button>
+          </div>
+          <div class="bulk__list" id="bulkList"></div>
+          <p class="bulk__summary" id="bulkSummary"></p>
+          <div class="bulk__confirm" id="bulkConfirm" hidden>
+            <span id="bulkConfirmText"></span>
+            <button type="button" class="btn btn--danger" id="btnBulkYes">네, 보냅니다</button>
+            <button type="button" class="btn btn--ghost" id="btnBulkNo">아니요</button>
+          </div>
+          <div class="bulk__acts">
+            <button type="button" class="btn btn--primary" id="btnBulkSend" disabled>보내기</button>
+            <button type="button" class="btn btn--ghost" id="btnBulkCancel">닫기</button>
+          </div>
+        </div>
+      </div>
+
       <div class="book gshop elite" id="eliteOverlay" hidden>
         <div class="book__card pane gshop__card">
           <div class="book__head">
@@ -278,6 +311,13 @@
               <tr><td><kbd>Esc</kbd></td><td>선택 해제 · 열린 창 닫기</td></tr>
             </table>
             <p class="help__note">버튼이 잠겨 있을 때(골드 부족 등)는 키를 눌러도 아무 일도 없습니다.</p>
+
+            <h3>시너지</h3>
+            <ul class="help__list">
+              <li><b>서로 다른 종 기준</b>으로 셉니다 — 필드 위에서 그 타입을 가진 <b>종</b>의 수예요. 구구 2마리는 비행 1, 구구 + 피죤은 비행 2.</li>
+              <li>이중 타입은 두 타입에 모두 1씩 셉니다. 같은 종이면 강화 레벨 · 잠금 · 자리가 달라도 1종입니다. 초월 폼은 다른 종입니다.</li>
+              <li>시너지 패널에 "비행 1/2 · 구구 ×2는 1종으로"처럼 효과에 쓰인 수와 중복으로 빠진 것이 함께 보입니다. 창고에 있는 포켓몬은 세지 않습니다.</li>
+            </ul>
 
             <h3>마우스</h3>
             <ul class="help__list">
@@ -414,6 +454,7 @@
             <span class="craftbtn__badge" id="craftBadge" hidden>0</span>
           </button>
         </header>
+        <div class="legendbar"><button type="button" class="minibtn legendbtn" id="btnLegend" title="지금 보유한 포켓몬으로 가장 빨리 만들 수 있는 전설">★ 전설 추천</button></div>
         <div class="tierfilter" id="tierFilter"></div>
         <div class="recipepop" id="recipePop" hidden></div>
         <div class="recipes__list" id="recipeList">
@@ -427,7 +468,7 @@
           <h2 class="pane__title">보유 포켓몬</h2>
           <span class="pane__count" id="ownedCount"></span>
           <span class="storagebadge" title="창고 사용 칸">창고 <b id="storageBadge">0</b></span>
-          <button type="button" class="minibtn" id="btnExpandStorage">확장</button>
+          <button type="button" class="minibtn" id="btnBulkStore" title="필드의 포켓몬을 등급별로 창고로 한꺼번에">일괄 창고로</button>
         </header>
         <div class="ownedsort" id="ownedSort" role="group" aria-label="보유 포켓몬 정렬">
           <button type="button" class="tchip is-on" data-sort="field">필드 먼저</button>
@@ -603,6 +644,7 @@
 <script src="js/systems/SaveManager.js"></script>
 <script src="js/systems/ProgressManager.js"></script>
 <script src="js/systems/SpellManager.js"></script>
+<script src="js/systems/LegendAdvisor.js"></script>
 <script src="js/systems/RunSave.js"></script>
 
 <script src="js/render/SpriteFactory.js"></script>
@@ -625,6 +667,8 @@
 <script src="js/ui/ResumeUI.js"></script>
 <script src="js/ui/AppUI.js"></script>
 <script src="js/ui/GoldShopUI.js"></script>
+<script src="js/ui/BulkStoreUI.js"></script>
+<script src="js/ui/LegendAdvisorUI.js"></script>
 <script src="js/ui/EliteUI.js"></script>
 <script src="js/ui/SpellUI.js"></script>
 <script src="js/main.js"></script>

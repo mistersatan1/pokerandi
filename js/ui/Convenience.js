@@ -29,8 +29,8 @@
     return r;
   };
   /* 한 줄 알림 — 휴대폰은 정보 바, PC 는 필드 가운데 글자 */
-  C.say = function (text) {
-    if (isMobile() && RPD.MobileToolbar) { RPD.MobileToolbar.toast(text, 1800); return; }
+  C.say = function (text, ms) {
+    if (isMobile() && RPD.MobileToolbar) { RPD.MobileToolbar.toast(text, ms || 1800); return; }
     var V = RPD.VIEW, Fx = RPD.FxRenderer;
     if (Fx && Fx.text && V) Fx.text(V.width / 2, V.height / 2, text, '#ffd15c', { size: 16, life: 1.2, vy: -20 });
   };

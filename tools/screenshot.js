@@ -1347,6 +1347,267 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
   report.push({ lock: lkReport });
   if (lkProblems.length) process.exitCode = 1;
 
+  /* ㉒ 일괄 창고로(세션 75) — 갤럭시 S24 세로(실제 손가락) + PC. (a) 선택 창(흔함 · 전설 · 히든 체크, 잠금 제외 표시, 창고 자리 부족 안내)
+   * (b) [보내기] 뒤 토스트 "흔함 N마리를 창고로 보냈어요 (M마리는 창고가 가득 차 남음)". 어긋나면 도구가 실패로 끝난다.
+   * 캡처: 22_bulk_{portrait|pc}_a_dialog · 22_bulk_{portrait|pc}_b_toast */
+  const bkProblems = [], bkReport = {};
+  const bkSetup = () => {
+    const R = window.RPD, F = R.FieldManager, SM = R.StorageManager;
+    F.slots.forEach(x => { if (!x.blocked) x.unlocked = true; });
+    F.slots.forEach(x => { if (x.unit) F.remove(x.index); });
+    SM.reset();
+    const hid = R.PokemonData.list.find(d => d.hidden && d.tier !== 'T2') || R.PokemonData.list.find(d => d.hidden);
+    const t = tier => R.PokemonData.list.find(d => d.tier === tier && !d.hidden && d.id !== 'ditto').id;
+    const put = (id, n) => { const out = []; for (let i = 0; i < n; i++) { const sl = F.slots.find(x => x.unlocked && !x.blocked && !x.unit); const u = R.UnitManager.create(id); F.place(sl.index, u); out.push(u); } return out; };
+    const t1 = put(t('T1'), 5); R.UnitManager.setLocked(t1[0], true);
+    put(t('T2'), 2); put(t('T3'), 1); put(t('T5'), 1); put(hid.id, 1);
+    SM.capacity = 2;       // 자리 2칸 — 흔함 4(잠금 제외)마리 중 2마리만 들어간다
+    R.UnitManager.recomputeAll();
+    R.GameManager.life = 999;
+    R.bus.emit('field:changed', {}); R.bus.emit('storage:changed', SM.units);
+    return { hidden: hid.id };
+  };
+  {
+    const bad = w => bkProblems.push(w);
+    for (const mode of ['portrait', 'pc']) {
+      const bctx = await browser.newContext(mode === 'pc' ? { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 } : { ...devices['Galaxy S24'], defaultBrowserType: undefined });
+      const bp = await bctx.newPage();
+      const be = [];
+      bp.on('pageerror', e => be.push(e.message));
+      await bp.goto(URL); await bp.waitForTimeout(1000);
+      await bp.evaluate(tbPrep, { wave: 7 });
+      await bp.waitForTimeout(500);
+      await bp.evaluate(() => window.RPD.Loop.setPaused(true));
+      await bp.evaluate(bkSetup);
+      if (mode === 'pc') await bp.click('#btnBulkStore');
+      else { await bp.evaluate(() => window.RPD.HudPanels.setDrawer('owned')); await bp.waitForTimeout(400); await bp.tap('#btnBulkStore'); }
+      await bp.waitForTimeout(350);
+      // 흔함 + 히든을 체크(실제 손가락/마우스)
+      for (const id of ['T1', 'HIDDEN']) { if (mode === 'pc') await bp.click('#bulkList input[data-id="' + id + '"]'); else await bp.tap('#bulkList input[data-id="' + id + '"]'); }
+      await bp.waitForTimeout(250);
+      const dlg = await bp.evaluate(() => {
+        const rows = [...document.querySelectorAll('#bulkList .bulkrow')].map(r => r.textContent.replace(/\s+/g, ' ').trim());
+        const o = document.getElementById('bulkOverlay'), r = o.getBoundingClientRect(), send = document.getElementById('btnBulkSend').getBoundingClientRect();
+        const card = o.querySelector('.book__card').getBoundingClientRect();
+        return { rows, summary: document.getElementById('bulkSummary').textContent.replace(/\s+/g, ' '), open: !o.hidden, sendH: Math.round(send.height), sendIn: send.bottom <= innerHeight + 1 && send.top >= 0, cardIn: card.right <= innerWidth + 1,
+          sheet: document.body.getAttribute('data-sheet'), title: (window.RPD.MobileSheet.openSheets() || []).join('/') };
+      });
+      if (!dlg.open) bad(mode + ': 창이 안 열렸다');
+      const cd = await bp.evaluate(() => getComputedStyle(document.getElementById('bulkConfirm')).display);
+      if (cd !== 'none') bad(mode + ': 확인 칸이 처음부터 보인다(' + cd + ')');
+      if (!dlg.rows.some(r => /흔함.*필드 5마리.*잠금 1마리 제외/.test(r))) bad(mode + ': 흔함 줄 ' + JSON.stringify(dlg.rows));
+      if (dlg.rows.length !== 7) bad(mode + ': 칸 ' + dlg.rows.length + '개');
+      if (!/2마리만 보냅니다/.test(dlg.summary)) bad(mode + ': 자리 부족 안내 ' + dlg.summary);
+      if (mode === 'portrait' && (dlg.sendH < 44 || !dlg.sendIn)) bad(mode + ': [보내기] 크기/위치 ' + JSON.stringify(dlg));
+      if (!dlg.cardIn) bad(mode + ': 창이 화면 밖으로 나간다');
+      await bp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '22_bulk_' + mode + '_a_dialog.png') });
+      // 히든이 들어 있어 한 번 확인 — 먼저 확인 문구 · 그 뒤 실행
+      if (mode === 'pc') await bp.click('#btnBulkSend'); else await bp.tap('#btnBulkSend');
+      await bp.waitForTimeout(250);
+      const conf = await bp.evaluate(() => ({ shown: !document.getElementById('bulkConfirm').hidden, display: getComputedStyle(document.getElementById('bulkConfirm')).display, text: document.getElementById('bulkConfirmText').textContent, stored: window.RPD.StorageManager.units.length }));
+      if (!conf.shown || conf.stored !== 0 || conf.display === 'none') bad(mode + ': 히든 포함인데 확인 없이 갔다 ' + JSON.stringify(conf));
+      await bp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '22_bulk_' + mode + '_a2_confirm.png') });
+      const before = await bp.evaluate(() => window.RPD.FieldManager.getUnits().length + window.RPD.StorageManager.units.length);
+      if (mode === 'pc') await bp.click('#btnBulkYes'); else await bp.tap('#btnBulkYes');
+      await bp.waitForTimeout(220);
+      const after = await bp.evaluate(() => ({ total: window.RPD.FieldManager.getUnits().length + window.RPD.StorageManager.units.length, stored: window.RPD.StorageManager.units.map(u => u.def.name), msg: window.RPD.BulkStoreUI.lastMessage,
+        bar: (document.getElementById('infoBar') || {}).textContent || '', open: !document.getElementById('bulkOverlay').hidden, undo: window.RPD.UndoManager.count() }));
+      if (after.total !== before) bad(mode + ': 유닛 총수가 바뀌었다 ' + before + '→' + after.total);
+      if (after.stored.length !== 2 || after.open) bad(mode + ': 결과 ' + JSON.stringify(after));
+      if (!/흔함 · 히든 2마리를 창고로 보냈어요 \(\d마리는 창고가 가득 차 남음\)|흔함 2마리를 창고로 보냈어요 \(\d마리는 창고가 가득 차 남음\)/.test(after.msg || '')) bad(mode + ': 토스트 ' + after.msg);
+      if (mode === 'portrait' && after.bar.indexOf('창고로 보냈어요') < 0) bad('portrait: 정보 바 토스트가 안 보인다 ' + after.bar.slice(0, 80));
+      if (after.undo !== 1) bad(mode + ': 되돌리기 기록 ' + after.undo + '건');
+      await bp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '22_bulk_' + mode + '_b_toast.png') });
+      bkReport[mode] = { dlg, conf, after };
+      if (be.length) bad(mode + ' 페이지 오류: ' + be[0]);
+      await bctx.close();
+    }
+  }
+  console.log('bulk', JSON.stringify(bkReport));
+  console.log('bulk problems', JSON.stringify(bkProblems));
+  report.push({ bulk: bkReport });
+  if (bkProblems.length) process.exitCode = 1;
+
+  /* ㉓ 창고 고정 칸(세션 76) — 골드 확장 삭제 · 기본 36칸. 갤럭시 S24 세로 + PC: 보유 목록 머리의 "창고 n/36" 과 [확장] 버튼이 없는가.
+   * 캡처: 23_storage_{portrait|pc}.png */
+  const stProblems = [], stReport = {};
+  {
+    const bad = w => stProblems.push(w);
+    for (const mode of ['portrait', 'pc']) {
+      const sctx = await browser.newContext(mode === 'pc' ? { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 } : { ...devices['Galaxy S24'], defaultBrowserType: undefined });
+      const sp = await sctx.newPage();
+      const se = [];
+      sp.on('pageerror', e => se.push(e.message));
+      await sp.goto(URL); await sp.waitForTimeout(1000);
+      await sp.evaluate(tbPrep, { wave: 7 });
+      await sp.waitForTimeout(400);
+      await sp.evaluate(() => {
+        const R = window.RPD, SM = R.StorageManager;
+        R.Loop.setPaused(true);
+        const ids = R.PokemonData.list.filter(d => d.summon).slice(0, 22).map(d => d.id);
+        SM.reset();
+        ids.forEach(id => SM.add(R.UnitManager.create(id)));
+        R.bus.emit('storage:changed', SM.units); R.bus.emit('field:changed', {});
+        if (window.innerWidth < 1100) R.HudPanels.setDrawer('owned');
+      });
+      await sp.waitForTimeout(500);
+      const st = await sp.evaluate(() => ({ badge: document.getElementById('storageBadge').textContent, expandBtn: !!document.getElementById('btnExpandStorage'),
+        text: document.querySelector('.pane--owned .pane__head').textContent.replace(/\s+/g, ' ').trim(), cells: document.querySelectorAll('#storageList .scell').length,
+        cfg: window.RPD.Config.storageBase, cap: window.RPD.StorageManager.capacity }));
+      if (st.badge !== '22/36') bad(mode + ': 창고 표시 ' + st.badge);
+      if (st.expandBtn || /확장/.test(st.text)) bad(mode + ': [확장] 이 남아 있다 ' + st.text);
+      if (st.cap !== 36 || st.cfg !== 36) bad(mode + ': 용량 ' + st.cap + '/' + st.cfg);
+      await sp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '23_storage_' + mode + '.png') });
+      stReport[mode] = st;
+      if (se.length) bad(mode + ' 페이지 오류: ' + se[0]);
+      await sctx.close();
+    }
+  }
+  console.log('storage', JSON.stringify(stReport));
+  console.log('storage problems', JSON.stringify(stProblems));
+  report.push({ storage: stReport });
+  if (stProblems.length) process.exitCode = 1;
+
+  /* ㉔ 시너지 — 서로 다른 종 기준(세션 77). 구구 2마리를 둔 필드의 시너지 패널(세로 시트 · PC): "비행 1/2" · "구구 ×2는 1종으로".
+   * 캡처: 24_synergy_{portrait|pc}_a_dup(구구 ×2) · _b_two(구구 + 피죤 — 비행 켜짐). 어긋나면 도구가 실패로 끝난다. */
+  const syProblems = [], syReport = {};
+  {
+    const bad = w => syProblems.push(w);
+    for (const mode of ['portrait', 'pc']) {
+      const yctx = await browser.newContext(mode === 'pc' ? { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 } : { ...devices['Galaxy S24'], defaultBrowserType: undefined });
+      const yp = await yctx.newPage();
+      const ye = [];
+      yp.on('pageerror', e => ye.push(e.message));
+      await yp.goto(URL); await yp.waitForTimeout(1000);
+      await yp.evaluate(tbPrep, { wave: 7 });
+      await yp.waitForTimeout(400);
+      const put = ids => yp.evaluate(ids => {
+        const R = window.RPD, F = R.FieldManager;
+        F.slots.forEach(x => { if (x.unit) F.remove(x.index); });
+        ids.forEach(id => { const sl = F.slots.find(x => x.unlocked && !x.blocked && !x.unit); F.place(sl.index, R.UnitManager.create(id)); });
+        R.UnitManager.recomputeAll(); R.bus.emit('field:changed', {});
+        R.Loop.setPaused(true);
+      }, ids);
+      const probe = () => yp.evaluate(() => {
+        const row = document.querySelector('#synergyBody .synrow[data-type="FLYING"]');
+        return { text: row ? row.textContent.replace(/\s+/g, ' ').trim() : '', active: !!row && row.classList.contains('is-active'),
+          cut: row ? [...row.querySelectorAll('.synrow__effect, .synrow__dup, .synrow__name')].some(n => n.scrollWidth > n.clientWidth + 1) : null,
+          rowW: row ? Math.round(row.getBoundingClientRect().width) : 0 };
+      });
+      await put(['pidgey', 'pidgey']);
+      if (mode === 'portrait') { await yp.evaluate(() => window.RPD.HudPanels.setDrawer('synergy')); await yp.waitForTimeout(450); }
+      await yp.waitForTimeout(250);
+      const a = await probe();
+      if (!/비행\s*1\/2/.test(a.text) || a.text.indexOf('구구 ×2는 1종으로') < 0 || a.active) bad(mode + ': 구구 ×2 줄 ' + JSON.stringify(a));
+      if (a.cut) bad(mode + ': 시너지 줄 글이 잘린다 ' + JSON.stringify(a));
+      await yp.evaluate(() => { const r = document.querySelector('#synergyBody .synrow[data-type="FLYING"]'); if (r && r.scrollIntoView) r.scrollIntoView({ block: 'center' }); });
+      await yp.waitForTimeout(150);
+      await yp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '24_synergy_' + mode + '_a_dup.png') });
+      await put(['pidgey', 'pidgey', 'pidgeotto']);
+      await yp.waitForTimeout(250);
+      const b = await probe();
+      if (!/비행\s*2/.test(b.text) || !b.active) bad(mode + ': 구구 + 피죤 줄 ' + JSON.stringify(b));
+      await yp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '24_synergy_' + mode + '_b_two.png') });
+      syReport[mode] = { a, b };
+      if (ye.length) bad(mode + ' 페이지 오류: ' + ye[0]);
+      await yctx.close();
+    }
+  }
+  console.log('synergy', JSON.stringify(syReport));
+  console.log('synergy problems', JSON.stringify(syProblems));
+  report.push({ synergy: syReport });
+  if (syProblems.length) process.exitCode = 1;
+
+  /* ㉕ 전설 추천(세션 78) — 세로(갤럭시 S24) (a) 재료가 일부 있는 보드의 추천 3개 (b) "지금 바로 조합 가능" (d) 미발견 히든 제외 안내 · PC (c).
+   * (a)(b)(c) 는 주문을 모두 밝힌 기록(히든 재료도 추천에 나온다) · (d) 는 아무것도 안 밝힌 기록. 어긋나면 도구가 실패로 끝난다.
+   * 캡처: 25_legend_portrait_a_partial · _b_ready · _d_hidden · 25_legend_pc_c */
+  const lgProblems = [], lgReport = {};
+  const lgSetup = (o) => {
+    const R = window.RPD, F = R.FieldManager, SM = R.StorageManager;
+    R.Loop.setPaused(true);
+    R.GameManager.setWave(22);
+    F.slots.forEach(x => { if (x.unit) F.remove(x.index); });
+    SM.reset();
+    R.SaveManager.data.spells = {};
+    if (o.knowAll) R.SpellData.list.forEach(sp => { R.SaveManager.data.spells[sp.id] = 1; });
+    R.ShardManager.shards = o.shards || 0;
+    const put = id => { const sl = F.slots.find(x => x.unlocked && !x.blocked && !x.unit); const u = R.UnitManager.create(id); if (sl) F.place(sl.index, u); else SM.add(u); };
+    o.field.forEach(put);
+    (o.store || []).forEach(id => SM.add(R.UnitManager.create(id)));
+    R.UnitManager.recomputeAll(); R.RecipeManager.refresh(); R.LegendAdvisor.invalidate();
+    R.bus.emit('field:changed', {}); R.bus.emit('storage:changed', SM.units); R.bus.emit('shard:changed', R.ShardManager.shards);
+  };
+  const lgProbe = (pg) => pg.evaluate(() => {
+    const cards = [...document.querySelectorAll('#legendList .lgcard')].map(c => ({ id: c.dataset.legend, text: c.textContent.replace(/\s+/g, ' ').trim(),
+      chips: [...c.querySelectorAll('.lgchip')].map(x => x.className.replace('lgchip ', '')), w: Math.round(c.getBoundingClientRect().width), overflow: c.scrollWidth > c.clientWidth + 1 }));
+    const o = document.getElementById('legendOverlay');
+    return { open: !o.hidden, cards, note: document.getElementById('legendNote').textContent, ms: window.RPD.LegendAdvisor.lastMs,
+      pageOverflow: document.documentElement.scrollWidth > window.innerWidth + 1 };
+  });
+  {
+    const bad = w => lgProblems.push(w);
+    for (const mode of ['portrait', 'pc']) {
+      const lctx2 = await browser.newContext(mode === 'pc' ? { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 } : { ...devices['Galaxy S24'], defaultBrowserType: undefined });
+      const lp2 = await lctx2.newPage();
+      const le2 = [];
+      lp2.on('pageerror', e => le2.push(e.message));
+      await lp2.goto(URL); await lp2.waitForTimeout(1000);
+      await lp2.evaluate(tbPrep, { wave: 7 });
+      await lp2.waitForTimeout(400);
+      const shot = n => lp2.screenshot({ path: require('path').join(__dirname, '..', 'dist', '25_legend_' + n + '.png') });
+      const openPanel = async () => {
+        if (mode === 'portrait') { await lp2.evaluate(() => window.RPD.HudPanels.setDrawer('recipes')); await lp2.waitForTimeout(350); await lp2.tap('#btnLegend'); }
+        else await lp2.click('#btnLegend');
+        await lp2.waitForTimeout(500);
+      };
+      // (a)/(c) 재료가 일부 — 리자몽 재료 2/3 · 윈디 재료 1/3 · 조각 30
+      await lp2.evaluate(lgSetup, { knowAll: true, shards: 30, field: ['charmeleon', 'rapidash', 'growlithe', 'pidgey', 'pidgey'], store: ['weedle', 'caterpie'] });
+      await openPanel();
+      const a = await lgProbe(lp2);
+      if (!a.open || a.cards.length !== 3) bad(mode + ': 추천 3개가 아니다 ' + JSON.stringify(a.cards.map(c => c.id)));
+      if (!a.cards.some(c => /예상 추가 소환 약 \d+회/.test(c.text))) bad(mode + ': "예상 추가 소환 약 N회" 없음 ' + JSON.stringify(a.cards.map(c => c.text)));
+      if (a.cards.some(c => /조합 0번/.test(c.text))) bad(mode + ': "조합 0번" 같은 말이 나온다');
+      if (!a.cards.some(c => c.chips.includes('is-have')) || !a.cards.some(c => c.chips.includes('is-miss'))) bad(mode + ': 칩 색(있음 · 모자람)이 다 안 보인다');
+      if (a.cards.some(c => c.overflow) || a.pageOverflow) bad(mode + ': 카드가 넘친다');
+      if (a.ms > 5000) bad(mode + ': 계산 ' + a.ms + 'ms');
+      await shot(mode === 'pc' ? 'pc_c' : 'portrait_a_partial');
+      // 칩을 누르면 그 재료의 조합식 창
+      if (mode === 'portrait') await lp2.tap('#legendList .lgchip.is-miss'); else await lp2.click('#legendList .lgchip.is-miss');
+      await lp2.waitForTimeout(400);
+      const pop = await lp2.evaluate(() => ({ open: !document.getElementById('recipePop').hidden, legend: !document.getElementById('legendOverlay').hidden, def: document.getElementById('recipePop').dataset.def }));
+      if (!pop.open) bad(mode + ': 재료 칩을 눌렀는데 조합식 창이 안 열린다 ' + JSON.stringify(pop));
+      if (mode === 'portrait') {
+        await shot('portrait_a2_chip_recipe');
+        // (b) 지금 바로 조합 가능
+        await lp2.evaluate(() => { document.getElementById('recipePop').hidden = true; });
+        await lp2.evaluate(lgSetup, { knowAll: true, shards: 0, field: ['vulpix', 'rapidash', 'magmar', 'charmeleon'] });
+        await lp2.evaluate(() => { if (document.body.getAttribute('data-mtab') === 'recipes') window.RPD.HudPanels.setDrawer('recipes'); });
+        await openPanel();
+        const b = await lgProbe(lp2);
+        if (!b.cards[0] || b.cards[0].id !== 'ninetales' || b.cards[0].text.indexOf('지금 바로 조합 가능') < 0) bad('portrait: 지금 바로 1위가 아니다 ' + JSON.stringify(b.cards[0]));
+        await shot('portrait_b_ready');
+        // (d) 미발견 히든 제외
+        await lp2.evaluate(() => { window.RPD.LegendAdvisorUI.hide(); if (document.body.getAttribute('data-mtab') === 'recipes') window.RPD.HudPanels.setDrawer('recipes'); });
+        await lp2.evaluate(lgSetup, { knowAll: false, shards: 0, field: ['charmeleon', 'rapidash', 'growlithe'] });
+        await openPanel();
+        const d = await lgProbe(lp2);
+        const names = await lp2.evaluate(() => window.RPD.PokemonData.list.filter(x => x.hidden).map(x => x.name));
+        const html = await lp2.evaluate(() => document.getElementById('legendOverlay').innerHTML);
+        if (!/숨은 재료가 필요한 전설 \d+종은 제외/.test(d.note)) bad('portrait: 제외 안내 없음 ' + d.note);
+        const leak = names.filter(n => html.indexOf(n) >= 0);
+        if (leak.length) bad('portrait: 숨은 이름이 보인다 ' + leak.join(','));
+        await shot('portrait_d_hidden');
+        lgReport.portrait = { a: a.cards.map(c => c.text.slice(0, 60)), b: b.cards.map(c => c.id), d: { cards: d.cards.map(c => c.id), note: d.note }, ms: a.ms };
+      } else lgReport.pc = { a: a.cards.map(c => c.text.slice(0, 60)), ms: a.ms };
+      if (le2.length) bad(mode + ' 페이지 오류: ' + le2[0]);
+      await lctx2.close();
+    }
+  }
+  console.log('legend', JSON.stringify(lgReport));
+  console.log('legend problems', JSON.stringify(lgProblems));
+  report.push({ legend: lgReport });
+  if (lgProblems.length) process.exitCode = 1;
+
   /* ---------- 홈 화면 앱(세션 53 · 모바일 ④ 세션 71) ----------
    * 설치 · 오프라인은 인터넷 주소에서만 되니, 원본 폴더(dist 아님)를 이 자리에서 작은 웹 서버로 띄워 연다(localhost 는 https 와 같게 친다).
    * 확인: 크롬이 "설치할 수 있다"고 보는가(설치 불가 사유 0) · 서비스 워커 · 오프라인 저장 · 인터넷을 끊고 다시 열어도 켜지고 처음 보는 그림이 나오는가 ·

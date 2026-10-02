@@ -445,7 +445,6 @@
     bus.on('unit:upgraded', function () { self.play('upgrade'); });
     bus.on('unit:sold', function () { self.play('sell'); });
     bus.on('field:slotBought', function () { self.play('coin'); });
-    bus.on('storage:expanded', function () { self.play('coin'); });
     bus.on('shard:spent', function () { self.play('shard'); });
     bus.on('unit:skill', function () { self.play('skill'); });
 

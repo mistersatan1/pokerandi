@@ -34,7 +34,10 @@
   }
   function changed() { RPD.bus.emit('undo:changed', { count: Undo.stack.length }); }
 
-  function alive(r) { return exists(r.uid) && (!r.other || exists(r.other)); }
+  function alive(r) {
+    if (r.kind === 'bulk') return r.items.every(function (it) { return exists(it.uid); });
+    return exists(r.uid) && (!r.other || exists(r.other));
+  }
   /* 화면 표시용 — 사라진 개체가 낀 기록은 빼고 센다(목록은 안 건드린다) */
   Undo.count = function () { return Undo.stack.filter(alive).length; };
   Undo.canUndo = function () { return Undo.count() > 0; };
@@ -58,6 +61,15 @@
       var s = F().get(r.from);
       return storageIndexOf(r.uid) >= 0 && !!(s && s.unlocked && !s.blocked && !s.unit);
     }
+    if (r.kind === 'bulk') {   // 일괄 창고로 — 전부 창고에 그대로 있고 원래 칸이 비어 있어야 한 번에 되돌린다
+      var seen = {};
+      return r.items.every(function (it) {
+        var s = F().get(it.from);
+        if (seen[it.from]) return false;
+        seen[it.from] = true;
+        return storageIndexOf(it.uid) >= 0 && !!(s && s.unlocked && !s.blocked && !s.unit);
+      });
+    }
     if (r.kind === 'deploy') {
       if (uidAt(r.to) !== r.uid) return false;
       return r.other ? storageIndexOf(r.other) >= 0 : !S().isFull();
@@ -68,6 +80,11 @@
   function apply(r) {
     if (r.kind === 'swap') return F().swap(r.to, r.from);
     if (r.kind === 'store') return S().deploy(storageIndexOf(r.uid), r.from).ok;
+    if (r.kind === 'bulk') {
+      var all = true;
+      r.items.forEach(function (it) { var i = storageIndexOf(it.uid); if (i < 0 || !S().deploy(i, it.from).ok) all = false; });
+      return all;
+    }
     if (r.kind === 'deploy') {
       // 창고에서 올리며 자리를 바꿨으면 그 상대를 다시 올린다(= 맞바꿈이 거꾸로) · 아니면 창고로
       return r.other ? S().deploy(storageIndexOf(r.other), r.to).ok : S().store(r.to).ok;
@@ -96,8 +113,12 @@
       push({ kind: 'swap', uid: p.moved.uid, from: p.from, to: p.to, other: p.other ? p.other.uid : null });
     });
     bus.on('storage:stored', function (p) {
-      if (!p || !p.unit || p.from == null) return;
+      if (!p || !p.unit || p.from == null || p.bulk) return;   // 일괄 창고로는 아래 'storage:bulk' 한 건으로
       push({ kind: 'store', uid: p.unit.uid, from: p.from });
+    });
+    bus.on('storage:bulk', function (p) {
+      if (!p || !p.items || !p.items.length) return;
+      push({ kind: 'bulk', items: p.items.map(function (it) { return { uid: it.uid, from: it.from }; }) });
     });
     bus.on('storage:deployed', function (p) {
       if (!p || !p.unit) return;

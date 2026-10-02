@@ -73,6 +73,35 @@ body[data-state="IDLE"] #gameCanvas { filter: saturate(0.85) brightness(0.9); }
   100% { opacity: 0; transform: translate(-50%, -60%) scale(1); }
 }
 
+/* ---------- 보스 이름표(세션 86 · js/ui/BossIntroUI.js) ----------
+ * 라운드 배너 자리에 0.3초 늦게 왼쪽에서 미끄러져 들어와 머물다 빠진다. 필드를 가리는 시간을 짧게, 클릭은 통과 */
+.bossintro {
+  position: absolute; top: 26%; left: 50%;
+  display: grid; justify-items: center; gap: 1px;
+  padding: 8px 26px 10px; min-width: 240px; max-width: 92%;
+  border: 2px solid #ff6a5a; border-radius: 6px;
+  background: linear-gradient(180deg, rgba(92, 10, 26, 0.94), rgba(46, 6, 16, 0.94));
+  box-shadow: 0 4px 0 #2a040c, 0 0 0 1px rgba(0,0,0,.5), 0 12px 26px rgba(0,0,0,.4);
+  color: #fff; text-align: center;
+  opacity: 0; pointer-events: none; transform: translate(-50%, -50%);
+  z-index: 5;
+}
+.bossintro.is-on { animation: bossIn 2s cubic-bezier(.2,.9,.25,1) forwards; }
+.bossintro.is-final { border-color: #ffd23f; box-shadow: 0 4px 0 #3a2a04, 0 0 0 1px rgba(0,0,0,.5), 0 0 34px rgba(255, 196, 40, .35); }
+.bossintro.is-final.is-on { animation-duration: 2.6s; }
+.bossintro__kicker { font-size: 11px; font-weight: 900; letter-spacing: .24em; color: #ff9a8a; }
+.bossintro.is-final .bossintro__kicker { color: #ffd23f; letter-spacing: .12em; }
+.bossintro__name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 24px; font-weight: 900; letter-spacing: -0.02em; line-height: 1.15; text-shadow: 0 2px 0 rgba(0,0,0,.45); }
+.bossintro__threat { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 700; color: #ffd0c8; }
+.bossintro__threat:empty { display: none; }
+@keyframes bossIn {
+  0%, 14% { opacity: 0; transform: translate(-80%, -50%); }
+  26%  { opacity: 1; transform: translate(-48%, -50%); }
+  32%  { transform: translate(-50%, -50%); }
+  82%  { opacity: 1; transform: translate(-50%, -50%); }
+  100% { opacity: 0; transform: translate(-50%, -62%); }
+}
+
 /* ---------- 고등급 소환·조합 연출 ---------- */
 .reveal {
   --tier: var(--gold);

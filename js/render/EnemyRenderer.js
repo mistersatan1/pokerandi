@@ -138,13 +138,14 @@
   };
 
   function drawBossBarIn(ctx, W, boss) {
-    var barW = Math.min(460, W - 40);
+    // 세션 86 — 넓은 화면은 460 → 620(보스가 "큰 상대"로 보이게). 세로 화면(W 600)은 오른쪽 위 진행 알약과 겹치지 않게 그대로
+    var barW = Math.min(W >= 900 ? 620 : 460, W - 40);
     var x = (W - barW) / 2;
     // 화면 위쪽 가운데는 라운드 진행 알약(DOM)이 차지한다. 그 아래로 내린다.
     var y = 56;
 
     ctx.save();
-    RPD.MapRenderer.roundRect(ctx, x - 8, y - 14, barW + 16, 40, 8);
+    RPD.MapRenderer.roundRect(ctx, x - 8, y - 14, barW + 16, 46, 8);
     ctx.fillStyle = 'rgba(10,16,11,0.82)';
     ctx.fill();
     ctx.strokeStyle = 'rgba(224,85,79,0.55)';
@@ -178,11 +179,22 @@
     ctx.fillRect(x, y + 8, barW, 9);
     ctx.fillStyle = boss.enraged ? '#ff6a52' : '#e0554f';
     ctx.fillRect(x, y + 8, barW * ratio, 9);
+    // 2페이즈 눈금 — 어디서 패턴이 바뀌는지 미리 보이게(세션 86). 지나면 흐리게
+    var p2 = boss.def.phase2;
+    if (p2 && p2.at > 0 && p2.at < 1) {
+      var nx = x + barW * p2.at, passed = (boss.phase || 1) >= 2;
+      ctx.fillStyle = passed ? 'rgba(255,255,255,0.35)' : '#ffd23f';
+      ctx.fillRect(nx - 1, y + 5, 2, 15);
+      ctx.font = '800 9px ' + RPD.FONT_STACK;
+      ctx.textAlign = 'center';
+      ctx.fillText('2P', nx, y + 25);
+    }
 
-    ctx.textAlign = 'center';
+    // 체력 숫자는 줄 오른쪽 끝(가운데는 2페이즈 눈금 자리 · 세션 86)
+    ctx.textAlign = 'right';
     ctx.font = '600 11px ' + RPD.FONT_STACK;
     ctx.fillStyle = '#e9e7d8';
-    ctx.fillText(Math.ceil(Math.max(0, boss.hp)) + ' / ' + boss.maxHp, x + barW / 2, y + 12.5);
+    ctx.fillText(Math.ceil(Math.max(0, boss.hp)) + ' / ' + boss.maxHp, x + barW - 4, y + 12.5);
     ctx.restore();
   }
 

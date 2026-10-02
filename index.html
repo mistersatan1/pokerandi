@@ -126,6 +126,8 @@
       </div>
 
       <div class="board__banner" id="waveBanner" aria-live="polite"></div>
+      <!-- 보스 이름표(세션 86) — BossIntroUI 가 boss:appeared 때 채운다. 클릭을 막지 않는다 -->
+      <div class="bossintro" id="bossIntro" aria-live="polite"></div>
       <div class="nextreward" id="nextReward" title="보스를 잡으면 받는 보상"></div>
       <div class="rewardpop" id="rewardPop" aria-live="polite" hidden></div>
       <div class="reveal" id="summonReveal" aria-live="polite">
@@ -661,6 +663,7 @@
 <script src="js/render/Renderer.js"></script>
 <script src="js/render/MapRenderer.js"></script>
 <script src="js/render/FxRenderer.js"></script>
+<script src="js/render/BossIntro.js"></script>
 <script src="js/render/UnitRenderer.js"></script>
 <script src="js/render/EnemyRenderer.js"></script>
 <script src="js/render/AttackFxRenderer.js"></script>
@@ -679,6 +682,7 @@
 <script src="js/ui/BulkStoreUI.js"></script>
 <script src="js/ui/LegendAdvisorUI.js"></script>
 <script src="js/ui/CheerUI.js"></script>
+<script src="js/ui/BossIntroUI.js"></script>
 <script src="js/ui/EliteUI.js"></script>
 <script src="js/ui/SpellUI.js"></script>
 <script src="js/main.js"></script>

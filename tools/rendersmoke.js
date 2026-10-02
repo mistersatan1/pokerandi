@@ -250,6 +250,21 @@ run('잠긴 칸(세션 85) — 못 살 때는 가격을 안 쓰고, 살 수 있�
   if (priced() !== locked.length + cheerLocked) throw new Error('다 살 수 있는데 가격 ' + priced() + ' / ' + (locked.length + cheerLocked));
 });
 
+run('보스 등장 연출(세션 86) — 비네팅 · 입구 경고 · 처치 금빛 · 효과 최소 · 2페이즈 눈금 체력 줄', () => {
+  const BI = RPD.BossIntro;
+  if (!BI) throw new Error('BossIntro 없음');
+  const boss = { name: 'x', wave: 10, isBoss: true, def: { phase2: { at: 0.5, label: '가속' } } };
+  BI.start(boss);
+  const g0 = calls.createRadialGradient || 0, f0 = calls.fillText || 0;
+  BI.draw(ctx);
+  if (!((calls.createRadialGradient || 0) > g0) || !((calls.fillText || 0) > f0)) throw new Error('비네팅 · 경고 글자를 안 그렸다');
+  if (RPD.Effects) { RPD.Effects.force('minimal'); BI.draw(ctx); RPD.Effects.force(null); }
+  BI.cleared(boss); BI.draw(ctx);
+  if (!BI.isBusy()) throw new Error('처치 비네팅이 없다');
+  BI.reset();
+  if (BI.isBusy()) throw new Error('reset 뒤에도 남았다');
+});
+
 run('조합 재료가 되는 칸이 강조된다', () => {
   // v1 의 자유 합성(fusion:changed) 자리를 v2 의 조합식이 대신한다
   RPD.FieldManager.init();

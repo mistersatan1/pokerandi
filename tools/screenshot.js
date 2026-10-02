@@ -1663,6 +1663,15 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     if (tr.problems.length) process.exitCode = 1;
   }
 
+  /* ㉚ 리디자인 ②(세션 86) 보스 등장 · 처치 연출 — tools/bossshots.js(단독으로도 돈다). 30_boss_* */
+  {
+    const br = await require('./bossshots.js').run(browser);
+    console.log('boss', JSON.stringify(br.report));
+    console.log('boss problems', JSON.stringify(br.problems));
+    report.push({ boss: br.report });
+    if (br.problems.length) process.exitCode = 1;
+  }
+
   /* ㉘ 응원 칸(세션 82) — tools/cheershots.js(단독으로도 돈다). (b) 빈 응원 칸 (c) 2마리 + 요약 줄 (d) 응원 칸 카드 (e) 받는 버프 (f) 거절 알림 (g) 2라운드 */
   {
     const ch = await require('./cheershots.js').run(browser);

@@ -759,6 +759,9 @@
   function ringAngle(a) { if (lastRing) lastRing.ang = a; }
 
 
+  /* 보스 등장 · 처치(BossIntro · 세션 86)도 같은 흔들림을 쓴다 — 효과 단계 · 동작 줄이기 규칙 그대로 */
+  AttackFx.shake = function (strength) { requestShake(strength, true); };
+
   function requestShake(strength, force) {
     if (reduceMotion || !fxLv.shake) return;
     if (!force && shake.cooldown > 0) return;

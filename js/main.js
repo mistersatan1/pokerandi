@@ -46,6 +46,7 @@
     if (RPD.UndoManager) RPD.UndoManager.init();
     if (RPD.Haptics) RPD.Haptics.init();
     RPD.FxRenderer.init();
+    if (RPD.BossIntro) RPD.BossIntro.init();
     RPD.UnitRenderer.init();
     if (RPD.AttackFx) RPD.AttackFx.init();
 
@@ -59,6 +60,7 @@
     if (RPD.BulkStoreUI) RPD.BulkStoreUI.init();
     if (RPD.LegendAdvisorUI) RPD.LegendAdvisorUI.init();
     if (RPD.CheerUI) RPD.CheerUI.init();
+    if (RPD.BossIntroUI) RPD.BossIntroUI.init();
     if (RPD.EliteUI) RPD.EliteUI.init();
     if (RPD.SpellUI) RPD.SpellUI.init();
     if (RPD.HudPanels) RPD.HudPanels.init();
@@ -97,6 +99,7 @@
     // 포켓몬별 공격 연출 — 적 위, 데미지 숫자 아래
     if (RPD.AttackFx) RPD.Renderer.addLayer(L.PROJECTILES + 1, function (ctx) { RPD.AttackFx.draw(ctx); });
     RPD.Renderer.addLayer(L.FX, function (ctx) { RPD.FxRenderer.draw(ctx); });
+    if (RPD.BossIntro) RPD.Renderer.addLayer(L.FX + 5, function (ctx) { RPD.BossIntro.draw(ctx); });   // 보스 등장 · 처치 비네팅(세션 86)
     RPD.Renderer.addLayer(L.OVERLAY, function (ctx) { RPD.EnemyRenderer.drawBossBar(ctx); });
   }
 

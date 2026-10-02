@@ -3024,6 +3024,29 @@ check('응원 칸 — 정보 카드 · 강화 버튼 · 보유 칸 ✨ · [응�
   CH.F.clearSelection();
 });
 
+/* ---------- 보스 등장 연출(세션 86 · 리디자인 ②) ---------- */
+check('보스 이름표 — 등장하면 이름 · 위협 한 줄이 뜨고 라운드 배너를 내린다 · 최종 보스는 "최종 보스" · 쓰러지면 바로 내린다', () => {
+  const BI = RPD.BossIntroUI, def = RPD.EnemyData ? null : null;
+  const boss = { name: '시험보스', wave: 10, isBoss: true, def: { name: '폭주대장', patterns: [{ label: '증원', every: 15 }, { label: '충격파', every: 10 }, { label: '침묵', every: 13 }], phase2: { at: 0.5, label: '가속' }, timeLimit: 60 } };
+  if (BI.threatOf(boss) !== '증원 15초마다 · 충격파 10초마다 · 체력 50% 가속') throw new Error('위협 줄 ' + BI.threatOf(boss));
+  if (BI.threatOf({ def: { patterns: [{ label: '증원', every: 15 }], timeLimit: 60 } }) !== '증원 15초마다 · 60초 뒤 돌진') throw new Error('짧은 위협 줄');
+  nodes.waveBanner.classList.add('is-on');
+  RPD.bus.emit('boss:appeared', boss);
+  const n = nodes.bossIntro;
+  if (!n.classList.contains('is-on') || !/시험보스/.test(n.innerHTML) || !/BOSS/.test(n.innerHTML)) throw new Error('이름표가 안 떴다 ' + n.innerHTML);
+  if (nodes.waveBanner.classList.contains('is-on')) throw new Error('라운드 배너가 남았다');
+  if (!RPD.BossIntro.isBusy()) throw new Error('캔버스 연출이 안 시작했다');
+  RPD.bus.emit('enemy:died', { enemy: boss });
+  if (n.classList.contains('is-on')) throw new Error('보스가 쓰러졌는데 이름표가 남았다');
+  const fw = RPD.GameManager.mode && RPD.GameManager.mode.finalWave;
+  if (fw) {
+    RPD.bus.emit('boss:appeared', Object.assign({}, boss, { wave: fw }));
+    if (!/최종 보스/.test(n.innerHTML) || !n.classList.contains('is-final')) throw new Error('최종 보스 표시 ' + n.innerHTML);
+    BI.hide();
+  }
+  RPD.BossIntro.reset();
+});
+
 wakePromise.then(() => {
   console.log(`\n────────────────────────────`);
   console.log(failures === 0 ? '부팅 경로 이상 없음' : `부팅 문제 ${failures}건`);

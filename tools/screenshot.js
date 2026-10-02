@@ -1608,6 +1608,52 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
   report.push({ legend: lgReport });
   if (lgProblems.length) process.exitCode = 1;
 
+  /* ㉖ 보유 창 [타입별] 머리 — 서로 다른 종 기준(세션 80). 구구 ×2 + 꼬렛 ×2 를 필드에 둔 보기: "필드 1종 · 1/2종 → … · 구구 ×2는 1종으로".
+   * 캡처: 26_bytype_{portrait|pc}.png. 어긋나면 도구가 실패로 끝난다. */
+  const btProblems = [], btReport = {};
+  {
+    const bad = w => btProblems.push(w);
+    for (const mode of ['portrait', 'pc']) {
+      const bctx2 = await browser.newContext(mode === 'pc' ? { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 } : { ...devices['Galaxy S24'], defaultBrowserType: undefined });
+      const bp2 = await bctx2.newPage();
+      const be2 = [];
+      bp2.on('pageerror', e => be2.push(e.message));
+      await bp2.goto(URL); await bp2.waitForTimeout(1000);
+      await bp2.evaluate(tbPrep, { wave: 7 });
+      await bp2.waitForTimeout(400);
+      await bp2.evaluate(() => {
+        const R = window.RPD, F = R.FieldManager;
+        R.Loop.setPaused(true);
+        F.slots.forEach(x => { if (x.unit) F.remove(x.index); });
+        R.StorageManager.reset();
+        ['pidgey', 'pidgey', 'rattata', 'rattata', 'pikachu'].forEach(id => { const sl = F.slots.find(x => x.unlocked && !x.blocked && !x.unit); F.place(sl.index, R.UnitManager.create(id)); });
+        R.StorageManager.add(R.UnitManager.create('pidgeotto'));
+        R.UnitManager.recomputeAll(); R.bus.emit('field:changed', {}); R.bus.emit('storage:changed', R.StorageManager.units);
+        if (window.innerWidth < 1100) R.HudPanels.setDrawer('owned');
+      });
+      await bp2.waitForTimeout(400);
+      if (mode === 'portrait') await bp2.tap('#ownedSort [data-sort="type"]'); else await bp2.click('#ownedSort [data-sort="type"]');
+      await bp2.waitForTimeout(400);
+      const r = await bp2.evaluate(() => {
+        const heads = [...document.querySelectorAll('#storageList .typegroup__head')].map(h => h.textContent.replace(/\s+/g, ' ').trim());
+        const fl = heads.find(h => h.indexOf('비행') === 0) || '';
+        const bad = [...document.querySelectorAll('#storageList .typegroup__head')].some(h => h.scrollWidth > h.clientWidth + 1);
+        return { fl, heads: heads.slice(0, 4), cut: bad, syn: window.RPD.SynergyManager.countOf('FLYING'), pageOverflow: document.documentElement.scrollWidth > window.innerWidth + 1 };
+      });
+      if (!/필드 1종/.test(r.fl) || !/1\/2종/.test(r.fl) || r.fl.indexOf('구구 ×2는 1종으로') < 0) bad(mode + ': 비행 머리 ' + r.fl);
+      if (r.syn !== 1) bad(mode + ': 실제 시너지 비행 ' + r.syn);
+      if (r.cut || r.pageOverflow) bad(mode + ': 머리가 잘리거나 넘친다');
+      await bp2.screenshot({ path: require('path').join(__dirname, '..', 'dist', '26_bytype_' + mode + '.png') });
+      btReport[mode] = r;
+      if (be2.length) bad(mode + ' 페이지 오류: ' + be2[0]);
+      await bctx2.close();
+    }
+  }
+  console.log('bytype', JSON.stringify(btReport));
+  console.log('bytype problems', JSON.stringify(btProblems));
+  report.push({ bytype: btReport });
+  if (btProblems.length) process.exitCode = 1;
+
   /* ---------- 홈 화면 앱(세션 53 · 모바일 ④ 세션 71) ----------
    * 설치 · 오프라인은 인터넷 주소에서만 되니, 원본 폴더(dist 아님)를 이 자리에서 작은 웹 서버로 띄워 연다(localhost 는 https 와 같게 친다).
    * 확인: 크롬이 "설치할 수 있다"고 보는가(설치 불가 사유 0) · 서비스 워커 · 오프라인 저장 · 인터넷을 끊고 다시 열어도 켜지고 처음 보는 그림이 나오는가 ·

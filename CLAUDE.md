@@ -45,6 +45,7 @@ node tools/perf.js 4  # 휴대폰 성능 — CPU 4배 느린 갤럭시 흉내로
 | `js/render/FramePacer.js` | 언제 · 얼마나 곱게 그릴지 — 전투 최대 60fps · 쉬는 중 10fps · 느리면 화질 사다리(해상도 2→1.5→1.25→1→30fps). 게임 규칙 · 시간은 안 건드림 |
 | `js/systems/UnitManager.js` 의 `locked` | 포켓몬 잠금(세션 74) — 재료(조합 · 주문 · 메타몽) · 방출에서 빠진다. 조합식 줄 "0/1 🔒1" 은 `RecipeManager.countsOf()`. 새 "재료 · 방출" 경로를 만들면 `.locked` 를 건너뛸 것(검사: bootsmoke "포켓몬 잠금"). 키 L |
 | `js/systems/SynergyManager.js` | 시너지는 **서로 다른 종(defId) 기준**(세션 77 — 구구 2마리 = 비행 1). 패널은 "비행 1/2 · 구구 ×2는 1종으로". 임계값(`RPD.Synergies`)은 조정안 **B** 적용(상위 단계 −1 · 독 · 노말 첫 단계 2 — VERSION 세션 77, `SYN_PRESET` 은 autoplay 실험용) |
+| `js/systems/LegendAdvisor.js` · `js/ui/LegendAdvisorUI.js` | 전설 추천(세션 78) — 보유(잠금 제외 · 메타몽) 기준 트리 전개 → 기대 소환 수(`SummonManager.speciesWeights` · 몬테카를로 300 · 고정 시드) · 조각 · **미발견 히든이 든 전설은 이름 없이 수만**. 추천만 한다 |
 | `Config.storageBase` | 창고 칸 36 고정(세션 76 — 골드 확장 삭제. 이어하기는 max(저장값, 기본값)). 값은 autoplay 의 `storageMax` · `STORAGE_CAP` 으로 쟀다(VERSION 세션 76) |
 | `js/ui/BulkStoreUI.js` · `StorageManager.bulkStore` | 일괄 창고로(세션 75) — 등급 칸은 `GoldShopManager.tierSlotOf`(히든은 [히든] 칸에만) · 잠금 제외 · 약한 순 · 자리 모자라면 일부만 · 되돌리기 'bulk' 1건 |
 | `js/systems/UndoManager.js` | 배치 이동 되돌리기(세션 68) — 이동 · 교체 · 창고로 · 필드로만, 최대 3. 소환 · 조합 · 방출 · 강화 · 상점 · 정예는 안 되돌린다. 화면은 `js/ui/Convenience.js`(Ctrl+Z · 알림) · 정보 바 [되돌리기] |

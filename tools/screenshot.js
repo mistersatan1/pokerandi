@@ -1518,6 +1518,96 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
   report.push({ synergy: syReport });
   if (syProblems.length) process.exitCode = 1;
 
+  /* ㉕ 전설 추천(세션 78) — 세로(갤럭시 S24) (a) 재료가 일부 있는 보드의 추천 3개 (b) "지금 바로 조합 가능" (d) 미발견 히든 제외 안내 · PC (c).
+   * (a)(b)(c) 는 주문을 모두 밝힌 기록(히든 재료도 추천에 나온다) · (d) 는 아무것도 안 밝힌 기록. 어긋나면 도구가 실패로 끝난다.
+   * 캡처: 25_legend_portrait_a_partial · _b_ready · _d_hidden · 25_legend_pc_c */
+  const lgProblems = [], lgReport = {};
+  const lgSetup = (o) => {
+    const R = window.RPD, F = R.FieldManager, SM = R.StorageManager;
+    R.Loop.setPaused(true);
+    R.GameManager.setWave(22);
+    F.slots.forEach(x => { if (x.unit) F.remove(x.index); });
+    SM.reset();
+    R.SaveManager.data.spells = {};
+    if (o.knowAll) R.SpellData.list.forEach(sp => { R.SaveManager.data.spells[sp.id] = 1; });
+    R.ShardManager.shards = o.shards || 0;
+    const put = id => { const sl = F.slots.find(x => x.unlocked && !x.blocked && !x.unit); const u = R.UnitManager.create(id); if (sl) F.place(sl.index, u); else SM.add(u); };
+    o.field.forEach(put);
+    (o.store || []).forEach(id => SM.add(R.UnitManager.create(id)));
+    R.UnitManager.recomputeAll(); R.RecipeManager.refresh(); R.LegendAdvisor.invalidate();
+    R.bus.emit('field:changed', {}); R.bus.emit('storage:changed', SM.units); R.bus.emit('shard:changed', R.ShardManager.shards);
+  };
+  const lgProbe = (pg) => pg.evaluate(() => {
+    const cards = [...document.querySelectorAll('#legendList .lgcard')].map(c => ({ id: c.dataset.legend, text: c.textContent.replace(/\s+/g, ' ').trim(),
+      chips: [...c.querySelectorAll('.lgchip')].map(x => x.className.replace('lgchip ', '')), w: Math.round(c.getBoundingClientRect().width), overflow: c.scrollWidth > c.clientWidth + 1 }));
+    const o = document.getElementById('legendOverlay');
+    return { open: !o.hidden, cards, note: document.getElementById('legendNote').textContent, ms: window.RPD.LegendAdvisor.lastMs,
+      pageOverflow: document.documentElement.scrollWidth > window.innerWidth + 1 };
+  });
+  {
+    const bad = w => lgProblems.push(w);
+    for (const mode of ['portrait', 'pc']) {
+      const lctx2 = await browser.newContext(mode === 'pc' ? { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 } : { ...devices['Galaxy S24'], defaultBrowserType: undefined });
+      const lp2 = await lctx2.newPage();
+      const le2 = [];
+      lp2.on('pageerror', e => le2.push(e.message));
+      await lp2.goto(URL); await lp2.waitForTimeout(1000);
+      await lp2.evaluate(tbPrep, { wave: 7 });
+      await lp2.waitForTimeout(400);
+      const shot = n => lp2.screenshot({ path: require('path').join(__dirname, '..', 'dist', '25_legend_' + n + '.png') });
+      const openPanel = async () => {
+        if (mode === 'portrait') { await lp2.evaluate(() => window.RPD.HudPanels.setDrawer('recipes')); await lp2.waitForTimeout(350); await lp2.tap('#btnLegend'); }
+        else await lp2.click('#btnLegend');
+        await lp2.waitForTimeout(500);
+      };
+      // (a)/(c) 재료가 일부 — 리자몽 재료 2/3 · 윈디 재료 1/3 · 조각 30
+      await lp2.evaluate(lgSetup, { knowAll: true, shards: 30, field: ['charmeleon', 'rapidash', 'growlithe', 'pidgey', 'pidgey'], store: ['weedle', 'caterpie'] });
+      await openPanel();
+      const a = await lgProbe(lp2);
+      if (!a.open || a.cards.length !== 3) bad(mode + ': 추천 3개가 아니다 ' + JSON.stringify(a.cards.map(c => c.id)));
+      if (!a.cards.some(c => /예상 추가 소환 약 \d+회/.test(c.text))) bad(mode + ': "예상 추가 소환 약 N회" 없음 ' + JSON.stringify(a.cards.map(c => c.text)));
+      if (a.cards.some(c => /조합 0번/.test(c.text))) bad(mode + ': "조합 0번" 같은 말이 나온다');
+      if (!a.cards.some(c => c.chips.includes('is-have')) || !a.cards.some(c => c.chips.includes('is-miss'))) bad(mode + ': 칩 색(있음 · 모자람)이 다 안 보인다');
+      if (a.cards.some(c => c.overflow) || a.pageOverflow) bad(mode + ': 카드가 넘친다');
+      if (a.ms > 5000) bad(mode + ': 계산 ' + a.ms + 'ms');
+      await shot(mode === 'pc' ? 'pc_c' : 'portrait_a_partial');
+      // 칩을 누르면 그 재료의 조합식 창
+      if (mode === 'portrait') await lp2.tap('#legendList .lgchip.is-miss'); else await lp2.click('#legendList .lgchip.is-miss');
+      await lp2.waitForTimeout(400);
+      const pop = await lp2.evaluate(() => ({ open: !document.getElementById('recipePop').hidden, legend: !document.getElementById('legendOverlay').hidden, def: document.getElementById('recipePop').dataset.def }));
+      if (!pop.open) bad(mode + ': 재료 칩을 눌렀는데 조합식 창이 안 열린다 ' + JSON.stringify(pop));
+      if (mode === 'portrait') {
+        await shot('portrait_a2_chip_recipe');
+        // (b) 지금 바로 조합 가능
+        await lp2.evaluate(() => { document.getElementById('recipePop').hidden = true; });
+        await lp2.evaluate(lgSetup, { knowAll: true, shards: 0, field: ['vulpix', 'rapidash', 'magmar', 'charmeleon'] });
+        await lp2.evaluate(() => { if (document.body.getAttribute('data-mtab') === 'recipes') window.RPD.HudPanels.setDrawer('recipes'); });
+        await openPanel();
+        const b = await lgProbe(lp2);
+        if (!b.cards[0] || b.cards[0].id !== 'ninetales' || b.cards[0].text.indexOf('지금 바로 조합 가능') < 0) bad('portrait: 지금 바로 1위가 아니다 ' + JSON.stringify(b.cards[0]));
+        await shot('portrait_b_ready');
+        // (d) 미발견 히든 제외
+        await lp2.evaluate(() => { window.RPD.LegendAdvisorUI.hide(); if (document.body.getAttribute('data-mtab') === 'recipes') window.RPD.HudPanels.setDrawer('recipes'); });
+        await lp2.evaluate(lgSetup, { knowAll: false, shards: 0, field: ['charmeleon', 'rapidash', 'growlithe'] });
+        await openPanel();
+        const d = await lgProbe(lp2);
+        const names = await lp2.evaluate(() => window.RPD.PokemonData.list.filter(x => x.hidden).map(x => x.name));
+        const html = await lp2.evaluate(() => document.getElementById('legendOverlay').innerHTML);
+        if (!/숨은 재료가 필요한 전설 \d+종은 제외/.test(d.note)) bad('portrait: 제외 안내 없음 ' + d.note);
+        const leak = names.filter(n => html.indexOf(n) >= 0);
+        if (leak.length) bad('portrait: 숨은 이름이 보인다 ' + leak.join(','));
+        await shot('portrait_d_hidden');
+        lgReport.portrait = { a: a.cards.map(c => c.text.slice(0, 60)), b: b.cards.map(c => c.id), d: { cards: d.cards.map(c => c.id), note: d.note }, ms: a.ms };
+      } else lgReport.pc = { a: a.cards.map(c => c.text.slice(0, 60)), ms: a.ms };
+      if (le2.length) bad(mode + ' 페이지 오류: ' + le2[0]);
+      await lctx2.close();
+    }
+  }
+  console.log('legend', JSON.stringify(lgReport));
+  console.log('legend problems', JSON.stringify(lgProblems));
+  report.push({ legend: lgReport });
+  if (lgProblems.length) process.exitCode = 1;
+
   /* ---------- 홈 화면 앱(세션 53 · 모바일 ④ 세션 71) ----------
    * 설치 · 오프라인은 인터넷 주소에서만 되니, 원본 폴더(dist 아님)를 이 자리에서 작은 웹 서버로 띄워 연다(localhost 는 https 와 같게 친다).
    * 확인: 크롬이 "설치할 수 있다"고 보는가(설치 불가 사유 0) · 서비스 워커 · 오프라인 저장 · 인터넷을 끊고 다시 열어도 켜지고 처음 보는 그림이 나오는가 ·

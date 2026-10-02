@@ -24,6 +24,7 @@
     { id: 'goldShopOverlay', title: '골드 상점' },
     { id: 'eliteOverlay', title: '정예 소환' },
     { id: 'bulkOverlay', title: '일괄 창고로' },
+    { id: 'legendOverlay', title: '전설 추천' },
     { id: 'bookOverlay', title: '조합 사전' }
   ];
   var FINGER = 44;              // 손가락 지름(화면 px) — 칸 누르기 범위

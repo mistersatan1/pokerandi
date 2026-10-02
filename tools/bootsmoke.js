@@ -2324,9 +2324,10 @@ check('판 이어하기 — 잠금이 저장 · 복원된다(필드 · 창고)',
   if (!r.ok) throw new Error('저장이 안 됐다: ' + r.reason);
   RS.restore(r.data);
   RS.pending = null;
-  const fu = RPD.FieldManager.getUnits().find(u => u.defId === 'pidgey'), su = RPD.StorageManager.units.find(u => u.defId === 'rattata');
-  if (!fu || !fu.locked) throw new Error('필드 개체의 잠금이 안 돌아왔다');
-  if (!su || !su.locked) throw new Error('창고 개체의 잠금이 안 돌아왔다');
+  // 판 시작 때 무작위로 받는 흔함이 같은 종(구구 · 꼬렛)일 수 있다 — "그 종 중 잠긴 개체가 하나 있는가"로 본다(세션 78: find 가 받은 개체를 집어 가끔 떨어졌다)
+  const fl = RPD.FieldManager.getUnits().filter(u => u.defId === 'pidgey'), sl = RPD.StorageManager.units.filter(u => u.defId === 'rattata');
+  if (fl.filter(u => u.locked).length !== 1) throw new Error('필드 개체의 잠금이 안 돌아왔다');
+  if (sl.filter(u => u.locked).length !== 1) throw new Error('창고 개체의 잠금이 안 돌아왔다');
   RS.clear();
 });
 
@@ -2633,6 +2634,111 @@ check('시너지 패널 — "비행 1/2" 와 "구구 ×2는 1종으로" 로 왜 
   RPD.bus.emit('field:changed', {});
   const on = panelHtml('synergyBody');
   if (on.indexOf('구구 ×2는 1종으로') < 0) throw new Error('켜진 뒤에도 중복 안내는 남아야 한다');
+});
+
+/* ---------- 전설 추천(세션 78) ---------- */
+console.log('\n전설 추천 — LegendAdvisor');
+const LA = RPD.LegendAdvisor;
+function laFresh(knowAll) {
+  MS.forceMobile = false; RPD.Config.autosave = false;
+  RPD.Game.restart(); RPD.Game.startRun('NORMAL', 'NORMAL');
+  RPD.GameManager.life = 999; RPD.GameManager.setWave(20);
+  RPD.FieldManager.init(); RPD.StorageManager.reset();
+  RPD.ShardManager.shards = 0;
+  RPD.SaveManager.data.spells = {};
+  if (knowAll) RPD.SpellData.list.forEach(sp => { RPD.SaveManager.data.spells[sp.id] = 1; });
+  LA.invalidate();
+}
+function laGive(ids) { ids.forEach(id => RPD.StorageManager.add(RPD.UnitManager.create(id))); RPD.RecipeManager.refresh(); }
+
+check('재료를 다 가진 전설이 "지금 바로 조합 가능"으로 1위', () => {
+  laFresh(true);
+  laGive(['vulpix', 'rapidash', 'magmar']);       // 나인테일
+  const r = LA.compute();
+  if (!r.top.length || r.top[0].id !== 'ninetales' || !r.top[0].ready || r.top[0].expected !== 0) throw new Error('1위 ' + JSON.stringify(r.top[0] && { id: r.top[0].id, ready: r.top[0].ready }));
+  if (r.list.filter(x => x.ready).length !== 1) throw new Error('지금 바로가 하나여야 한다');
+});
+
+check('재료 하나 모자란 전설이 둘 모자란 것보다 위 — 리자몽(두두 −1) > 윈디(독침붕 · 마그마 −2)', () => {
+  laFresh(true);
+  laGive(['charmeleon', 'rapidash', 'growlithe']);
+  const r = LA.compute();
+  const a = r.list.findIndex(x => x.id === 'charizard'), b = r.list.findIndex(x => x.id === 'arcanine');
+  const ca = r.list[a].chips.reduce((n, c) => n + c.missing, 0), cb = r.list[b].chips.reduce((n, c) => n + c.missing, 0);
+  if (ca !== 1 || cb !== 2) throw new Error('모자란 수 ' + ca + ' / ' + cb);
+  if (!(a >= 0 && b >= 0 && a < b)) throw new Error('순서 리자몽 ' + a + ' · 윈디 ' + b);
+  if (!(r.list[a].expected < r.list[b].expected)) throw new Error('기대 소환 ' + r.list[a].expected + ' / ' + r.list[b].expected);
+});
+
+check('잠긴 유닛은 보유로 안 친다 — 잠그면 "지금 바로"가 아니고, 풀면 다시', () => {
+  laFresh(true);
+  laGive(['vulpix', 'rapidash', 'magmar']);
+  const u = RPD.StorageManager.units.find(x => x.defId === 'magmar');
+  RPD.UnitManager.setLocked(u, true);
+  let r = LA.compute(), n = r.list.find(x => x.id === 'ninetales');
+  if (!n || n.ready || n.chips.find(c => c.id === 'magmar').missing !== 1) throw new Error('잠긴 마그마를 보유로 셌다');
+  RPD.UnitManager.setLocked(u, false);
+  r = LA.compute(); n = r.list.find(x => x.id === 'ninetales');
+  if (!n.ready) throw new Error('잠금을 풀었는데 지금 바로가 아니다');
+});
+
+check('미발견 히든이 든 전설은 후보에서 빠지고 HTML 어디에도 이름이 안 나온다 · "N종은 제외" 한 줄', () => {
+  laFresh(false);
+  laGive(['vulpix', 'rapidash', 'magmar', 'charmeleon']);
+  const r = LA.compute();
+  const shown = new Set(r.list.map(x => x.id));
+  const excluded = LA.candidates().filter(id => !shown.has(id));
+  if (!r.hiddenExcluded || excluded.length !== r.hiddenExcluded) throw new Error('제외 수 ' + r.hiddenExcluded + ' / ' + excluded.length);
+  click('btnLegend');
+  if (nodes.legendOverlay.hidden) throw new Error('[전설 추천] 창이 안 열린다');
+  RPD.LegendAdvisorUI.render();
+  const html = panelHtml('legendList') + ' ' + String(nodes.legendNote.textContent) + ' ' + JSON.stringify(r);
+  const secretNames = RPD.PokemonData.list.filter(d => d.hidden).map(d => d.name).concat(excluded.map(id => RPD.PokemonData.get(id).name));
+  const leak = secretNames.filter(nm => html.indexOf(nm) >= 0);
+  if (leak.length) throw new Error('이름이 새었다: ' + leak.join(', '));
+  const leakId = excluded.concat(RPD.PokemonData.list.filter(d => d.hidden).map(d => d.id)).filter(id => html.indexOf('"' + id + '"') >= 0);
+  if (leakId.length) throw new Error('id 가 새었다: ' + leakId.join(', '));
+  if (String(nodes.legendNote.textContent).indexOf('숨은 재료가 필요한 전설 ' + r.hiddenExcluded + '종은 제외') < 0) throw new Error('안내: ' + nodes.legendNote.textContent);
+  click('btnLegendClose');
+});
+
+check('기대 소환 수 — 같은 보유에서 실제 pickSpecies 로 재료가 모일 때까지 200번 돌린 평균과 ±15% 안 · 계산 5초 안', () => {
+  laFresh(true);
+  laGive(['charmeleon', 'rapidash', 'growlithe']);
+  const t0 = Date.now();
+  const r = LA.compute({ force: true });
+  const ms = Date.now() - t0;
+  if (ms > 5000) throw new Error('계산 ' + ms + 'ms');
+  const SM = RPD.SummonManager;
+  const pick = r.list.filter(x => !x.ready && isFinite(x.expected) && x.expected > 0).slice(0, 3);
+  if (pick.length < 3) throw new Error('비교할 후보가 모자란다');
+  pick.forEach(x => {
+    let tot = 0;
+    for (let i = 0; i < 200; i++) {
+      const left = Object.assign({}, x.leaves);
+      let rem = Object.values(left).reduce((a, b) => a + b, 0), d = 0;
+      while (rem > 0 && d < 20000) {
+        d++;
+        const sp = SM.pickSpecies(RPD.Utils.weightedPick(SM.currentOdds()));
+        if (left[sp] > 0) { left[sp]--; rem--; }
+      }
+      tot += d;
+    }
+    const sim = tot / 200, diff = Math.abs(x.expected / sim - 1);
+    if (diff > 0.15) throw new Error(x.id + ' 계산 ' + x.expected.toFixed(1) + ' · 실제 ' + sim.toFixed(1) + ' (' + (diff * 100).toFixed(1) + '%)');
+  });
+});
+
+check('같은 보유면 다시 계산하지 않는다(캐시) · 화면이 안 흔들린다(고정 시드) · 추천은 골드 · 조각 · 보유를 바꾸지 않는다', () => {
+  laFresh(true);
+  laGive(['charmeleon', 'rapidash']);
+  RPD.ShardManager.shards = 60; RPD.GameManager.gold = 777;
+  const a = LA.compute(), b = LA.compute();
+  if (a !== b) throw new Error('캐시를 안 썼다');
+  const c = LA.compute({ force: true });
+  if (JSON.stringify(c.top.map(x => [x.id, x.expected])) !== JSON.stringify(a.top.map(x => [x.id, x.expected]))) throw new Error('다시 계산하니 숫자가 바뀐다');
+  if (RPD.ShardManager.shards !== 60 || RPD.GameManager.gold !== 777 || RPD.StorageManager.units.length !== 2) throw new Error('추천이 무언가를 썼다');
+  if (!c.list.some(x => x.shardsUsed > 0)) throw new Error('조각 60 이 있는데 조각을 쓰는 안이 없다');
 });
 
 wakePromise.then(() => {

@@ -121,13 +121,14 @@
   /* 같은 등급 안에서 어떤 종이 나올지.
    * 조합 보정: 재료 하나만 남은 레시피의 그 재료에 가중치를 얹는다.
    * 중복 보정: 이미 여러 마리 보유한 종은 가중치를 낮춘다. */
-  SummonManager.pickSpecies = function (tier, opts) {
+  /* 그 등급에서 종마다의 가중치 [{ id, weight }] — pickSpecies 가 그대로 쓰고, 전설 추천(LegendAdvisor)이 기대 소환 수를 잴 때도 쓴다(세션 78) */
+  SummonManager.speciesWeights = function (tier, opts) {
     /* 소환은 summon:true 인 종만(흔함 15 · 안흔함 21 · 특별함 7).
      * 보스 보상은 그 등급에서 히든만 뺀 전체 — 희귀함·전설은 소환 대상이 없어서다.
      * 예전에는 판마다 계열을 추첨했다(PoolManager). 조합식 개편 v2 에서 없앴다 —
      * 재료가 전부 이름으로 못박혀 있어, 추첨에서 빠진 계열이 있으면 조합이 막힌다. */
     var pool = opts && opts.reward ? RPD.PokemonData.rewardPool(tier) : RPD.PokemonData.summonPool(tier);
-    if (!pool.length) return null;
+    if (!pool.length) return [];
 
     var T = RPD.SummonTable;
     var wanted = RPD.RecipeManager ? RPD.RecipeManager.missingMaterials(T.recipeBoostMaxMissing) : {};
@@ -146,6 +147,12 @@
       if ((owned[id] || 0) >= T.duplicateSoftenFrom) weight *= T.duplicateSoftenMul;
       entries.push({ id: id, weight: weight });
     }
+    return entries;
+  };
+
+  SummonManager.pickSpecies = function (tier, opts) {
+    var entries = this.speciesWeights(tier, opts);
+    if (!entries.length) return null;
     return U.weightedPick(entries);
   };
 

@@ -190,6 +190,18 @@
       </div>
       <div class="spellscene" id="spellScene" hidden></div>
 
+      <div class="book gshop legend" id="legendOverlay" hidden>
+        <div class="book__card pane gshop__card">
+          <div class="book__head">
+            <h2 class="pane__title">★ 전설 추천</h2>
+            <span class="gshop__hint">지금 보유한 포켓몬(잠근 것 제외)으로 가장 빨리 만들 수 있는 전설 — 앞으로 필요한 소환 수가 적은 순</span>
+            <button type="button" class="help__close" id="btnLegendClose" aria-label="닫기">×</button>
+          </div>
+          <div class="legend__list" id="legendList"></div>
+          <p class="legend__note" id="legendNote"></p>
+        </div>
+      </div>
+
       <div class="book gshop bulk" id="bulkOverlay" hidden>
         <div class="book__card pane gshop__card">
           <div class="book__head">
@@ -442,6 +454,7 @@
             <span class="craftbtn__badge" id="craftBadge" hidden>0</span>
           </button>
         </header>
+        <div class="legendbar"><button type="button" class="minibtn legendbtn" id="btnLegend" title="지금 보유한 포켓몬으로 가장 빨리 만들 수 있는 전설">★ 전설 추천</button></div>
         <div class="tierfilter" id="tierFilter"></div>
         <div class="recipepop" id="recipePop" hidden></div>
         <div class="recipes__list" id="recipeList">
@@ -631,6 +644,7 @@
 <script src="js/systems/SaveManager.js"></script>
 <script src="js/systems/ProgressManager.js"></script>
 <script src="js/systems/SpellManager.js"></script>
+<script src="js/systems/LegendAdvisor.js"></script>
 <script src="js/systems/RunSave.js"></script>
 
 <script src="js/render/SpriteFactory.js"></script>
@@ -654,6 +668,7 @@
 <script src="js/ui/AppUI.js"></script>
 <script src="js/ui/GoldShopUI.js"></script>
 <script src="js/ui/BulkStoreUI.js"></script>
+<script src="js/ui/LegendAdvisorUI.js"></script>
 <script src="js/ui/EliteUI.js"></script>
 <script src="js/ui/SpellUI.js"></script>
 <script src="js/main.js"></script>

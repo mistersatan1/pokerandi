@@ -1442,6 +1442,12 @@
     return shown + rest + (d.length === 1 ? '는 1종으로' : '는 종마다 1종으로');
   }
 
+  /* 시너지 패널(리디자인 ④ · 세션 88) — 17줄 목록이 높이를 넘겨 스크롤해야 했고, 어느 것이 "곧 켜질지" 안 보였다.
+   *   켜짐     : 줄 그대로(효과 글 · 단계 점 · 중복 안내)
+   *   곧 켜짐  : 1종 이상 있는 것 — 남은 종 수가 적은 순, "1종 더"는 금색 테두리
+   *   아직 없음: 0종 — 글 없이 메달만 격자로(누르면 그 자리에서 단계표가 펼쳐진다)
+   * 메달 둘레 고리 = 다음 단계까지 모인 비율(최고 단계면 꽉 참). 켜지는 순간 기여한 포켓몬 칸에 타입 색 링(필드 · 응원 칸).
+   * 검사 · 다른 화면이 쓰는 .synrow[data-type] 은 그대로 둔다(메달도 .synrow). */
   function renderSynergyPanel(state) {
     if (!el.synergyBody) return;
     state = state || RPD.SynergyManager;
@@ -1450,49 +1456,60 @@
     var byType = {};
     (state.active || []).forEach(function (a) { byType[a.typeId] = a; });
 
-    var ids = Object.keys(RPD.Synergies).sort(function (a, b) {
-      var A = byType[a], B = byType[b];
-      var ai = A ? A.tierIndex : -2, bi = B ? B.tierIndex : -2;
-      if (ai !== bi) return bi - ai;
-      return (B ? B.count : 0) - (A ? A.count : 0);
-    });
-
-    var activeCount = 0;
-    var html = ids.map(function (id) {
-      var t = RPD.Types[id];
+    var groups = { on: [], near: [], none: [] };
+    var activated = [];
+    Object.keys(RPD.Synergies).forEach(function (id) {
       var tiers = RPD.Synergies[id];
       var a = byType[id] || { count: 0, tierIndex: -1, next: tiers[0] };
       var on = a.tierIndex >= 0;
-      if (on) activeCount += 1;
+      var pulse = on && (synergyPrev[id] === undefined ? false : a.tierIndex > synergyPrev[id]);
+      if (pulse) activated.push(id);
+      synergyPrev[id] = a.tierIndex;
+      var g = on ? 'on' : a.count > 0 || synergyOpen[id] ? 'near' : 'none';
+      groups[g].push({ id: id, a: a, tiers: tiers, on: on, pulse: pulse });
+    });
+    groups.on.sort(function (x, y) { return y.a.tierIndex - x.a.tierIndex || y.a.count - x.a.count; });
+    groups.near.sort(function (x, y) {
+      var rx = x.a.next ? x.a.next.count - x.a.count : 99, ry = y.a.next ? y.a.next.count - y.a.count : 99;
+      return rx - ry || y.a.count - x.a.count;
+    });
 
-      var pips = tiers.map(function (tier, i) {
+    // 다음 단계까지 모인 비율(%) — 최고 단계면 100
+    function progress(r) {
+      if (!r.a.next) return 100;
+      var prev = r.a.tierIndex >= 0 ? r.tiers[r.a.tierIndex].count : 0;
+      return Math.max(0, Math.min(100, Math.round((r.a.count - prev) / Math.max(1, r.a.next.count - prev) * 100)));
+    }
+    function detailHtml(r) {
+      if (!synergyOpen[r.id]) return '';
+      var t = RPD.Types[r.id];
+      return '<div class="syndetail">' +
+        '<p>' + (t.desc || '') + '</p>' +
+        '<p class="syndetail__rule">같은 종은 몇 마리여도 1종으로 셉니다(서로 다른 종 기준).</p>' +
+        r.tiers.map(function (tier, i) {
+          return '<div class="syndetail__row' + (i <= r.a.tierIndex ? ' is-on' : '') + '">' +
+            '<b>' + tier.count + '</b><span>' + tier.label + '</span></div>';
+        }).join('') +
+      '</div>';
+    }
+    function medal(r) {
+      return '<span class="synrow__icon synmedal" style="--p:' + progress(r) + '">' + UI.typeIcon(r.id) + '</span>';
+    }
+    function rowHtml(r) {
+      var t = RPD.Types[r.id], a = r.a;
+      var remain = a.next ? a.next.count - a.count : 0;
+      var pips = r.tiers.map(function (tier, i) {
         return '<span class="pip' + (i <= a.tierIndex ? ' is-on' : '') + '"></span>';
       }).join('');
-
       // 시너지는 서로 다른 종 기준(세션 77) — 효과에 쓰인 수(종)와 중복으로 빠진 마리를 같이 보여 왜 안 켜졌는지 알 수 있게
-      var effect = on ? a.tier.label
-        : (a.count > 0 ? (a.next.count - a.count) + '종 더 → ' + a.next.label : tiers[0].count + '종 · ' + tiers[0].label);
+      var effect = r.on ? a.tier.label
+        : (a.count > 0 ? remain + '종 더 → ' + a.next.label : r.tiers[0].count + '종 · ' + r.tiers[0].label);
       var dupNote = synergyDupNote(a);
-
-      var pulse = on && (synergyPrev[id] === undefined ? false : a.tierIndex > synergyPrev[id]);
-      synergyPrev[id] = a.tierIndex;
-
-      var detail = '';
-      if (synergyOpen[id]) {
-        detail = '<div class="syndetail">' +
-          '<p>' + (t.desc || '') + '</p>' +
-          '<p class="syndetail__rule">같은 종은 몇 마리여도 1종으로 셉니다(서로 다른 종 기준).</p>' +
-          tiers.map(function (tier, i) {
-            return '<div class="syndetail__row' + (i <= a.tierIndex ? ' is-on' : '') + '">' +
-              '<b>' + tier.count + '</b><span>' + tier.label + '</span></div>';
-          }).join('') +
-        '</div>';
-      }
-
-      return '<div class="synrow' + (on ? ' is-active' : '') + (a.count > 0 && !on ? ' is-partial' : '') + (dupNote ? ' has-dup' : '') +
-          (pulse ? ' is-pulse' : '') + (synergyOpen[id] ? ' is-open' : '') +
-          '" data-type="' + id + '" style="--tc:' + t.color + '" role="button" tabindex="0">' +
-        '<span class="synrow__icon">' + UI.typeIcon(id) + '</span>' +
+      return '<div class="synrow' + (r.on ? ' is-active' : '') + (a.count > 0 && !r.on ? ' is-partial' : '') +
+          (!r.on && a.count > 0 && remain === 1 ? ' is-near' : '') + (dupNote ? ' has-dup' : '') +
+          (r.pulse ? ' is-pulse' : '') + (synergyOpen[r.id] ? ' is-open' : '') +
+          '" data-type="' + r.id + '" style="--tc:' + t.color + '" role="button" tabindex="0">' +
+        medal(r) +
         '<span class="synrow__main">' +
           '<span class="synrow__name">' + t.label + '<em title="서로 다른 종 ' + a.count + '종' + (a.next ? ' / 다음 단계 ' + a.next.count + '종' : '') + '">' +
             a.count + (a.next ? '/' + a.next.count : '') + '</em></span>' +
@@ -1501,13 +1518,41 @@
         '</span>' +
         '<span class="synrow__pips">' + pips + '</span>' +
         '<span class="synrow__chev" aria-hidden="true"></span>' +
-        detail +
+        detailHtml(r) +
       '</div>';
-    }).join('');
+    }
+    function medalHtml(r) {
+      var t = RPD.Types[r.id], first = r.tiers[0];
+      return '<div class="synrow is-medal" data-type="' + r.id + '" style="--tc:' + t.color + '" role="button" tabindex="0"' +
+        ' title="' + t.label + ' 0/' + first.count + ' · ' + first.count + '종 → ' + first.label + '">' +
+        medal(r) + '<em class="synmedal__n">' + t.label + '</em></div>';
+    }
+
+    var html = '';
+    if (groups.on.length) html += '<div class="syngroup__hd">켜짐 ' + groups.on.length + '</div>' + groups.on.map(rowHtml).join('');
+    if (groups.near.length) html += '<div class="syngroup__hd">곧 켜짐</div>' + groups.near.map(rowHtml).join('');
+    if (groups.none.length) html += '<div class="syngroup__hd">아직 없음 <small>눌러서 단계 보기</small></div>' +
+      '<div class="synmedals">' + groups.none.map(medalHtml).join('') + '</div>';
 
     el.synergyBody.innerHTML = html;
-    if (el.synergyCount) el.synergyCount.textContent = activeCount ? activeCount + '개 활성' : '';
+    if (el.synergyCount) el.synergyCount.textContent = groups.on.length ? groups.on.length + '개 활성' : '';
+    if (activated.length) flashSynergyUnits(activated);
   }
+
+  /* 켜지는 순간 — 그 타입을 가진 필드 · 응원 칸 포켓몬 칸에 타입 색 링(세션 88). 시너지 셈과 같은 getAllUnits */
+  function flashSynergyUnits(typeIds) {
+    if (!RPD.FxRenderer || !RPD.FxRenderer.ring) return;
+    F.getAllUnits().forEach(function (u) {
+      for (var i = 0; i < typeIds.length; i++) {
+        if ((u.types || []).indexOf(typeIds[i]) >= 0) {
+          RPD.FxRenderer.ring(u.x, u.y, RPD.Types[typeIds[i]].color, 46, 0.7);
+          break;
+        }
+      }
+    });
+    if (RPD.FramePacer && RPD.FramePacer.wake) RPD.FramePacer.wake();
+  }
+  UIManager.renderSynergyPanel = function () { renderSynergyPanel(); };
 
   /* ---------- 조각 상점 ----------
    *

@@ -2664,6 +2664,34 @@ check('시너지 패널 — "비행 1/2" 와 "구구 ×2는 1종으로" 로 왜 
   if (on.indexOf('구구 ×2는 1종으로') < 0) throw new Error('켜진 뒤에도 중복 안내는 남아야 한다');
 });
 
+check('시너지 패널(세션 88) — 켜짐 · 곧 켜짐 · 아직 없음 묶음 · "1종 더"는 금색 · 0종은 메달 · 메달을 누르면 그 자리에서 펼침 · 켜질 때 기여 칸에 링', () => {
+  synFresh();
+  synPut('charmander', 1); synPut('vulpix', 1);   // 불꽃 2종 — 켜짐
+  synPut('pidgey', 1);                             // 비행 1/2 — 곧(1종 더)
+  RPD.bus.emit('field:changed', {});
+  const h = panelHtml('synergyBody');
+  const pos = s => h.indexOf(s);
+  if (!(pos('켜짐 ') >= 0 && pos('곧 켜짐') > pos('켜짐 ') && pos('아직 없음') > pos('곧 켜짐'))) throw new Error('묶음 순서 ' + [pos('켜짐 '), pos('곧 켜짐'), pos('아직 없음')]);
+  const rowOf = t => { const m = h.match(new RegExp('<div class="synrow([^"]*)" data-type="' + t + '"')); return m ? m[1] : null; };
+  if (!/is-active/.test(rowOf('FIRE') || '')) throw new Error('불꽃이 켜짐 줄이 아니다 ' + rowOf('FIRE'));
+  if (!/is-near/.test(rowOf('FLYING') || '')) throw new Error('비행(1종 더)이 금색 줄이 아니다 ' + rowOf('FLYING'));
+  if (!/is-medal/.test(rowOf('ICE') || '')) throw new Error('얼음(0종)이 메달이 아니다 ' + rowOf('ICE'));
+  const missing = Object.keys(RPD.Synergies).filter(t => !rowOf(t));
+  if (missing.length) throw new Error('빠진 타입 ' + missing);
+  // 메달 누르기 → 그 타입이 줄로 펼쳐지고 단계표
+  const body = nodes.synergyBody;
+  (listeners.synergyBody.click || []).forEach(fn => fn({ target: { closest: () => ({ dataset: { type: 'ICE' } }) } }));
+  const h2 = panelHtml('synergyBody');
+  if (!/data-type="ICE"[^>]*>[\s\S]*?syndetail/.test(h2) || /class="synrow is-medal" data-type="ICE"/.test(h2)) throw new Error('메달을 눌러도 안 펼쳐진다');
+  (listeners.synergyBody.click || []).forEach(fn => fn({ target: { closest: () => ({ dataset: { type: 'ICE' } }) } }));
+  // 켜지는 순간 — 비행을 가진 칸에만 링
+  const rings = []; const orig = RPD.FxRenderer.ring;
+  RPD.FxRenderer.ring = (x, y, c) => rings.push({ x, y, c });
+  try { synPut('pidgeotto', 1); RPD.bus.emit('field:changed', {}); } finally { RPD.FxRenderer.ring = orig; }
+  const flyColor = RPD.Types.FLYING.color, fly = rings.filter(r => r.c === flyColor);
+  if (fly.length !== 2) throw new Error('비행 기여 칸 링 ' + fly.length + ' / 2 (전체 ' + rings.length + ')');
+});
+
 /* ---------- 전설 추천(세션 78) ---------- */
 console.log('\n전설 추천 — LegendAdvisor');
 const LA = RPD.LegendAdvisor;

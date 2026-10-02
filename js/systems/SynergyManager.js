@@ -63,12 +63,9 @@
    * 같은 종이 여러 마리면 한 종으로 센다(강화 레벨 · 잠금 · 위치와 상관없이). 같은 종 여러 마리로 시너지를 채우는 길을 막아
    * "여러 종을 모으는" 판을 만든다. 초월 폼(_transcend)은 defId 가 달라 다른 종이다.
    * 빠진 중복은 dups 로 들고 있어 패널이 "왜 안 켜졌는지" 보여 준다. */
-  SynergyManager.recompute = function () {
-    var counts = {};
-    var unitCounts = {};
-    var speciesOf = {};     // { 타입: { defId: 마리 수 } }
-    var units = RPD.FieldManager.getUnits();
-
+  /* 개체 목록을 세어 { counts: 타입별 종 수, unitCounts: 타입별 마리 수, speciesOf: { 타입: { defId: 마리 수 } } } — 보유 창 [타입별] 머리도 같은 셈을 쓴다(세션 80) */
+  SynergyManager.tally = function (units) {
+    var counts = {}, unitCounts = {}, speciesOf = {};
     for (var i = 0; i < units.length; i++) {
       var types = units[i].types || [];
       var id = units[i].defId;
@@ -80,6 +77,13 @@
         unitCounts[ty] = (unitCounts[ty] || 0) + 1;
       }
     }
+    return { counts: counts, unitCounts: unitCounts, speciesOf: speciesOf };
+  };
+  SynergyManager.dupsOf = function (map) { return dupsOf(map); };
+
+  SynergyManager.recompute = function () {
+    var tl = this.tally(RPD.FieldManager.getUnits());
+    var counts = tl.counts, unitCounts = tl.unitCounts, speciesOf = tl.speciesOf;
 
     var bonus = baseBonus();
     var active = [];

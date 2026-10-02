@@ -436,6 +436,7 @@
   gap: 6px;
 }
 .owned__grid > .empty { grid-column: 1 / -1; }
+.owned__grid.is-bytype { grid-auto-rows: auto; }
 .scell {
   --tier: #888;
   position: relative;
@@ -789,11 +790,12 @@
   padding: 3px 8px;
   border-radius: 8px;
   background: linear-gradient(90deg, color-mix(in srgb, var(--tc) 22%, transparent), transparent);
-  font-size: 12px;
+  font-size: 12px; flex-wrap: wrap;
 }
 .typegroup__head b { font-weight: 900; }
 .typegroup__head span { color: var(--muted); font-size: 11px; }
 .typegroup__head em { margin-left: auto; font-style: normal; font-size: 11px; color: color-mix(in srgb, var(--tc) 50%, #fff); font-weight: 800; }
+.typegroup__dup { flex: 1 1 100%; font-size: 10.5px; color: #f0b429; font-weight: 700; }
 .typegroup__head em.is-max { color: var(--gold); }
 .typegroup__head em.is-none { color: var(--faint); font-weight: 600; }
 .typegroup__cells { display: grid; grid-template-columns: repeat(auto-fill, minmax(54px, 1fr)); grid-auto-rows: 60px; gap: 6px; }

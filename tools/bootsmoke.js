@@ -2622,6 +2622,32 @@ check('임계값은 조정안 B — 상위 단계 −1 · 독 · 노말 첫 단�
   if (syn('FLYING').tierIndex !== 1) throw new Error('비행 3종은 2단계: ' + syn('FLYING').tierIndex);
 });
 
+check('보유 창 [타입별] 머리도 종 기준 — "필드 1종 · 1/2종" · "구구 ×2는 1종으로" (패널 · 실제 시너지와 같은 셈)', () => {
+  synFresh();
+  synPut('pidgey', 2);
+  const l = listeners.ownedSort && listeners.ownedSort.click;
+  if (!l || !l.length) throw new Error('#ownedSort 에 click 핸들러가 없다');
+  const btn = { dataset: { sort: 'type' }, classList: { add() {}, remove() {}, toggle() {} }, closest: () => btn, parentNode: nodes.ownedSort };
+  l.forEach(fn => fn({ target: btn }));
+  RPD.bus.emit('storage:changed', RPD.StorageManager.units);
+  RPD.bus.emit('field:changed', {});
+  const html = panelHtml('storageList');
+  const m = html.match(/typegroup__head[^>]*>(?:(?!typegroup__cells)[\s\S])*?<b>비행<\/b>([\s\S]*?)<\/div>/);
+  if (!m) throw new Error('비행 묶음 머리가 없다');
+  const head = m[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  if (head.indexOf('필드 1종') < 0 || head.indexOf('1/2종') < 0) throw new Error('머리: ' + head);
+  if (head.indexOf('구구 ×2는 1종으로') < 0) throw new Error('중복 안내가 없다: ' + head);
+  if (head.indexOf('필드 2') >= 0) throw new Error('아직 마리로 센다: ' + head);
+  // 실제 시너지와 같은 값 — 패널 · 머리 · SynergyManager 가 어긋나지 않는다
+  if (SY.countOf('FLYING') !== 1) throw new Error('시너지 수 ' + SY.countOf('FLYING'));
+  synPut('pidgeotto', 1);
+  RPD.bus.emit('field:changed', {});
+  const m2 = panelHtml('storageList').match(/<b>비행<\/b>([\s\S]*?)<\/div>/);
+  const head2 = m2[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  if (head2.indexOf('필드 2종') < 0) throw new Error('구구 + 피죤: ' + head2);
+  l.forEach(fn => fn({ target: Object.assign(btn, { dataset: { sort: 'field' } }) }));
+});
+
 check('시너지 패널 — "비행 1/2" 와 "구구 ×2는 1종으로" 로 왜 안 켜졌는지 보인다', () => {
   synFresh();
   synPut('pidgey', 2);

@@ -1796,6 +1796,7 @@
       return;
     }
 
+    el.storageList.classList.toggle('is-bytype', ownedSort === 'type');   // 묶음 머리가 두 줄이 되어도 겹치지 않게(고정 행 높이를 푼다)
     if (ownedSort === 'type') {
       el.storageList.innerHTML = renderByType(rows);
       return;
@@ -1806,7 +1807,7 @@
 
   /* 타입별 묶어보기 — 시너지를 읽기 위한 보기.
    * 두 타입을 가진 포켓몬은 두 묶음에 모두 나온다(시너지도 양쪽에 다 센다).
-   * 묶음 머리에는 필드에 올린 수와 다음 시너지 단계를 보여 준다 — 창고에 있는 것은 시너지에 안 들어간다. */
+   * 묶음 머리에는 필드에 올린 **종 수**와 다음 시너지 단계를 보여 준다(세션 80 — 시너지가 서로 다른 종 기준이라 "구구 ×2는 1종으로" 도 같이) — 창고에 있는 것은 시너지에 안 들어간다. */
   function renderByType(rows) {
     var groups = {};
     rows.forEach(function (r) {
@@ -1814,10 +1815,9 @@
         (groups[t] = groups[t] || []).push(r);
       });
     });
-    var fieldCount = {};
-    F.getUnits().forEach(function (u) {
-      (u.types || []).forEach(function (t) { fieldCount[t] = (fieldCount[t] || 0) + 1; });
-    });
+    // 서로 다른 종 기준(세션 77 · 80) — 패널 · 실제 시너지와 같은 셈(SynergyManager.tally)
+    var tl = RPD.SynergyManager.tally(F.getUnits());
+    var fieldCount = tl.counts;
     var order = Object.keys(groups).sort(function (a, b) {
       return (fieldCount[b] || 0) - (fieldCount[a] || 0) || groups[b].length - groups[a].length;
     });
@@ -1825,18 +1825,20 @@
       var t = RPD.Types[typeId] || { label: typeId, color: '#888' };
       var tiers = RPD.Synergies[typeId];
       var on = fieldCount[typeId] || 0;
+      var dupNote = synergyDupNote({ dups: RPD.SynergyManager.dupsOf(tl.speciesOf[typeId]) });
       var syn = '';
       if (tiers) {
         var next = null, cur = null;
         tiers.forEach(function (s) { if (on >= s.count) cur = s; else if (!next) next = s; });
-        syn = next ? '<em>' + on + '/' + next.count + ' → ' + next.label + '</em>'
+        syn = next ? '<em>' + on + '/' + next.count + '종 → ' + next.label + '</em>'
                    : '<em class="is-max">' + (cur ? cur.label : '') + '</em>';
       } else {
         syn = '<em class="is-none">시너지 없음</em>';
       }
       return '<div class="typegroup" style="--tc:' + t.color + '">' +
         '<div class="typegroup__head">' + RPD.UI.typeIcon(typeId) + '<b>' + t.label + '</b>' +
-          '<span>필드 ' + on + '</span>' + syn + '</div>' +
+          '<span>필드 ' + on + '종</span>' + syn +
+          (dupNote ? '<small class="typegroup__dup">' + dupNote + '</small>' : '') + '</div>' +
         '<div class="typegroup__cells">' + groups[typeId].map(cellHtml).join('') + '</div>' +
       '</div>';
     }).join('');

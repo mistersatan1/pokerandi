@@ -85,7 +85,7 @@
   };
 
   SkillManager.recomputePassives = function () {
-    var p = SkillManager.passiveFor(RPD.FieldManager.getUnits().map(function (u) { return u.def; }));
+    var p = SkillManager.passiveFor(RPD.FieldManager.getBattleUnits().map(function (u) { return u.def; }));
     // 능력치에 들어가는 축이 바뀌면 전체를 다시 계산한다
     var changed = p.teamAttackMul !== this.passive.teamAttackMul ||
       p.teamCritDamageAdd !== this.passive.teamCritDamageAdd ||
@@ -112,7 +112,7 @@
     var slots = RPD.FieldManager.slots;
     for (var i = 0; i < slots.length; i++) {
       var unit = slots[i].unit;
-      if (!unit || !unit.skill) continue;
+      if (!unit || !unit.skill || slots[i].zone === 'cheer') continue;   // 응원 칸은 스킬도 안 쓴다
 
       // 침묵 중에는 쿨다운도 멈춘다
       if (RPD.UnitManager.isDisabled(unit)) continue;

@@ -33,7 +33,7 @@
   };
 
   function onWave() {
-    var units = RPD.FieldManager.getUnits();
+    var units = RPD.FieldManager.getBattleUnits();   // 응원 칸은 특성이 발동하지 않는다
     for (var i = 0; i < units.length; i++) {
       var t = TraitManager.of(units[i]);
       if (!t || t.kind !== 'goldOnWave') continue;

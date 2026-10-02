@@ -158,6 +158,7 @@
   };
 
   EconomyManager.canUpgrade = function (unit) {
+    if (unit && RPD.FieldManager.isCheer(unit.slotIndex)) return false;   // 응원 칸은 강화 불가(싸우지 않는다)
     return !!unit && unit.level < CFG.upgradeMaxLevel && unit.def.range < RPD.Range.GLOBAL;
   };
 

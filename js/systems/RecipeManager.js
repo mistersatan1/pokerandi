@@ -30,7 +30,7 @@
   /* 잠금(세션 74) — 잠긴 개체는 재료로 안 쓰이니 "쓸 수 있는 수"에서 빼고, 따로 센다("0/1 🔒1" 표시 · 모자란 이유 안내).
    * 메타몽 대체도 같다: 잠긴 메타몽은 대신하지 않는다. */
   function allUnits() {
-    return RPD.StorageManager ? RPD.StorageManager.allUnits() : F.getUnits();
+    return RPD.StorageManager ? RPD.StorageManager.allUnits() : F.getAllUnits();
   }
   function countOnField() {
     var counts = {};
@@ -196,12 +196,14 @@
         }
       }
       if (!found) {
-        // 필드에서는 강화 안 한 개체부터 쓴다
+        // 필드에서는 강화 안 한 개체부터 쓴다 — 전투 칸을 먼저, 응원 칸은 맨 마지막(세션 82: 창고 → 필드 → 응원 칸)
         var bestS = -1;
-        for (var s = 0; s < F.slots.length; s++) {
-          if (usedField[s]) continue;
-          var unit = F.slots[s].unit;
-          if (unit && !unit.locked && unit.defId === want && (bestS < 0 || unit.level < F.slots[bestS].unit.level)) bestS = s;
+        for (var pass = 0; pass < 2 && bestS < 0; pass++) {
+          for (var s = 0; s < F.slots.length; s++) {
+            if (usedField[s] || (F.slots[s].zone === 'cheer') !== (pass === 1)) continue;
+            var unit = F.slots[s].unit;
+            if (unit && !unit.locked && unit.defId === want && (bestS < 0 || unit.level < F.slots[bestS].unit.level)) bestS = s;
+          }
         }
         if (bestS >= 0) { found = { where: 'field', at: bestS }; usedField[bestS] = true; }
       }
@@ -220,9 +222,10 @@
         if (!usedStore[d] && !SM.units[d].locked && SM.units[d].defId === DITTO) { ditto = { where: 'store', at: d, ditto: true }; break; }
       }
     }
-    if (!ditto) {
+    for (var dp = 0; dp < 2 && !ditto; dp++) {   // 메타몽도 전투 칸 → 응원 칸 순
       for (var f = 0; f < F.slots.length; f++) {
         var u = F.slots[f].unit;
+        if ((F.slots[f].zone === 'cheer') !== (dp === 1)) continue;
         if (!usedField[f] && u && !u.locked && u.defId === DITTO) { ditto = { where: 'field', at: f, ditto: true }; break; }
       }
     }
@@ -275,7 +278,9 @@
     }
 
     // 결과물이 앉을 자리: 재료가 쓰던 필드 칸 > 빈 필드 칸 > 창고
-    var keep = fieldSlots.length ? bestSlot(fieldSlots) : null;
+    // 응원 칸에서 쓴 재료의 자리는 결과 자리 후보가 아니다(결과가 응원 가능하지 않을 수 있다 — 세션 82)
+    var battleSlots = fieldSlots.filter(function (i) { return !F.isCheer(i); });
+    var keep = battleSlots.length ? bestSlot(battleSlots) : null;
 
     for (var f = 0; f < fieldSlots.length; f++) F.remove(fieldSlots[f]);
     // 창고는 인덱스가 밀리므로 뒤에서부터 지운다
@@ -298,8 +303,8 @@
       var empty = F.firstEmpty();
       if (empty) keep = empty.index;
     }
-    if (keep !== null) F.place(keep, made);
-    else if (!SM.add(made)) return { ok: false, reason: 'NO_ROOM' };
+    if (keep !== null && !F.place(keep, made)) keep = null;
+    if (keep === null && !SM.add(made)) return { ok: false, reason: 'NO_ROOM' };
 
     RPD.UnitManager.recomputeAll();
 

@@ -106,6 +106,22 @@ function applySynPreset() {
   }
 }
 applySynPreset();
+if (process.env.CHEER_SET === 'early') {   // 기존 버퍼 9종을 응원 가능에서 뺀다(비교용 — 이 실행 안에서만)
+  const t = R.CheerData.table();
+  Object.keys(t).forEach(k => { if (t[k].source === 'aura') delete t[k]; });
+}
+/* 봇이 고르는 기준은 원래 표 값(아래 배율을 0 으로 해도 칸은 같은 식으로 채운다 — "칸 자체(보관 · 전투 칸 비움)"와 "버프"를 가르려고) */
+const CHEER_PICK = JSON.parse(JSON.stringify(R.CheerData.table()));
+/* CHEER_SCALE=0.11 — 버퍼 9종(이웃 × SCALE)을 다른 SCALE 로 · CHEER_DIRECT_MUL=0.5 — 응원 전용 8종 값에 배율(0 이면 효과 없음) */
+{
+  const t = R.CheerData.table();
+  const sc = process.env.CHEER_SCALE != null ? parseFloat(process.env.CHEER_SCALE) / R.CheerData.SCALE : 1;
+  const dm = process.env.CHEER_DIRECT_MUL != null ? parseFloat(process.env.CHEER_DIRECT_MUL) : 1;
+  Object.keys(t).forEach(id => {
+    const m = t[id].source === 'aura' ? sc : dm;
+    if (m !== 1) R.CheerData.AXES.forEach(k => { if (t[id][k]) t[id][k] *= m; });
+  });
+}
 
 function newGame(modeId) {
   const diffId = process.argv[4] || 'NORMAL';
@@ -116,10 +132,50 @@ function newGame(modeId) {
   if (process.env.STORAGE_CAP) SG.capacity = parseInt(process.env.STORAGE_CAP, 10);   // 실험 — 창고 칸을 덮어쓴다(수요 측정은 아주 크게)
 }
 
+/* ---------- 응원 칸 봇(세션 82) ----------
+ * 창고에 있는 응원 가능 포켓몬 중 효과 가치가 큰 것부터 응원 칸을 채우고, 더 좋은 게 생기면 바꾼다(밀려난 것은 창고로).
+ * 같은 종은 한 번만 효과가 나므로 이미 응원 중인 종은 안 올린다. 칸이 다 차고 후보가 남으면 골드 여유가 클 때 응원 칸을 연다.
+ * NO_CHEER=1 — 응원 칸을 안 쓴다(비교용). CHEER_SET=early — 소환으로 나오는 8종만 응원 가능(기존 버퍼 9종 제외 · 비교용). */
+const CHEER_W = { attack: 1.0, attackSpeed: 1.0, critRate: 0.7, critDamage: 0.25, range: 0.5, cooldown: 0.3, armorPierce: 0.4, bossDamage: 0.4 };
+function cheerValue(id) {
+  const e = R.CheerData.isCheerable(id) && CHEER_PICK[id];
+  if (!e) return 0;
+  return Object.keys(CHEER_W).reduce((a, k) => a + (e[k] || 0) * CHEER_W[k], 0);
+}
+function manageCheer(stats) {
+  if (process.env.NO_CHEER) return;
+  const slots = F.cheerSlots();
+  const cheering = new Set(slots.filter(s => s.unit).map(s => s.unit.defId));
+  for (const slot of slots) {
+    if (!slot.unlocked) continue;
+    const cur = slot.unit ? cheerValue(slot.unit.defId) : 0;
+    let best = -1, bestV = cur * 1.05;
+    SG.units.forEach((u, i) => {
+      if (cheering.has(u.defId)) return;
+      const v = cheerValue(u.defId);
+      if (v > bestV) { bestV = v; best = i; }
+    });
+    if (best < 0) continue;
+    const id = SG.units[best].defId;
+    const had = !!slot.unit;
+    if (SG.deploy(best, slot.index).ok) {
+      cheering.add(id);
+      if (had) stats.cheerSwaps++; else stats.cheerFills++;   // 빈 칸 채움(재료로 쓰여 빈 칸 포함) · 더 나은 응원으로 교체
+    }
+  }
+  // 칸이 다 차고, 응원 안 하는 후보가 남아 있으면 응원 칸을 연다
+  const full = slots.every(s => !s.unlocked || s.unit);
+  const spare = SG.units.some(u => cheerValue(u.defId) > 0 && !slots.some(s => s.unit && s.unit.defId === u.defId));
+  if (full && spare) {
+    const next = F.lockedCheerSlots().sort((a, b) => a.cost - b.cost)[0];
+    if (next && GM.gold > next.cost * 2.5 && EC.unlockSlot(next.index).ok) stats.cheerSlotsBought++;
+  }
+}
+
 function weakest() {
   let worst = null;
   for (const s of F.slots) {
-    if (!s.unit) continue;
+    if (!s.unit || s.zone === 'cheer') continue;   // 응원 칸은 따로 관리(manageCheer)
     if (!worst || s.unit.dps < worst.unit.dps) worst = s;
   }
   return worst;
@@ -194,7 +250,7 @@ function castAll() {
   let n = 0;
   for (const sp of R.SpellData.list) {
     if (sp.kind === 'transcend') continue;
-    if (sp.kind === 'immortal' && !IMMORTAL && F.getUnits().length < F.slots.filter(s => s.unlocked).length - 1) continue;
+    if (sp.kind === 'immortal' && !IMMORTAL && F.getBattleUnits().length < F.battleSlots().filter(s => s.unlocked).length - 1) continue;
     if (!R.SpellManager.check(sp).ok) continue;
     if (R.SpellManager.cast(sp.phrase).ok) n++;
   }
@@ -211,6 +267,8 @@ function act(stats) {
     if (!s.affordable) continue;
     if (SH.buy(s.id).ok) { stats.shardBuys++; stats.crafts += craftAll(); }
   }
+
+  manageCheer(stats);
 
   // 창고에서 더 센 개체를 필드로 올린다
   for (let g = 0; g < 10; g++) {
@@ -257,7 +315,7 @@ function act(stats) {
   // 그게 정예 체력의 ELITE_SAFETY 배를 넘는 가장 높은 등급만 부른다. 참가비를 내도 소환할 돈이 남을 때만.
   const EL = R.EliteManager;
   if (!process.env.NO_ELITE && !EL.active && !EL.isBanned()) {
-    const boardDps = F.getUnits().reduce((a, u) => a + u.dps, 0);
+    const boardDps = F.getBattleUnits().reduce((a, u) => a + u.dps, 0);
     const SAFETY = Number(process.env.ELITE_SAFETY || 3);
     const COVER = 0.3;   // 보드 DPS 중 한 적에게 실제로 들어가는 몫(사거리·분산) 어림
     for (const t of EL.TIERS.slice().reverse()) {
@@ -292,7 +350,7 @@ function act(stats) {
     const c = G.check(kind, key);
     if (!c.ok) continue;
     let gain = 0;
-    for (const u of F.getUnits()) {
+    for (const u of F.getBattleUnits()) {
       const hit = kind === 'type' ? (u.def.types || []).indexOf(key) >= 0 : G.tierSlotOf(u.def) === key;
       if (hit) gain += u.dps;
     }
@@ -325,8 +383,22 @@ let curStats = null, eliteHooked = false;
 /* 시너지 표본(1초마다) — 같은 보드를 "마리 기준"과 "종 기준"으로 모두 세어 본다(세션 77).
  * 실제 게임 규칙이 어느 쪽이든 두 값을 같이 남기니, 규칙을 바꾼 전·후 판을 같은 잣대로 비교할 수 있다.
  * synActual = 게임이 실제로 켠 시너지 수(SynergyManager). 타입별 켜진 비율은 synType[타입] = { u: 마리 기준, s: 종 기준, a: 실제 }. */
+/* 버퍼 도달 표본(세션 82 — 응원 칸 CHEER_SCALE 근거) — 필드의 버퍼(공격력 오라 또는 AuraData)마다 이웃(200px) 안의 다른 유닛 수.
+ * auraBuffers = 표본에서 본 버퍼 수 합 · auraReach = 그 버퍼들이 닿은 유닛 수 합 · auraField = 표본마다 필드 전투 유닛 수 합 */
+function sampleAura(stats) {
+  const slots = F.slots.filter(s => s.unit && s.zone !== 'cheer');
+  if (!slots.length) return;
+  stats.auraN++; stats.auraField += slots.length;
+  slots.forEach(s => {
+    const d = s.unit.def;
+    if (!(d.auraAttack || (R.AuraData && R.AuraData.get(d.id)))) return;
+    stats.auraBuffers++;
+    stats.auraReach += slots.filter(o => o !== s && R.UnitManager.isNeighbor(s, o)).length;
+  });
+}
+
 function sampleSynergy(stats) {
-  const units = F.getUnits();
+  const units = F.getBattleUnits();
   if (!units.length) return;
   const perType = {};
   for (const u of units) for (const t of (u.types || [])) {
@@ -355,7 +427,7 @@ function playOne(modeId) {
     /* 60라운드 시점에 불멸·초월을 몇 마리 갖고 있었나 — "갖춰야 60을 넘는다"를 재는 기준 */
     R.bus.on('game:wave', p => {
       if (!curStats) return;
-      const all = F.getUnits().concat(R.StorageManager.units);
+      const all = F.getAllUnits().concat(R.StorageManager.units);
       const special = all.filter(u => u.def.tier === 'T6' || u.def.tier === 'T7').length;
       if (p.wave === 60) curStats.special60 = special;
       /* 켜진 시너지(타입:단계) — 30 · 50 · 60 라운드. WALL_LOG 에 같이 남긴다 */
@@ -371,11 +443,14 @@ function playOne(modeId) {
       }
       /* 벽 넘김 = 61R 시작 ~ 66R 시작 사이 라이프를 지켰나. 라운드가 겹쳐 들어와 61R 적이 새는 건 62~64 에 드러나고,
        * 라이프 60 이 닳는 데 몇 라운드가 걸려 "65 도달"은 벽을 못 넘은 판도 셌다(세션 38). */
+      if (p.wave === 1) curStats.life1 = GM.life;
+      if (p.wave === 21) curStats.life20 = GM.life;
+      if (p.wave === 10 || p.wave === 20 || p.wave === 25) curStats['dps' + p.wave] = F.getBattleUnits().reduce((a, u) => a + (u.dps || 0), 0);   // 초반 필드 DPS(응원 효과 비교)   // 1~20R 라이프 손실 = life1 − life20(21R 시작 시점)
       if (p.wave === 61) curStats.life61 = GM.life;
       if (p.wave === 66) curStats.life66 = GM.life;
       /* WALL_LOG=파일 — 58라운드부터 라운드 시작 시점의 라이프 · 필드 DPS 를 판마다 남긴다(벽을 어떻게 넘는지 보기) */
       if (process.env.WALL_LOG && p.wave >= 49) {
-        const fu = F.getUnits(), imm = fu.filter(u => u.def.tier === 'T6' || u.def.tier === 'T7');
+        const fu = F.getBattleUnits(), imm = fu.filter(u => u.def.tier === 'T6' || u.def.tier === 'T7');
         (curStats.trace = curStats.trace || []).push({ w: p.wave, life: GM.life,
           dps: Math.round(fu.reduce((a, u) => a + u.dps, 0)), sp: special, n: fu.length,
           immField: imm.length, immDps: Math.round(imm.reduce((a, u) => a + u.dps, 0)),
@@ -394,7 +469,7 @@ function playOne(modeId) {
         for (const id of ids) {
           let freed = -1;
           for (let k = 0; k < 3; k++) {
-            const pool = F.slots.filter(sl => sl.unit && sl.unit.def.tier !== 'T6');
+            const pool = F.slots.filter(sl => sl.unit && sl.zone !== 'cheer' && sl.unit.def.tier !== 'T6');
             if (!pool.length) break;
             const legends = pool.filter(sl => sl.unit.def.tier === 'T5');
             const pick = (legends.length ? legends : pool).sort((a, b) => a.unit.dps - b.unit.dps)[0];
@@ -417,14 +492,14 @@ function playOne(modeId) {
       }
     };
     R.bus.on('enemy:died', p => finalBoss(p.enemy, 'killed'));
-    R.bus.on('enemy:leaked', e => finalBoss(e, 'leaked'));
+    R.bus.on('enemy:leaked', e => { finalBoss(e, 'leaked'); if (curStats && GM.wave <= 25) curStats.leak25 = (curStats.leak25 || 0) + 1; });
     R.bus.on('elite:result', p => {
       if (!curStats) return;
       if (p.ok) { curStats.eliteWin++; curStats.eliteGold += p.gold; } else curStats.eliteLose++;
     });
   }
   const stats = { special60: null, life61: null, life66: null, finalBoss: null, finalBossFrac: null, syn: null, crafts: 0, spells: 0, summons: 0, shopBuys: 0, elites: 0, eliteWin: 0, eliteLose: 0, eliteGold: 0, sells: 0, slots: 0, upgrades: 0, deploys: 0,
-                  synN: 0, synActUnits: 0, synActSpecies: 0, synActual: 0, synType: {}, fullSells: 0, blocked: 0, acts: 0, fullActs: 0, storageMax: 0, shardBuys: 0, byTier: {}, goldSum: 0, goldN: 0 };
+                  cheerSwaps: 0, cheerFills: 0, cheerSlotsBought: 0, leak25: 0, cheerOcc: 0, cheerOccN: 0, life20: null, life1: null, auraN: 0, auraField: 0, auraBuffers: 0, auraReach: 0, synN: 0, synActUnits: 0, synActSpecies: 0, synActual: 0, synType: {}, fullSells: 0, blocked: 0, acts: 0, fullActs: 0, storageMax: 0, shardBuys: 0, byTier: {}, goldSum: 0, goldN: 0 };
   curStats = stats;
   WM.begin();
 
@@ -438,14 +513,15 @@ function playOne(modeId) {
     if (SG.units.length > stats.storageMax) stats.storageMax = SG.units.length;
     if (i % 60 === 0) {
       stats.goldSum += GM.gold; stats.goldN++;
-      sampleSynergy(stats);
+      sampleSynergy(stats); sampleAura(stats);
+      stats.cheerOccN++; stats.cheerOcc += F.getCheerUnits().length;
     }
     if (GM.elapsed - lastAct >= 0.5) {
       /* SPECIES_LOG=파일 — 종별 "필드에 있던 1초당 실제 피해". 누적 피해는 조합 재료로 쓰이면 사라지고
        * 필드에 있던 시간도 제각각이라, 0.5초마다 차이만 모은다. */
       if (SPECIES_LOG) {
         const dt = GM.elapsed - lastAct;
-        for (const u of F.getUnits()) {
+        for (const u of F.getBattleUnits()) {
           const d = u.totalDamage - (u._logged || 0); u._logged = u.totalDamage;
           const rec = SPECIES[u.defId] || (SPECIES[u.defId] = { dmg: 0, time: 0, games: new Set() });
           rec.dmg += d; rec.time += dt; rec.games.add(gameNo);
@@ -456,7 +532,7 @@ function playOne(modeId) {
     if (GM.state === R.GameState.GAMEOVER || GM.state === R.GameState.VICTORY) break;
   }
 
-  const units = F.getUnits();
+  const units = F.getBattleUnits();
   const board = {};
   units.forEach(u => { board[u.tier] = (board[u.tier] || 0) + 1; });
 
@@ -534,7 +610,16 @@ console.log(`  정예 판당 ${(n / RUNS).toFixed(1)}회 (하급 ${(sum('elite1'
 console.log(`  평균 보유 골드 ${Math.round(results.reduce((a, r) => a + r.avgGold, 0) / RUNS)}`);
 {
   const sum = k => results.reduce((a, r) => a + (r[k] || 0), 0);
+  const med = k => { const v = results.map(r => r[k]).filter(x => x != null).sort((a, b) => a - b); return v.length ? Math.round(v[v.length >> 1]) : '-'; };
   const n = sum('synN');
+  {
+    const early = results.map(r => r.life1 != null ? r.life1 - (r.life20 != null ? r.life20 : 0) : null).filter(x => x != null);
+    console.log(`  응원 칸: 평균 점유 ${(sum('cheerOcc') / Math.max(1, sum('cheerOccN'))).toFixed(2)}칸 · 채움 판당 ${(sum('cheerFills') / RUNS).toFixed(1)}회 · 교체 판당 ${(sum('cheerSwaps') / RUNS).toFixed(1)}회 · 응원 칸 구매 판당 ${(sum('cheerSlotsBought') / RUNS).toFixed(2)}개` +
+      ` · 1~20R 라이프 손실 평균 ${(early.reduce((a, b) => a + b, 0) / Math.max(1, early.length)).toFixed(2)} · 1~25R 샌 적 판당 ${(sum('leak25') / RUNS).toFixed(2)}` +
+      ` · 필드 DPS 중앙 10R ${med('dps10')} · 20R ${med('dps20')} · 25R ${med('dps25')}` + (process.env.NO_CHEER ? ' (NO_CHEER)' : '') + (process.env.CHEER_SET ? ' (CHEER_SET=' + process.env.CHEER_SET + ')' : '') +
+      (process.env.CHEER_SCALE ? ' (CHEER_SCALE=' + process.env.CHEER_SCALE + ')' : '') + (process.env.CHEER_DIRECT_MUL ? ' (CHEER_DIRECT_MUL=' + process.env.CHEER_DIRECT_MUL + ')' : ''));
+  }
+  if (sum('auraN')) console.log(`  버퍼 도달(1초 표본): 필드 전투 유닛 평균 ${(sum('auraField') / sum('auraN')).toFixed(2)}마리 · 필드 버퍼 평균 ${(sum('auraBuffers') / sum('auraN')).toFixed(2)}마리 · 버퍼 하나가 닿는 유닛 평균 ${(sum('auraReach') / Math.max(1, sum('auraBuffers'))).toFixed(2)}마리`);
   console.log(`  시너지 — 판당 켜진 수(1초 표본 평균): 마리 기준 ${(sum('synActUnits') / n).toFixed(2)} · 종 기준 ${(sum('synActSpecies') / n).toFixed(2)} · 게임이 실제로 켠 ${(sum('synActual') / n).toFixed(2)}`);
   const types = Object.keys(R.Synergies);
   const agg = t => results.reduce((a, r) => { const o = (r.synType || {})[t] || { u: 0, s: 0, a: 0 }; a.u += o.u; a.s += o.s; a.a += o.a; return a; }, { u: 0, s: 0, a: 0 });

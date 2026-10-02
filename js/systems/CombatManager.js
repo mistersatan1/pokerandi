@@ -30,7 +30,7 @@
     var slots = RPD.FieldManager.slots;
     for (var i = 0; i < slots.length; i++) {
       var unit = slots[i].unit;
-      if (!unit) continue;
+      if (!unit || slots[i].zone === 'cheer') continue;   // 응원 칸은 싸우지 않는다(세션 82)
 
       if (unit.attackFlash > 0) unit.attackFlash = Math.max(0, unit.attackFlash - dt * 6);
 

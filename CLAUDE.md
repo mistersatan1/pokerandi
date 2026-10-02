@@ -35,7 +35,7 @@ node tools/perf.js 4  # 휴대폰 성능 — CPU 4배 느린 갤럭시 흉내로
 | `js/data/roletuning.js` | 역할 보정(광역·연쇄 ↓, 단일·보스킬러 ↑, 버퍼 오라 ↑) — **craftpower.js 보다 먼저 로드** |
 | `js/data/craftpower.js` | 까다로운 조합 보너스 · 히든 1.5배 · 불멸 2.5배 · 초월 2.8배(재료 합 기준, 역할 보정 포함) |
 | `js/data/auras.js` | 버퍼 버프 7축(공속·치명·치피·사거리·쿨다운·방어무시·보스피해) |
-| `js/data/map.js` | 두 갈래 경로(세션 56) — 입구 → 위 · 아래 두 길(대칭 · 길이 같음, 적 번갈아) → 합류 → 출구. 칸 28(기본 20 — 명당 5 · 갈림길 1 · 한쪽 · 출구, 세션 57 에 명당 +2). 커버리지는 적 한 마리 기준(갈래 ×0.5). 버퍼 옆 칸 = 200px |
+| `js/data/map.js` | 두 갈래 경로(세션 56) — 입구 → 위 · 아래 두 길(대칭 · 길이 같음, 적 번갈아) → 합류 → 출구. 칸 28(기본 20 — 명당 5 · 갈림길 1 · 한쪽 · 출구, 세션 57 에 명당 +2) + **응원 칸 4**(28~31 · `zone:'cheer'` · 무료 2 + 400 · 900G). 커버리지는 적 한 마리 기준(갈래 ×0.5). 버퍼 옆 칸 = 200px |
 | `js/data/waves.js` | 적 체력 곡선 — ~50 ×1.109, 51~60 ×1.07, **61R 계단 ×5.4**, 이후 ×1.02 · 맵 보정 `mapHpMul` 0.97(모든 적). 70R 보스는 69R 체력에서 나오니 벽을 바꾸면 모드의 `finalBossHpMul` 도 같이 |
 | `js/systems/*Manager.js` | 규칙. 골드 상점 `GoldShopManager` · 정예 `EliteManager` · 보상 `RewardManager` |
 | `js/ui/UIManager.js` | 화면 대부분. 크다 — 파일 상단 구조 설명부터 읽는다 |
@@ -44,8 +44,9 @@ node tools/perf.js 4  # 휴대폰 성능 — CPU 4배 느린 갤럭시 흉내로
 | `js/data/music.js` · `js/core/MusicFiles.js` | 배경음악 파일 — 장면별(calm · battle · boss · hidden · immortal · transcend) `assets/music/*.mp3` · 곡별 음량 · 겹침 1초. 없으면 합성(AudioManager). `<audio>` 로만(file:// 가능). 실제 재생 검사 `node tools/musicplay.js` |
 | `js/render/FramePacer.js` | 언제 · 얼마나 곱게 그릴지 — 전투 최대 60fps · 쉬는 중 10fps · 느리면 화질 사다리(해상도 2→1.5→1.25→1→30fps). 게임 규칙 · 시간은 안 건드림 |
 | `js/systems/UnitManager.js` 의 `locked` | 포켓몬 잠금(세션 74) — 재료(조합 · 주문 · 메타몽) · 방출에서 빠진다. 조합식 줄 "0/1 🔒1" 은 `RecipeManager.countsOf()`. 새 "재료 · 방출" 경로를 만들면 `.locked` 를 건너뛸 것(검사: bootsmoke "포켓몬 잠금"). 키 L |
-| `js/systems/SynergyManager.js` | 시너지는 **서로 다른 종(defId) 기준**(세션 77 — 구구 2마리 = 비행 1). 패널은 "비행 1/2 · 구구 ×2는 1종으로". 임계값(`RPD.Synergies`)은 조정안 **B** 적용(상위 단계 −1 · 독 · 노말 첫 단계 2 — VERSION 세션 77, `SYN_PRESET` 은 autoplay 실험용). 종 수 셈은 `SynergyManager.tally` 한 곳(패널 · 보유 창 [타입별] 머리 공용) |
+| `js/systems/SynergyManager.js` | 시너지는 **서로 다른 종(defId) 기준**(응원 칸 포함 · 세션 83)(세션 77 — 구구 2마리 = 비행 1). 패널은 "비행 1/2 · 구구 ×2는 1종으로". 임계값(`RPD.Synergies`)은 조정안 **B** 적용(상위 단계 −1 · 독 · 노말 첫 단계 2 — VERSION 세션 77, `SYN_PRESET` 은 autoplay 실험용). 종 수 셈은 `SynergyManager.tally` 한 곳(패널 · 보유 창 [타입별] 머리 공용) |
 | `js/systems/LegendAdvisor.js` · `js/ui/LegendAdvisorUI.js` | 전설 추천(세션 78) — 보유(잠금 제외 · 메타몽) 기준 트리 전개 → 기대 소환 수(`SummonManager.speciesWeights` · 몬테카를로 300 · 고정 시드) · 조각 · **미발견 히든이 든 전설은 이름 없이 수만**. 추천만 한다 |
+| 응원 칸(세션 82) — `RPD.CheerData`(auras.js) · `FieldManager`(zone · `canPlace` · `getBattleUnits`/`getAllUnits`) · `UnitManager.cheerTotals` · `js/ui/CheerUI.js` | 버프 전용 칸 — 응원 가능 16종(버퍼 8 = 이웃 × `CHEER_SCALE` 0.11 · 응원 전용 8)만, 싸우지 않고 필드 전체 전투 유닛에. 시너지 종 수에는 센다(세션 83 — `SynergyManager` 는 `getAllUnits`). 불멸 이상(T6+) 버퍼(뮤)는 응원 칸 불가 — 전투 칸에 있으면 응원 값을 필드 전체에(`CheerData.fieldIds` · 자기 자신 제외). 같은 종 한 번 · 축마다 cap. **`getUnits` 는 없다** — 싸우는 개체면 `getBattleUnits`, 보유(재료 · 방출 · 표시)면 `getAllUnits`. `F.slots` 를 도는 새 코드는 `zone === 'cheer'` 를 어떻게 할지 정할 것(검사: bootsmoke "응원 칸"). 재료 순서 창고 → 전투 칸 → 응원 칸 |
 | `Config.storageBase` | 창고 칸 36 고정(세션 76 — 골드 확장 삭제. 이어하기는 max(저장값, 기본값)). 값은 autoplay 의 `storageMax` · `STORAGE_CAP` 으로 쟀다(VERSION 세션 76) |
 | `js/ui/BulkStoreUI.js` · `StorageManager.bulkStore` | 일괄 창고로(세션 75) — 등급 칸은 `GoldShopManager.tierSlotOf`(히든은 [히든] 칸에만) · 잠금 제외 · 약한 순 · 자리 모자라면 일부만 · 되돌리기 'bulk' 1건 |
 | `js/systems/UndoManager.js` | 배치 이동 되돌리기(세션 68) — 이동 · 교체 · 창고로 · 필드로만, 최대 3. 소환 · 조합 · 방출 · 강화 · 상점 · 정예는 안 되돌린다. 화면은 `js/ui/Convenience.js`(Ctrl+Z · 알림) · 정보 바 [되돌리기] |
@@ -94,6 +95,7 @@ node tools/perf.js 4  # 휴대폰 성능 — CPU 4배 느린 갤럭시 흉내로
 | `GIVE_IMMORTAL=2` | 50R 에 가장 약한 전설 3마리씩을 치르고 불멸 2마리로 바꾼다 — "불멸을 갖춘 판" 비교용 |
 | `WALL_STEP` · `LATE` | 61R 벽 높이 · 51~60 성장률 실험 |
 | `NO_SHOP` · `NO_ELITE` · `NO_CRAFTPOWER` | 골드 상점 · 정예 · 조합 보정을 끄고 비교 |
+| `NO_CHEER=1` · `CHEER_SET=early` · `CHEER_SCALE=` · `CHEER_DIRECT_MUL=` | 응원 칸 끄기 · 응원 전용 8종만 · 버퍼 환산 배율 · 8종 값 배율(봇은 원래 값으로 골라 칸 효과와 버프 효과를 가른다 — 0 이면 칸만 씀) |
 | `SPECIES_LOG=파일` | 종별 "필드에 있던 1초당 실제 피해"를 JSON 으로 — 포켓몬 밸런스 점검용. `dmg` = 누적 피해(세션 63 부터 지속 피해 포함 — 그 전 기록은 빠진 값) · `dmgAll` = 받은 피해 이벤트 합(실드 · 처형 포함) |
 
 요약의 "60R 도달 → 벽 넘김(61~65 라이프 지킴)"은 60라운드 시점 불멸·초월 보유 여부로 나눈 것.
@@ -154,3 +156,4 @@ node tools/perf.js 4  # 휴대폰 성능 — CPU 4배 느린 갤럭시 흉내로
 - 시라소몬(희귀함·히든)이 흔함 3마리분으로 지나치게 싸다(괴력몬 전설도 연쇄로 싸다).
 - 조합 병목(소환 불가 재료가 3곳 이상에 쓰임) 17곳.
 - 엔드리스가 길다(중앙 77R · 약 23분).
+- **응원 칸(세션 82)**: SCALE 0.22 → 0.11 로 내렸는데도 노멀 클리어 9.4% → 17.5%(160판) · 세션 83 시너지 포함 뒤 19.4% — 후반 목표(약 10%)를 넘는다. 주원인은 응원 전용 8종 값(8종만 써도 24%). 제안: 8종 값 ×0.5 → 12.5% — **결정 대기**. 칸 수 · 가격 제안(무료 1 + 400 · 900 · 1500G)도 대기. 초반이 쉬워졌는지는 봇 지표로 안 드러남(봇은 원래 초반에 안 샌다). 보스 러시 65%(목표 안).

@@ -238,28 +238,28 @@ function tick(seconds) {
 }
 
 check('소환 버튼이 포켓몬을 필드에 올린다', () => {
-  const before = RPD.FieldManager.getUnits().length;
+  const before = RPD.FieldManager.getAllUnits().length;
   click('btnSummon');
-  const after = RPD.FieldManager.getUnits().length;
+  const after = RPD.FieldManager.getAllUnits().length;
   if (after !== before + 1) throw new Error(`${before} → ${after}`);
 });
 
 check('소환한 포켓몬에 실효 스탯이 들어간다', () => {
-  const u = RPD.FieldManager.getUnits()[0];
+  const u = RPD.FieldManager.getAllUnits()[0];
   if (!u) throw new Error('필드에 개체가 없다');
   if (!(u.attack > 0) || !(u.dps > 0)) throw new Error(`attack=${u.attack} dps=${u.dps}`);
 });
 
 
 check('슬롯을 선택하면 정보 카드가 나온다', () => {
-  const u = RPD.FieldManager.getUnits()[0];
+  const u = RPD.FieldManager.getAllUnits()[0];
   RPD.FieldManager.select(u.slotIndex);
   const html = sandbox.document.getElementById('slotBody').innerHTML;
   if (html.indexOf(u.name) < 0) throw new Error('카드에 이름이 없다');
 });
 
 check('방출 버튼이 칸을 비우고 골드를 준다', () => {
-  const u = RPD.FieldManager.getUnits()[0];
+  const u = RPD.FieldManager.getAllUnits()[0];
   RPD.FieldManager.select(u.slotIndex);
   const gold = RPD.GameManager.gold;
   const idx = u.slotIndex;
@@ -305,7 +305,7 @@ check('조합 버튼이 실제로 조합한다', () => {
   if (nodes.btnCraft.disabled) throw new Error('조합 버튼이 잠겨 있다');
   click('btnCraft');
 
-  const units = RPD.FieldManager.getUnits();
+  const units = RPD.FieldManager.getAllUnits();
   if (units.length !== 1 || units[0].defId !== craftRecipe.id) {
     throw new Error(`결과 ${units.map(u => u.defId)}`);
   }
@@ -342,7 +342,7 @@ check('창고에서 필드로 배치된다', () => {
   const r = RPD.StorageManager.deploy(0);
   if (!r.ok) throw new Error(r.reason);
   if (RPD.StorageManager.units.length !== before - 1) throw new Error('창고에서 안 빠졌다');
-  if (RPD.FieldManager.getUnits().length !== 1) throw new Error('필드에 안 올라갔다');
+  if (RPD.FieldManager.getAllUnits().length !== 1) throw new Error('필드에 안 올라갔다');
 });
 
 check('도감 화면이 열린다', () => {
@@ -744,7 +744,7 @@ check('필드 조합식 [히든] 칩 — 재료가 모인 미발견 줄을 누�
   const l = listeners.recipeList.click;
   const fake = { dataset: { spellN: String(n) }, classList: { contains: c => c === 'is-ready', add() {}, remove() {} }, offsetWidth: 0 };
   l.forEach(fn => fn({ target: { closest: sel => (sel === '.rrow' ? fake : null) } }));
-  const got = RPD.StorageManager.allUnits().concat(RPD.FieldManager.getUnits()).filter(u => u.defId === 'pikachu');
+  const got = RPD.StorageManager.allUnits().concat(RPD.FieldManager.getAllUnits()).filter(u => u.defId === 'pikachu');
   if (!got.length) throw new Error('눌렀는데 조합되지 않았다');
   if (first !== true) throw new Error('첫 발견(firstTime)으로 알리지 않았다');
   if (!RPD.SaveManager.knowsSpell(sp.id)) throw new Error('발견으로 기록되지 않았다');
@@ -780,7 +780,7 @@ check('필드 조합식 — 발견하면 그 자리에 줄이 뜨고, 클릭 한
   sp.materials.forEach(m => { if (row.indexOf('data-def="' + m + '"') < 0) throw new Error('재료 ' + m + ' 가 안 보인다'); });
 
   clickSpellRow(sp.id, true);
-  const got = RPD.StorageManager.allUnits().concat(RPD.FieldManager.getUnits()).filter(u => u.defId === 'pikachu');
+  const got = RPD.StorageManager.allUnits().concat(RPD.FieldManager.getAllUnits()).filter(u => u.defId === 'pikachu');
   if (!got.length) throw new Error('클릭만으로 조합되지 않았다(채팅을 거쳐야 했다)');
   RPD.SaveManager.data.spells = {};
 });
@@ -980,7 +980,7 @@ check('보유 목록에서 창고 전용 개체가 필드 개체 뒤에 온다',
 
 check('칸을 고르면 정보 카드가 열리고 비우면 닫힌다', () => {
   const card = sandbox.document.getElementById('slotCard');
-  const u = RPD.FieldManager.getUnits()[0];
+  const u = RPD.FieldManager.getAllUnits()[0];
   RPD.FieldManager.select(u.slotIndex);
   if (card.hidden) throw new Error('카드가 안 열렸다');
   if (panelHtml('slotBody').indexOf(u.name) < 0) throw new Error('카드에 이름이 없다');
@@ -1338,7 +1338,7 @@ check('이동 모드 — 빈 칸 · 누가 있는 칸마다 칸 태그(근접용
   const { F, a, b } = msSetup();
   F.select(a); MS.startMove();
   const tags = Object.values(MS.kinds || {});
-  const allowed = ['근접용', '중거리용', '장거리', '구석'];
+  const allowed = ['근접용', '중거리용', '장거리', '구석', '응원'];   // 응원 칸은 "응원"(세션 82)
   if (!tags.length || tags.some(t => allowed.indexOf(t) < 0)) throw new Error('칸 태그 이상: ' + tags.slice(0, 5).join(','));
   if (Object.keys(MS.kinds).length !== F.slots.filter(s => s.unlocked && !s.blocked).length) throw new Error('태그 수가 열린 칸 수와 다르다');
   F.select(b);
@@ -1709,7 +1709,7 @@ check('효과 단계는 전투 결과를 안 바꾼다 — 같은 난수로 30�
     const GM = RPD.GameManager, EM = RPD.EnemyManager;
     return JSON.stringify({ gold: GM.gold, life: GM.life, wave: GM.wave, kills: RPD.StatsManager.kills || (RPD.StatsManager.data && RPD.StatsManager.data.kills),
       hp: Math.round(EM.enemies.reduce((a, e) => a + (e.alive ? e.hp : 0), 0)), n: EM.enemies.length,
-      dmg: Math.round(F.getUnits().reduce((a, u) => a + (u.totalDamage || 0), 0)) });
+      dmg: Math.round(F.getAllUnits().reduce((a, u) => a + (u.totalDamage || 0), 0)) });
   }
   const realRandom = vm.runInContext('Math.random', sandbox);
   let a, b, c;
@@ -1865,7 +1865,7 @@ check('복원 → "눌러서 계속" 전에는 멈춰 있고, 누르면 그 라�
   const d = richRun();
   RPD.Game.resetAll('NORMAL', 'NORMAL');
   RS.restore(d);
-  const GM = RPD.GameManager, count = () => RPD.FieldManager.getUnits().length + RPD.StorageManager.units.length;
+  const GM = RPD.GameManager, count = () => RPD.FieldManager.getAllUnits().length + RPD.StorageManager.units.length;
   const n0 = count(), g0 = GM.gold, sh0 = GM.shield, t0 = RPD.SummonManager.tickets;
   if (!RPD.Loop.paused || GM.state !== RPD.GameState.PAUSED) throw new Error('복원 직후 멈춰 있지 않다');
   if (RPD.WaveManager.phase !== 'IDLE') throw new Error('누르기 전에 라운드가 시작됐다: ' + RPD.WaveManager.phase);
@@ -2199,7 +2199,7 @@ check('잠근 포켓몬은 조합 재료로 안 쓰인다 — 재료가 있어�
   if (lkReady()) throw new Error('잠근 재료로 완성 가능으로 뜬다');
   const r = RPD.RecipeManager.craft(LK_RECIPE.id);
   if (r.ok) throw new Error('잠근 재료로 조합이 됐다');
-  if (RPD.StorageManager.units.indexOf(b) < 0 || !RPD.FieldManager.getUnits().includes(a)) throw new Error('실패했는데 재료가 사라졌다');
+  if (RPD.StorageManager.units.indexOf(b) < 0 || !RPD.FieldManager.getAllUnits().includes(a)) throw new Error('실패했는데 재료가 사라졌다');
   if (RPD.RecipeManager.craftBest().ok) throw new Error('[조합](craftBest)이 잠근 재료를 골랐다');
   RPD.UnitManager.setLocked(b, false);
   if (!lkReady()) throw new Error('잠금을 풀었는데 다시 안 쓰인다');
@@ -2216,7 +2216,7 @@ check('조합 결과는 잠기지 않는다 — 재료의 잠금을 물려받지
   RPD.RecipeManager.refresh();
   const r = RPD.RecipeManager.craft(LK_RECIPE.id);
   if (!r.ok) throw new Error('조합 실패 ' + r.reason);
-  const res = RPD.FieldManager.getUnits().concat(RPD.StorageManager.units).filter(u => u.defId === LK_RECIPE.id);
+  const res = RPD.FieldManager.getAllUnits().concat(RPD.StorageManager.units).filter(u => u.defId === LK_RECIPE.id);
   if (res.length !== 1 || res[0].locked) throw new Error('결과가 잠겨 있다/없다: ' + res.map(u => u.locked));
   if (!RPD.StorageManager.units.includes(spare) || !spare.locked) throw new Error('잠근 여분이 소모되거나 잠금이 풀렸다');
 });
@@ -2265,7 +2265,7 @@ check('잠근 포켓몬은 주문 재료로도 안 쓰인다(check · cast) — 
   if (RPD.StorageManager.units.length !== us.length) throw new Error('실패했는데 재료가 사라졌다');
   RPD.UnitManager.setLocked(us[0], false);
   if (!RPD.SpellManager.cast(sp.phrase).ok) throw new Error('풀었는데 주문이 안 걸린다');
-  const res = RPD.FieldManager.getUnits().concat(RPD.StorageManager.units).filter(u => u.defId === 'pikachu');
+  const res = RPD.FieldManager.getAllUnits().concat(RPD.StorageManager.units).filter(u => u.defId === 'pikachu');
   if (res.length !== 1 || res[0].locked) throw new Error('주문 결과가 잠겨 있다');
 });
 
@@ -2275,7 +2275,7 @@ check('잠근 포켓몬은 방출할 수 없다 — 필드 · 창고 · 버튼(�
   RPD.FieldManager.place(0, f); RPD.StorageManager.add(s);
   RPD.UnitManager.setLocked(f, true); RPD.UnitManager.setLocked(s, true);
   const gold = RPD.GameManager.gold;
-  if (RPD.EconomyManager.sell(0) !== 0 || !RPD.FieldManager.getUnits().includes(f)) throw new Error('잠근 필드 개체가 팔렸다');
+  if (RPD.EconomyManager.sell(0) !== 0 || !RPD.FieldManager.getAllUnits().includes(f)) throw new Error('잠근 필드 개체가 팔렸다');
   if (RPD.EconomyManager.sellStored(0) !== 0 || !RPD.StorageManager.units.includes(s)) throw new Error('잠근 창고 개체가 팔렸다');
   if (RPD.GameManager.gold !== gold) throw new Error('골드가 바뀌었다');
   RPD.FieldManager.select(0);
@@ -2316,7 +2316,9 @@ check('판 이어하기 — 잠금이 저장 · 복원된다(필드 · 창고)',
   RPD.Game.restart(); RPD.Game.startRun('NORMAL', 'NORMAL');
   RPD.GameManager.life = 999;
   const f = RPD.UnitManager.create('pidgey'), s = RPD.UnitManager.create('rattata');
-  RPD.FieldManager.place(0, f); RPD.StorageManager.add(s);
+  // 0번 칸이 아니라 빈 칸에 — 판 시작 때 받은 흔함(구구일 수 있다)이 0번에 앉으면 place 가 실패해 가끔 떨어졌다(세션 82)
+  if (!RPD.FieldManager.place(RPD.FieldManager.firstEmpty().index, f)) throw new Error('빈 칸에 못 두었다');
+  RPD.StorageManager.add(s);
   RPD.UnitManager.setLocked(f, true); RPD.UnitManager.setLocked(s, true);
   RPD.bus.emit('wave:started', RPD.WaveManager.plan);
   const r = RS.read();
@@ -2325,8 +2327,8 @@ check('판 이어하기 — 잠금이 저장 · 복원된다(필드 · 창고)',
   RS.restore(r.data);
   RS.pending = null;
   // 판 시작 때 무작위로 받는 흔함이 같은 종(구구 · 꼬렛)일 수 있다 — "그 종 중 잠긴 개체가 하나 있는가"로 본다(세션 78: find 가 받은 개체를 집어 가끔 떨어졌다)
-  const fl = RPD.FieldManager.getUnits().filter(u => u.defId === 'pidgey'), sl = RPD.StorageManager.units.filter(u => u.defId === 'rattata');
-  if (fl.filter(u => u.locked).length !== 1) throw new Error('필드 개체의 잠금이 안 돌아왔다');
+  const fl = RPD.FieldManager.getAllUnits().filter(u => u.defId === 'pidgey'), sl = RPD.StorageManager.units.filter(u => u.defId === 'rattata');
+  if (fl.filter(u => u.locked).length !== 1) throw new Error('필드 개체의 잠금이 안 돌아왔다 — ' + JSON.stringify(RPD.FieldManager.slots.filter(x => x.unit).map(x => x.index + ':' + x.unit.defId + (x.unit.locked ? 'L' : ''))) + ' saved ' + JSON.stringify(r.data.state.FieldManager.units.map(e => e.slot + ':' + e.unit.defId + (e.unit.locked ? 'L' : ''))));
   if (sl.filter(u => u.locked).length !== 1) throw new Error('창고 개체의 잠금이 안 돌아왔다');
   RS.clear();
 });
@@ -2402,7 +2404,7 @@ function bkPut(defId, n, opt) {
 }
 const bkOf = t => BK.PD.list.find(d => d.tier === t && !d.hidden && d.id !== 'ditto').id;
 const BK_HIDDEN = BK.PD.list.find(d => d.hidden && ['T3', 'T4', 'T5'].includes(d.tier)) || BK.PD.list.find(d => d.hidden);
-function bkTotal() { return BK.F.getUnits().length + BK.sm.units.length; }
+function bkTotal() { return BK.F.getAllUnits().length + BK.sm.units.length; }
 function bkGroup(id) { return BK.sm.bulkGroups().find(g => g.id === id); }
 
 check('선택한 등급만 창고로 간다 — 다른 등급은 필드에 그대로', () => {
@@ -2412,10 +2414,10 @@ check('선택한 등급만 창고로 간다 — 다른 등급은 필드에 그�
   const r = BK.sm.bulkStore(['T1']);
   if (r.moved !== 3 || r.noRoom !== 0) throw new Error('결과 ' + JSON.stringify(r));
   if (BK.sm.units.some(u => u.def.tier !== 'T1') || BK.sm.units.length !== 3) throw new Error('T1 만 가야 한다');
-  if (BK.F.getUnits().filter(u => u.def.tier === 'T1').length) throw new Error('T1 이 필드에 남았다');
-  if (BK.F.getUnits().length !== 3 || bkTotal() !== before) throw new Error('다른 등급이 움직였거나 총수가 바뀌었다');
+  if (BK.F.getAllUnits().filter(u => u.def.tier === 'T1').length) throw new Error('T1 이 필드에 남았다');
+  if (BK.F.getAllUnits().length !== 3 || bkTotal() !== before) throw new Error('다른 등급이 움직였거나 총수가 바뀌었다');
   const two = BK.sm.bulkStore(['T2', 'T3']);
-  if (two.moved !== 3 || BK.F.getUnits().length) throw new Error('여러 칸 선택 ' + JSON.stringify(two));
+  if (two.moved !== 3 || BK.F.getAllUnits().length) throw new Error('여러 칸 선택 ' + JSON.stringify(two));
 });
 
 check('히든은 [히든] 칸에만 — 자기 강함 등급 칸에는 안 들어간다(골드 상점과 같은 규칙) · 불멸 · 초월은 [불멸 · 초월] 칸', () => {
@@ -2442,7 +2444,7 @@ check('잠근 유닛은 건너뛴다 — "잠금 N마리 제외"로 센다', () 
   if (g.count !== 2 || g.locked !== 2) throw new Error('칸: ' + g.count + '/' + g.locked);
   const r = BK.sm.bulkStore(['T1']);
   if (r.moved !== 2 || r.locked !== 2) throw new Error(JSON.stringify(r));
-  if (!BK.F.getUnits().includes(us[0]) || !BK.F.getUnits().includes(us[1])) throw new Error('잠근 유닛이 움직였다');
+  if (!BK.F.getAllUnits().includes(us[0]) || !BK.F.getAllUnits().includes(us[1])) throw new Error('잠근 유닛이 움직였다');
 });
 
 check('창고 자리가 모자라면 들어가는 만큼만(약한 것부터) 보내고 유닛 총수는 그대로', () => {
@@ -2452,7 +2454,7 @@ check('창고 자리가 모자라면 들어가는 만큼만(약한 것부터) �
   const total = bkTotal();
   const r = BK.sm.bulkStore(['T1']);
   if (r.moved !== 2 || r.noRoom !== 3) throw new Error(JSON.stringify(r));
-  if (bkTotal() !== total || BK.F.getUnits().length !== 3 || BK.sm.units.length !== 2) throw new Error('총수 ' + bkTotal() + ' / ' + total);
+  if (bkTotal() !== total || BK.F.getAllUnits().length !== 3 || BK.sm.units.length !== 2) throw new Error('총수 ' + bkTotal() + ' / ' + total);
   if (!BK.sm.units.includes(us[4]) || !BK.sm.units.includes(us[3])) throw new Error('약한 것부터 가야 한다: ' + BK.sm.units.map(u => u.dps));
   const again = BK.sm.bulkStore(['T1']);
   if (again.moved !== 0 || again.noRoom !== 3 || bkTotal() !== total) throw new Error('가득 찬 창고에 또 보냈다 ' + JSON.stringify(again));
@@ -2467,8 +2469,8 @@ check('일괄 창고로는 되돌리기 한 건 — 한 번에 원복', () => {
   if (RPD.UndoManager.count() !== 1) throw new Error('기록 ' + RPD.UndoManager.count() + '건 — 1건이어야 한다');
   const r = RPD.UndoManager.undo();
   if (!r.ok) throw new Error('되돌리기 실패 ' + r.reason);
-  if (BK.sm.units.length !== 0 || BK.F.getUnits().length !== 4) throw new Error('한 번에 원복이 안 됐다');
-  if (!us.every(u => BK.F.getUnits().includes(u))) throw new Error('같은 개체가 아니다');
+  if (BK.sm.units.length !== 0 || BK.F.getAllUnits().length !== 4) throw new Error('한 번에 원복이 안 됐다');
+  if (!us.every(u => BK.F.getAllUnits().includes(u))) throw new Error('같은 개체가 아니다');
   if (RPD.UndoManager.count() !== 0) throw new Error('원복 뒤 기록이 남았다');
 });
 
@@ -2503,7 +2505,7 @@ check('단일 [창고로] 버튼과 S 단축키는 그대로 · 일괄 창고로
   BK.F.select(u.slotIndex);
   RPD.bus.emit('field:changed', {});
   click('btnStore');
-  if (BK.sm.units.length !== 1 || BK.F.getUnits().length !== 0) throw new Error('단일 [창고로] 가 달라졌다');
+  if (BK.sm.units.length !== 1 || BK.F.getAllUnits().length !== 0) throw new Error('단일 [창고로] 가 달라졌다');
   if (RPD.UndoManager.count() < 1) throw new Error('단일 이동 기록이 안 남는다');
   const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'js', 'ui', 'HudPanels.js'), 'utf8');
   if (/BulkStore/.test(src)) throw new Error('HudPanels 에 일괄 창고로 단축키가 생겼다');
@@ -2765,6 +2767,261 @@ check('같은 보유면 다시 계산하지 않는다(캐시) · 화면이 안 �
   if (JSON.stringify(c.top.map(x => [x.id, x.expected])) !== JSON.stringify(a.top.map(x => [x.id, x.expected]))) throw new Error('다시 계산하니 숫자가 바뀐다');
   if (RPD.ShardManager.shards !== 60 || RPD.GameManager.gold !== 777 || RPD.StorageManager.units.length !== 2) throw new Error('추천이 무언가를 썼다');
   if (!c.list.some(x => x.shardsUsed > 0)) throw new Error('조각 60 이 있는데 조각을 쓰는 안이 없다');
+});
+
+/* ---------- 응원 칸 (세션 82) — 버프 전용 칸 · 필드 전체에 ---------- */
+
+const CH = { F: RPD.FieldManager, UM: RPD.UnitManager, SM: RPD.StorageManager, CD: RPD.CheerData };
+function chFresh() {
+  lockFresh();
+  RPD.CheerData.reset();
+  RPD.EnemyManager.reset();
+  return CH.F.cheerSlots();
+}
+const chOpen = () => CH.F.cheerSlots().filter(s => s.unlocked);
+const chBattle = () => CH.F.slots.filter(s => s.unlocked && s.zone !== 'cheer');
+function chRejects(fn) {
+  const got = []; const h = p => got.push(p);
+  RPD.bus.on('field:rejected', h);
+  try { fn(); } finally { RPD.bus.off('field:rejected', h); }
+  return got;
+}
+
+check('응원 칸 — 응원 가능한 포켓몬만 들어간다(놓기 · 맞바꾸기 · 창고에서 · 거절 알림)', () => {
+  chFresh();
+  const [c0] = chOpen(), b0 = chBattle()[0];
+  const ok = CH.UM.create('exeggcute'), no = CH.UM.create('rattata');
+  if (CH.CD.isCheerable('rattata') || !CH.CD.isCheerable('exeggcute')) throw new Error('표가 이상하다');
+  let rej = chRejects(() => { if (CH.F.place(c0.index, no)) throw new Error('꼬렛이 응원 칸에 들어갔다'); });
+  if (!rej.length || rej[0].reason !== 'NOT_CHEERABLE') throw new Error('거절 알림(field:rejected NOT_CHEERABLE)이 없다');
+  if (!CH.F.place(c0.index, ok)) throw new Error('아라리가 못 들어갔다');
+  CH.F.place(b0.index, no);
+  rej = chRejects(() => { if (CH.F.swap(c0.index, b0.index)) throw new Error('맞바꿔 꼬렛이 응원 칸으로 갔다'); });
+  if (c0.unit !== ok || b0.unit !== no || !rej.length) throw new Error('맞바꾸기 거절 뒤 자리가 바뀌었다');
+  CH.F.remove(c0.index);
+  CH.SM.add(no2 = CH.UM.create('pidgey'));
+  const r = CH.SM.deploy(CH.SM.units.indexOf(no2), c0.index);
+  if (r.ok || CH.SM.units.indexOf(no2) < 0) throw new Error('창고 → 응원 칸 거절 때 개체가 사라졌다: ' + JSON.stringify(r));
+  if (RPD.CheerUI.REJECT_TEXT !== '응원 칸에는 응원 가능한 포켓몬만 둘 수 있어요') throw new Error('알림 문구');
+});
+var no2;
+
+check('응원 칸 — 처음 2칸 무료 · 400G · 900G 를 사기 전엔 못 둔다', () => {
+  chFresh();
+  const locked = CH.F.lockedCheerSlots();
+  if (chOpen().length !== 2 || locked.map(s => s.cost).join(',') !== '400,900') throw new Error(chOpen().length + ' / ' + locked.map(s => s.cost));
+  const u = CH.UM.create('gastly');
+  if (CH.F.place(locked[0].index, u) || CH.F.canPlace(locked[0].index, u).reason !== 'LOCKED') throw new Error('잠긴 응원 칸에 놓였다');
+  RPD.GameManager.gold = 1000;
+  const r = RPD.EconomyManager.unlockSlot(locked[0].index);
+  if (!r.ok || RPD.GameManager.gold !== 600) throw new Error('400G 구매: ' + JSON.stringify(r) + ' gold ' + RPD.GameManager.gold);
+  if (!CH.F.place(locked[0].index, u)) throw new Error('산 뒤에도 못 둔다');
+  if (CH.F.lockedSlots().some(s => s.zone === 'cheer')) throw new Error('확장 칸 목록(lockedSlots)에 응원 칸이 섞였다');
+});
+
+check('응원 칸 — getBattleUnits 엔 없고 getAllUnits 엔 있다 · 싸우지 않는다(공격 · 강화) · 시너지에는 센다', () => {
+  chFresh();
+  const [c0] = chOpen();
+  const m = CH.UM.create('clefable');           // 버퍼 · 장거리 — 빼먹으면 지나가는 적을 때린다
+  CH.F.place(c0.index, m); CH.UM.recomputeAll();
+  if (CH.F.getBattleUnits().indexOf(m) >= 0 || CH.F.getAllUnits().indexOf(m) < 0) throw new Error('분류가 틀렸다');
+  // 시너지 — 응원 칸도 종 수에 센다(세션 83). 필드의 같은 종과는 합쳐 1종
+  if (RPD.SynergyManager.countOf('FAIRY') !== 1) throw new Error('응원 칸 픽시가 시너지에 안 셌다 ' + RPD.SynergyManager.countOf('FAIRY'));
+  CH.F.place(chBattle()[0].index, CH.UM.create('clefable')); CH.UM.recomputeAll();
+  if (RPD.SynergyManager.countOf('FAIRY') !== 1) throw new Error('필드 픽시 + 응원 칸 픽시가 2종으로 셌다');
+  CH.F.remove(chBattle()[0].index); CH.F.place(chBattle()[0].index, CH.UM.create('clefairy')); CH.UM.recomputeAll();
+  if (RPD.SynergyManager.countOf('FAIRY') !== 2) throw new Error('필드 삐삐 + 응원 칸 픽시가 2종이 아니다');
+  CH.F.remove(chBattle()[0].index); CH.UM.recomputeAll();
+  if (RPD.EconomyManager.canUpgrade(m) || RPD.EconomyManager.upgrade(c0.index).ok) throw new Error('응원 칸이 강화된다');
+  RPD.GameManager.setState('RUNNING');
+  for (let i = 0; i < 6; i++) RPD.EnemyManager.spawn('armored', 30);
+  // 판 시작 때 받은 흔함 · 라운드 보상이 전투 칸에 앉을 수 있다 — 응원 칸 개체의 피해만 본다. 적이 사거리 안에 들어왔는지도 확인(헛검사 막기)
+  let minD = Infinity;
+  for (let t = 0; t < 40; t++) {
+    tick(0.5);
+    RPD.EnemyManager.enemies.forEach(e => { if (e.alive !== false) minD = Math.min(minD, Math.hypot(e.x - c0.x, e.y - c0.y)); });
+  }
+  RPD.EnemyManager.reset();
+  if (!(minD < m.range)) throw new Error('적이 응원 칸 사거리에 안 들어왔다(헛검사) ' + Math.round(minD) + ' / ' + m.range);
+  if (m.totalDamage > 0) throw new Error('응원 칸이 공격했다: ' + m.totalDamage);
+});
+
+function chAspd(cheerIds, tweak) {
+  chFresh();
+  if (tweak) tweak(CH.CD.table());
+  const bs = chBattle(), units = [bs[0], bs[5], bs[bs.length - 1]].map(s => { const u = CH.UM.create('charmander'); CH.F.place(s.index, u); return u; });
+  CH.UM.recomputeAll();
+  const base = units.map(u => u.attackSpeed);
+  const slots = chOpen();
+  RPD.GameManager.gold = 5000;
+  CH.F.lockedCheerSlots().forEach(s => RPD.EconomyManager.unlockSlot(s.index));
+  cheerIds.forEach((id, i) => CH.F.place(CH.F.cheerSlots()[i].index, CH.UM.create(id)));
+  CH.UM.recomputeAll();
+  return { units, base, ratio: units.map((u, i) => u.attackSpeed / base[i]) };
+}
+check('응원 칸 — 효과가 필드의 모든 전투 포켓몬에 닿고, 비우면 사라진다', () => {
+  const t = chAspd(['exeggcute']);
+  const want = 1 + CH.CD.get('exeggcute').attackSpeed;
+  if (t.ratio.some(r => Math.abs(r - want) > 0.005)) throw new Error('공속 배율 ' + t.ratio.map(r => r.toFixed(3)) + ' (기대 ' + want + ')');
+  CH.F.remove(CH.F.cheerSlots()[0].index); CH.UM.recomputeAll();
+  if (t.units.some((u, i) => Math.abs(u.attackSpeed - t.base[i]) > 1e-9)) throw new Error('비웠는데 버프가 남았다');
+  const parts = chAspd(['shellder']).units[0].auraParts;
+  if (!parts || !(parts.cheer > 0) || parts.neighbor !== 0) throw new Error('auraParts 가 응원 · 이웃을 못 가른다: ' + JSON.stringify(parts));
+});
+
+check('응원 칸 — 같은 종은 한 번만 · 다른 종은 더해진다 · 축마다 상한', () => {
+  const one = chAspd(['exeggcute']).ratio[0], two = chAspd(['exeggcute', 'exeggcute']).ratio[0];
+  if (Math.abs(one - two) > 1e-9) throw new Error('같은 종 두 마리가 두 번 셌다 ' + one + ' / ' + two);
+  chAspd(['exeggcute', 'exeggcute']);
+  if (CH.UM.cheer.dups.join() !== 'exeggcute') throw new Error('중복 기록 ' + CH.UM.cheer.dups);
+  chAspd(['bulbasaur', 'shellder']);
+  const atk = CH.UM.cheer.attack, wantA = CH.CD.get('bulbasaur').attack + CH.CD.get('shellder').attack;
+  if (Math.abs(atk - wantA) > 1e-9) throw new Error('다른 종이 안 더해진다 ' + atk + ' / ' + wantA);
+  // 상한 — 표를 잠깐 바꿔 넘치게 만든다
+  chAspd(['gastly'], T => { T.gastly.critRate = 5; });
+  const c = CH.UM.cheer;
+  if (c.critRate !== CH.CD.capOf('critRate') || !(c.raw.critRate > c.critRate)) throw new Error('상한이 안 걸렸다 ' + c.critRate);
+  CH.CD.reset();
+  // 응원 칸끼리는 서로 안 준다
+  const t = chAspd(['exeggcute', 'oddish']);
+  const cu = CH.F.cheerSlots()[1].unit;
+  if (cu.auraExtras || cu.auraBonus) throw new Error('응원 칸이 응원을 받았다');
+});
+
+check('응원 칸 — 재료 순서는 창고 → 필드 → 응원 칸 · 잠근 개체는 안 쓴다', () => {
+  chFresh();
+  const [c0] = chOpen(), b0 = chBattle()[0];
+  const inCheer = CH.UM.create('bulbasaur'), inField = CH.UM.create('bulbasaur'), inStore = CH.UM.create('bulbasaur');
+  CH.F.place(c0.index, inCheer); CH.F.place(b0.index, inField); CH.SM.add(inStore);
+  let r = RPD.RecipeManager.craft('ivysaur');
+  if (!r.ok) throw new Error('조합 실패 ' + r.reason);
+  if (c0.unit !== inCheer) throw new Error('창고 · 필드가 있는데 응원 칸 재료를 썼다');
+  // 이제 응원 칸 + 창고 하나 — 응원 칸을 마지막에 쓴다
+  CH.F.remove(b0.index); CH.SM.reset();
+  CH.SM.add(CH.UM.create('bulbasaur'));
+  r = RPD.RecipeManager.craft('ivysaur');
+  if (!r.ok || c0.unit) throw new Error('응원 칸도 재료로 쓰여야 한다(보유 개체) ' + JSON.stringify(r.reason));
+  if (r.unit && r.unit.slotIndex === c0.index) throw new Error('결과가 응원 칸에 앉았다');
+  // 잠금
+  chFresh();
+  const lk = CH.UM.create('bulbasaur'); CH.F.place(chOpen()[0].index, lk); CH.UM.setLocked(lk, true);
+  CH.SM.add(CH.UM.create('bulbasaur'));
+  if (RPD.RecipeManager.craft('ivysaur').ok) throw new Error('잠근 응원 칸 개체를 재료로 썼다');
+});
+
+check('응원 칸 — 자동 배치 · firstEmpty · 소환 · 일괄 창고로는 응원 칸을 건드리지 않는다', () => {
+  chFresh();
+  chBattle().forEach(s => CH.F.place(s.index, CH.UM.create('rattata')));
+  if (CH.F.firstEmpty() || CH.F.emptyCount() !== 0) throw new Error('전투 칸이 다 찼는데 빈 칸이 있다고 한다');
+  if (RPD.SummonManager.autoPlace(CH.UM.create('exeggcute'))) throw new Error('자동 배치가 응원 칸에 넣었다');
+  RPD.GameManager.gold = 99999;
+  const n = CH.SM.units.length;
+  const r = RPD.SummonManager.summon();
+  if (!r.ok || CH.SM.units.length !== n + 1 || chOpen().some(s => s.unit)) throw new Error('필드가 차면 소환은 창고로 가야 한다');
+  CH.F.place(chOpen()[0].index, CH.UM.create('oddish'));
+  if (RPD.StorageManager.bulkStore) {
+    RPD.StorageManager.bulkStore(RPD.StorageManager.bulkGroups().map(g => g.id));
+    if (!chOpen()[0].unit) throw new Error('일괄 창고로가 응원 칸을 비웠다');
+  }
+});
+
+check('응원 칸 — 이웃 버프는 그대로(피카츄 옆 삐삐 사거리 · 응원과 합쳐 상한)', () => {
+  chFresh();
+  const bs = chBattle();
+  const near = (s, o) => o !== s && Math.hypot(s.x - o.x, s.y - o.y) <= 150;   // 이웃 판정(200px) 안쪽으로 넉넉히
+  const a = bs.find(s => bs.some(o => near(s, o)));
+  const b = a && bs.find(o => near(a, o));
+  if (!a || !b) throw new Error('이웃 칸 쌍이 없다');
+  const u = CH.UM.create('pikachu'); CH.F.place(a.index, u); CH.UM.recomputeAll();
+  const r0 = u.range;
+  CH.F.place(b.index, CH.UM.create('clefairy')); CH.UM.recomputeAll();
+  if (!(u.range > r0)) throw new Error('삐삐 이웃 사거리가 사라졌다');
+  const r1 = u.range;
+  CH.F.place(chOpen()[0].index, CH.UM.create('oddish')); CH.UM.recomputeAll();
+  if (!(u.range >= r1) || !u.auraExtras.neighbor || !u.auraExtras.cheer) throw new Error('이웃 + 응원이 합쳐지지 않는다');
+});
+
+check('응원 칸 — 표의 16종(+ 필드 전체 불멸 1)이 다 실제 포켓몬 · 설명서 표 · 응원 칸 카드가 같은 표로 그린다', () => {
+  chFresh();
+  const ids = CH.CD.ids();
+  if (ids.length !== 16 || CH.CD.fieldIds().join() !== 'mew') throw new Error('응원 가능 ' + ids.length + '종 · 필드 전체 ' + CH.CD.fieldIds());
+  const bad = ids.filter(id => !RPD.PokemonData.get(id));
+  if (bad.length) throw new Error('없는 포켓몬: ' + bad);
+  if (ids.some(id => !CH.CD.describe(CH.CD.get(id)))) throw new Error('효과가 빈 종이 있다');
+  const help = RPD.CheerUI.renderHelp();
+  const rows = (help.match(/<tr><td>/g) || []).length;
+  if (rows !== ids.length + CH.CD.fieldIds().length) throw new Error('설명서 표 ' + rows + '줄');
+  if (!/불멸 이상/.test(help)) throw new Error('설명서에 불멸 이상 안내가 없다');
+  if (ids.some(id => help.indexOf(CH.CD.describe(CH.CD.get(id))) < 0)) throw new Error('설명서 수치가 표와 다르다');
+  if (!/필드 전체/.test(help)) throw new Error('설명서에 "필드 전체" 가 없다');
+  // 버퍼 9종은 이웃 버프 × SCALE
+  const g = CH.CD.get('golduck'), a = RPD.AuraData.get('golduck');
+  if (Math.abs(g.armorPierce - Math.round(a.armorPierce * CH.CD.SCALE * 1000) / 1000) > 1e-9) throw new Error('골덕 = 이웃 × SCALE 이 아니다');
+});
+
+check('불멸 이상(뮤) — 응원 칸엔 못 두고, 전투 칸에 두면 옆 칸은 원래 이웃 값 · 필드 전체는 응원 값(세션 83)', () => {
+  chFresh();
+  const bs = chBattle();
+  if (CH.CD.isCheerable('mew') || CH.F.place(chOpen()[0].index, CH.UM.create('mew'))) throw new Error('뮤가 응원 칸에 들어갔다');
+  const far = bs[bs.length - 1], hub = bs.find(s => Math.hypot(s.x - far.x, s.y - far.y) > 400);
+  const nb = bs.find(s => s !== hub && Math.hypot(s.x - hub.x, s.y - hub.y) <= 150);
+  const uf = CH.UM.create('charmander'), un = CH.UM.create('charmander');
+  CH.F.place(far.index, uf); CH.F.place(nb.index, un); CH.UM.recomputeAll();
+  const f0 = uf.attackSpeed, n0 = un.attackSpeed;
+  CH.F.place(hub.index, CH.UM.create('mew')); CH.UM.recomputeAll();
+  const e = CH.CD.get('mew'), a = RPD.AuraData.get('mew');
+  if (Math.abs(uf.attackSpeed / f0 - (1 + e.attackSpeed)) > 0.005) throw new Error('먼 칸이 응원 값을 못 받았다 ' + (uf.attackSpeed / f0).toFixed(3));
+  if (Math.abs(un.attackSpeed / n0 - (1 + a.attackSpeed + e.attackSpeed)) > 0.005) throw new Error('옆 칸이 원래 이웃 값 + 응원 값이 아니다 ' + (un.attackSpeed / n0).toFixed(3));
+  if (CH.UM.cheer.field.join() !== 'mew' || !(uf.auraParts.cheer > 0)) throw new Error('필드 전체 기록 ' + JSON.stringify(CH.UM.cheer.field));
+  // 두 마리여도 한 번
+  CH.F.place(bs.find(s => !s.unit).index, CH.UM.create('mew')); CH.UM.recomputeAll();
+  if (Math.abs(uf.attackSpeed / f0 - (1 + e.attackSpeed)) > 0.005) throw new Error('뮤 두 마리가 두 번 셌다');
+  // 창고로 보내면 사라진다
+  CH.F.slots.filter(s => s.unit && s.unit.defId === 'mew').forEach(s => CH.F.remove(s.index)); CH.UM.recomputeAll();
+  if (Math.abs(uf.attackSpeed - f0) > 1e-9) throw new Error('뮤를 빼도 남았다');
+  // 옛 저장(뮤가 응원 칸에) — 잃지 않고 전투 칸으로
+  chFresh();
+  CH.F.loadState({ unlocked: [], units: [{ slot: chOpen()[0].index, unit: CH.UM.serialize(CH.UM.create('mew')) }] });
+  if (chOpen()[0].unit || !CH.F.getBattleUnits().some(u => u.defId === 'mew')) throw new Error('옛 저장의 응원 칸 뮤가 사라졌거나 응원 칸에 남았다');
+});
+
+check('응원 칸 — 판 이어하기가 응원 칸(산 칸 · 개체)을 저장 · 복원한다', () => {
+  lockFresh();
+  RPD.Config.autosave = true; RS.blocked = false;
+  RPD.Game.restart(); RPD.Game.startRun('NORMAL', 'NORMAL');
+  RPD.GameManager.life = 999; RPD.GameManager.gold = 5000;
+  const lockedC = CH.F.lockedCheerSlots()[0];
+  RPD.EconomyManager.unlockSlot(lockedC.index);
+  CH.F.place(lockedC.index, CH.UM.create('vulpix'));
+  CH.F.place(chOpen()[0].index, CH.UM.create('koffing'));
+  RPD.bus.emit('wave:started', RPD.WaveManager.plan);
+  const r = RS.read();
+  RPD.Config.autosave = false;
+  if (!r.ok) throw new Error('저장 실패 ' + r.reason);
+  RS.restore(r.data); RS.pending = null;
+  const got = CH.F.cheerSlots().filter(s => s.unit).map(s => s.unit.defId).sort().join(',');
+  if (got !== 'koffing,vulpix' || !CH.F.get(lockedC.index).unlocked) throw new Error('복원 ' + got);
+  if (!(CH.UM.cheer.critDamage > 0) || !(CH.UM.cheer.bossDamage > 0)) throw new Error('복원 뒤 응원 효과가 없다');
+});
+
+check('응원 칸 — 정보 카드 · 강화 버튼 · 보유 칸 ✨ · [응원 가능] 거름망 · 요약 줄', () => {
+  chFresh();
+  const c0 = chOpen()[0];
+  CH.F.place(c0.index, CH.UM.create('shellder'));
+  const b0 = chBattle()[0]; CH.F.place(b0.index, CH.UM.create('charmander'));
+  CH.UM.recomputeAll();
+  CH.F.select(c0.index);
+  const body = nodes.slotBody.innerHTML;
+  if (!/응원: 공격력 \+5% · 방어 무시 \+5%/.test(body) || !/필드 전체/.test(body) || /공격 대상/.test(body)) throw new Error('응원 칸 카드: ' + body.slice(0, 200));
+  if (nodes.upgradeCost.textContent !== '응원 칸은 강화 불가') throw new Error('강화 버튼 글: ' + nodes.upgradeCost.textContent);
+  CH.F.select(b0.index);
+  const bb = nodes.slotBody.innerHTML;
+  if (!/받는 버프/.test(bb) || !/📣 응원 · 공격 \+\d+%/.test(bb)) throw new Error('전투 칸 받는 버프: ' + (bb.match(/sc__recv[\s\S]{0,200}/) || [''])[0]);
+  RPD.UIManager.refreshAll && RPD.UIManager.refreshAll();
+  if (!/✨|📣/.test(nodes.storageList.innerHTML)) throw new Error('보유 칸에 응원 표시가 없다');
+  RPD.CheerUI.render();
+  if (nodes.cheerSummary.hidden || !/공격력 \+5%/.test(nodes.cheerSummary.innerHTML)) throw new Error('요약 줄: ' + nodes.cheerSummary.innerHTML);
+  CH.F.clearSelection();
 });
 
 wakePromise.then(() => {

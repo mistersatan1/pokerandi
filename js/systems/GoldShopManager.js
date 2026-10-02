@@ -137,7 +137,7 @@
   /* 지금 필드에 있는 개체 중 이 칸의 혜택을 받는 수 — 화면에서 "지금 사면 몇 마리가 세진다" */
   GoldShopManager.affected = function (kind, key) {
     var self = this, n = 0;
-    RPD.FieldManager.getUnits().forEach(function (u) {
+    RPD.FieldManager.getBattleUnits().forEach(function (u) {   // 혜택을 받아 싸우는 개체
       if (kind === 'type' ? (u.def.types || []).indexOf(key) >= 0 : self.tierSlotOf(u.def) === key) n += 1;
     });
     return n;

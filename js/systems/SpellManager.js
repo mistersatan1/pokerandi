@@ -44,9 +44,12 @@
       for (var k = 0; k < SM.units.length && !found; k++) {
         if (!usedS[k] && (withLocked || !SM.units[k].locked) && SM.units[k].defId === want) { usedS[k] = true; found = { where: 'store', unit: SM.units[k] }; }
       }
-      for (var s = 0; s < F.slots.length && !found; s++) {
-        var u = F.slots[s].unit;
-        if (!usedF[s] && u && (withLocked || !u.locked) && u.defId === want) { usedF[s] = true; found = { where: 'field', slot: s, unit: u }; }
+      for (var pass = 0; pass < 2 && !found; pass++) {   // 창고 → 전투 칸 → 응원 칸(세션 82)
+        for (var s = 0; s < F.slots.length && !found; s++) {
+          if ((F.slots[s].zone === 'cheer') !== (pass === 1)) continue;
+          var u = F.slots[s].unit;
+          if (!usedF[s] && u && (withLocked || !u.locked) && u.defId === want) { usedF[s] = true; found = { where: 'field', slot: s, unit: u }; }
+        }
       }
       if (!found) return null;
       out.push(found);
@@ -81,7 +84,7 @@
     var removeStore = [];
     c.found.forEach(function (f) {
       if (f.where === 'field') {
-        if (slotForResult < 0) slotForResult = f.slot;
+        if (slotForResult < 0 && !RPD.FieldManager.isCheer(f.slot)) slotForResult = f.slot;   // 응원 칸 자리는 결과 자리로 안 쓴다
         RPD.FieldManager.remove(f.slot);
       } else {
         removeStore.push(RPD.StorageManager.units.indexOf(f.unit));
@@ -94,8 +97,7 @@
     // 조합식과 같은 규칙 — 재료 중 가장 높은 강화 레벨의 절반을 이어받는다
     var topLevel = c.found.reduce(function (m, f) { return Math.max(m, (f.unit && f.unit.level) || 0); }, 0);
     unit.level = Math.min(RPD.Config.upgradeMaxLevel, Math.floor(topLevel / 2));
-    if (slotForResult >= 0) RPD.FieldManager.place(slotForResult, unit);
-    else if (!RPD.SummonManager.autoPlace(unit)) RPD.StorageManager.add(unit);
+    if (!(slotForResult >= 0 && RPD.FieldManager.place(slotForResult, unit)) && !RPD.SummonManager.autoPlace(unit)) RPD.StorageManager.add(unit);
     RPD.UnitManager.recomputeAll();
 
     if (spell.kind === 'transcend') { this.transcendShards -= 1; this.transcendUsed = true; }

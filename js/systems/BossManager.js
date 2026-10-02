@@ -114,7 +114,7 @@
       var occupied = [];
       var slots = RPD.FieldManager.slots;
       for (var i = 0; i < slots.length; i++) {
-        if (slots[i].unit) occupied.push(slots[i]);
+        if (slots[i].unit && slots[i].zone !== 'cheer') occupied.push(slots[i]);   // 싸우는 칸만 노린다
       }
       if (!occupied.length) return null;
 
@@ -139,7 +139,7 @@
 
       for (var i = 0; i < slots.length; i++) {
         var slot = slots[i];
-        if (!slot.unit) continue;
+        if (!slot.unit || slot.zone === 'cheer') continue;
         if (U.dist2(slot.x, slot.y, boss.x, boss.y) > radius * radius) continue;
         RPD.UnitManager.disable(slot.unit, p.duration || 2);
         hit.push(slot.index);

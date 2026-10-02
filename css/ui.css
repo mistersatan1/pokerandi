@@ -886,3 +886,10 @@
 .lockchips { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; }
 .lockchip { min-height: 32px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--panel-2); font-size: 12px; font-weight: 800; }
 .lockchip.is-locked { border-color: #f0b429; color: #f0b429; }
+
+/* 응원 칸(세션 82) — 보유 칸의 ✨ 응원 가능 / 📣 응원 중 · [✨ 응원 가능] 거름망 · 응원 칸에 두기 */
+.scell__cheer { position: absolute; left: 2px; bottom: 2px; font-size: 10px; line-height: 1; pointer-events: none; text-shadow: 0 1px 1px #000; }
+.tchip--cheer.is-on { background: #e8559a; border-color: #e8559a; color: #fff; }
+.btn--cheer { border-color: #e8559a; color: #ffd0ea; }
+.ib__cheer { color: #ffb3dc; font-weight: 700; }
+.cheerhelp td:nth-child(2) { color: #ffd0ea; font-weight: 700; }

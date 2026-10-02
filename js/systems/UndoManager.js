@@ -23,7 +23,7 @@
     for (var i = 0; i < list.length; i++) if (list[i].uid === uid) return i;
     return -1;
   }
-  function onField(uid) { return F().getUnits().some(function (u) { return u.uid === uid; }); }
+  function onField(uid) { return F().getAllUnits().some(function (u) { return u.uid === uid; }); }
   function exists(uid) { return onField(uid) || storageIndexOf(uid) >= 0; }
 
   function push(rec) {

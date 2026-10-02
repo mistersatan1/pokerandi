@@ -3012,7 +3012,7 @@ check('응원 칸 — 정보 카드 · 강화 버튼 · 보유 칸 ✨ · [응�
   CH.UM.recomputeAll();
   CH.F.select(c0.index);
   const body = nodes.slotBody.innerHTML;
-  if (!/응원: 공격력 \+5% · 방어 무시 \+5%/.test(body) || !/필드 전체/.test(body) || /공격 대상/.test(body)) throw new Error('응원 칸 카드: ' + body.slice(0, 200));
+  if (!/응원: 공격력 \+2\.5% · 방어 무시 \+2\.5%/.test(body) || !/필드 전체/.test(body) || /공격 대상/.test(body)) throw new Error('응원 칸 카드: ' + body.slice(0, 200));
   if (nodes.upgradeCost.textContent !== '응원 칸은 강화 불가') throw new Error('강화 버튼 글: ' + nodes.upgradeCost.textContent);
   CH.F.select(b0.index);
   const bb = nodes.slotBody.innerHTML;
@@ -3020,7 +3020,7 @@ check('응원 칸 — 정보 카드 · 강화 버튼 · 보유 칸 ✨ · [응�
   RPD.UIManager.refreshAll && RPD.UIManager.refreshAll();
   if (!/✨|📣/.test(nodes.storageList.innerHTML)) throw new Error('보유 칸에 응원 표시가 없다');
   RPD.CheerUI.render();
-  if (nodes.cheerSummary.hidden || !/공격력 \+5%/.test(nodes.cheerSummary.innerHTML)) throw new Error('요약 줄: ' + nodes.cheerSummary.innerHTML);
+  if (nodes.cheerSummary.hidden || !/공격력 \+2\.5%/.test(nodes.cheerSummary.innerHTML)) throw new Error('요약 줄: ' + nodes.cheerSummary.innerHTML);
   CH.F.clearSelection();
 });
 

@@ -70,7 +70,7 @@ async function run(browser) {
     c.water = await p.evaluate(() => ({ n: window.RPD.SynergyManager.countOf('WATER'),
       row: ((document.querySelector('#synergyBody .synrow[data-type="WATER"]') || {}).textContent || '').replace(/\s+/g, ' ').trim() }));
     if (c.water.n !== 2 || !/물\s*2/.test(c.water.row)) bad('(c) 응원 칸이 시너지에 안 셌다 ' + JSON.stringify(c.water));
-    if (c.hidden || !/공격력 \+5%/.test(c.text) || !/공속 \+4%/.test(c.text) || !/방어 무시 \+5%/.test(c.text)) bad('(c) 요약 줄 ' + JSON.stringify(c));
+    if (c.hidden || !/공격력 \+2\.5%/.test(c.text) || !/공속 \+2%/.test(c.text) || !/방어 무시 \+2\.5%/.test(c.text)) bad('(c) 요약 줄 ' + JSON.stringify(c));
     await p.click('#cheerSummary').catch(() => {});
     await p.waitForTimeout(200);
     const c2 = await p.evaluate(() => document.getElementById('cheerSummary').classList.contains('is-open'));
@@ -88,7 +88,7 @@ async function run(browser) {
       up: document.getElementById('upgradeCost').textContent
     }));
     const dText = mode === 'pc' ? d.card : d.bar;
-    if (!/응원: 공격력 \+5% · 방어 무시 \+5%/.test(dText) || !/필드 전체/.test(dText)) bad('(d) ' + dText.slice(0, 160));
+    if (!/응원: 공격력 \+2\.5% · 방어 무시 \+2\.5%/.test(dText) || !/필드 전체/.test(dText)) bad('(d) ' + dText.slice(0, 160));
     if (d.up !== '응원 칸은 강화 불가') bad('(d) 강화 버튼 ' + d.up);
     if (mode === 'portrait' && /강화/.test(d.bar)) bad('(d) 정보 바에 [강화] 가 있다');
     await shot('d_card');

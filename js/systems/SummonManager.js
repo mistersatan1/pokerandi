@@ -134,7 +134,7 @@
     var wanted = RPD.RecipeManager ? RPD.RecipeManager.missingMaterials(T.recipeBoostMaxMissing) : {};
 
     var owned = {};
-    var units = RPD.FieldManager.getUnits();
+    var units = RPD.FieldManager.getAllUnits();
     for (var u = 0; u < units.length; u++) {
       owned[units[u].defId] = (owned[units[u].defId] || 0) + 1;
     }
@@ -167,7 +167,7 @@
 
     for (var i = 0; i < F.slots.length; i++) {
       var slot = F.slots[i];
-      if (!slot.unlocked || slot.unit) continue;
+      if (!slot.unlocked || slot.unit || slot.zone === 'cheer') continue;   // 응원 칸은 자동으로 채우지 않는다
       var cover = RPD.MapData.coverageAt(slot.x, slot.y, unit.range);
       if (cover > bestCover) { bestCover = cover; best = slot; }
     }

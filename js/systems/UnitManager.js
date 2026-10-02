@@ -85,12 +85,12 @@
   function auraBonusFor(slotIndex) {
     var F = RPD.FieldManager;
     var self = F.get(slotIndex);
-    if (!self) return 0;
+    if (!self || self.zone === 'cheer') return 0;   // 응원 칸은 버프를 받지 않는다(싸우지 않는다)
 
     var bonus = 0;
     for (var i = 0; i < F.slots.length; i++) {
       var other = F.slots[i];
-      if (!other.unit || i === slotIndex) continue;
+      if (!other.unit || i === slotIndex || other.zone === 'cheer') continue;   // 응원 칸의 버퍼는 이웃 버프 대신 응원(전체)으로 준다
       var d = other.unit.def;
       if (!d.auraAttack) continue;
 
@@ -106,10 +106,10 @@
     var F = RPD.FieldManager;
     var self = F.get(slotIndex);
     var out = { attackSpeed: 0, critRate: 0, critDamage: 0, range: 0, cooldown: 0, armorPierce: 0, bossDamage: 0, from: [] };
-    if (!self || !RPD.AuraData) return out;
+    if (!self || !RPD.AuraData || self.zone === 'cheer') return out;
     for (var i = 0; i < F.slots.length; i++) {
       var other = F.slots[i];
-      if (!other.unit || i === slotIndex) continue;
+      if (!other.unit || i === slotIndex || other.zone === 'cheer') continue;
       var a = RPD.AuraData.get(other.unit.def.id);
       if (!a || !isNeighbor(self, other)) continue;
       out.attackSpeed += a.attackSpeed || 0;
@@ -276,20 +276,64 @@
   UnitManager.setTargetingAll = function (mode) {
     if (mode != null && UnitManager.TARGET_MODES.indexOf(mode) < 0) return false;
     RPD.GameManager.targetAll = mode || null;
-    var units = RPD.FieldManager.getUnits().concat(RPD.StorageManager ? RPD.StorageManager.units : []);
+    var units = RPD.FieldManager.getAllUnits().concat(RPD.StorageManager ? RPD.StorageManager.units : []);
     units.forEach(function (u) { u.targetChoice = null; applyTargeting(u); });
     RPD.bus.emit('unit:targeting', { all: true, mode: mode || null });
     return true;
   };
 
+  /* ---------- 응원 칸(세션 82) ----------
+   * 응원 칸에 둔 응원 가능 포켓몬(auras.js CheerData)의 버프 합계. 다른 종끼리는 더하고, 같은 종은 한 번(dups 에 남긴다),
+   * 축마다 상한(AuraData.cap · 공격력은 CheerData.capAttack). recomputeAll 이 한 번만 세고 모든 전투 유닛에 얹는다. */
+  var CHEER_KEYS = ['attackSpeed', 'critRate', 'critDamage', 'range', 'cooldown', 'armorPierce', 'bossDamage'];
+  UnitManager.cheerTotals = function () {
+    var F = RPD.FieldManager, CD = RPD.CheerData;
+    var out = { attack: 0, attackSpeed: 0, critRate: 0, critDamage: 0, range: 0, cooldown: 0, armorPierce: 0, bossDamage: 0, from: [], dups: [], raw: {} };
+    if (!CD) return out;
+    var seen = {};
+    for (var i = 0; i < F.slots.length; i++) {
+      var s = F.slots[i];
+      if (s.zone !== 'cheer' || !s.unlocked || !s.unit) continue;
+      var id = s.unit.defId, e = CD.get(id);
+      if (!e) continue;
+      if (seen[id]) { out.dups.push(id); continue; }
+      seen[id] = true;
+      out.from.push(id);
+      CD.AXES.forEach(function (k) { out[k] += e[k] || 0; });
+    }
+    CD.AXES.forEach(function (k) { out.raw[k] = out[k]; out[k] = Math.min(CD.capOf(k), out[k]); });
+    return out;
+  };
+  UnitManager.cheer = null;
+
+  /* 이웃 버프(auraExtrasFor) + 응원 — 축마다 합쳐 AuraData.cap 에서 멈춘다. 화면이 나눠 보이게 neighbor · cheer 를 같이 든다 */
+  function mergeExtras(nb, ch) {
+    if (!ch || !ch.from.length) return nb;
+    var cap = RPD.AuraData.cap, out = { from: nb.from.slice(), neighbor: nb, cheer: ch };
+    CHEER_KEYS.forEach(function (k) { out[k] = Math.min(cap[k], (nb[k] || 0) + (ch[k] || 0)); });
+    return out;
+  }
+
   UnitManager.recomputeAll = function () {
     var F = RPD.FieldManager;
     // 시너지를 먼저 센다. 순서를 이벤트 구독 순서에 맡기면 조용히 한 프레임 어긋난다.
     RPD.SynergyManager.recompute();
+    var cheer = UnitManager.cheer = UnitManager.cheerTotals();   // 한 번만 센다
     for (var i = 0; i < F.slots.length; i++) {
       var slot = F.slots[i];
       if (!slot.unit) continue;
-      UnitManager.recompute(slot.unit, auraBonusFor(i), auraExtrasFor(i));
+      if (slot.zone === 'cheer') {
+        // 응원 칸 — 싸우지 않으니 버프 없이 기본값만(정보 카드용). 응원 칸끼리는 서로 주지 않는다
+        UnitManager.recompute(slot.unit, 0, null);
+        slot.unit.cheering = true;
+        slot.unit.auraParts = null;
+        continue;
+      }
+      slot.unit.cheering = false;
+      var nbAtk = auraBonusFor(i);
+      UnitManager.recompute(slot.unit, nbAtk + cheer.attack, mergeExtras(auraExtrasFor(i), cheer));
+      var m = RPD.SynergyManager.bonus.auraMul;
+      slot.unit.auraParts = { neighbor: nbAtk * m, cheer: cheer.attack * m };   // 정보 카드 "응원 +5% · 이웃 +12%"
     }
     RPD.bus.emit('units:recomputed');
   };
@@ -301,7 +345,7 @@
   /* 결과 화면용 — 이번 판 최고 피해 포켓몬 */
   UnitManager.topDamage = function () {
     var best = null;
-    var units = RPD.FieldManager.getUnits();
+    var units = RPD.FieldManager.getBattleUnits();
     for (var i = 0; i < units.length; i++) {
       if (!best || units[i].totalDamage > best.totalDamage) best = units[i];
     }

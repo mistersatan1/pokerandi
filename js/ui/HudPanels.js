@@ -566,7 +566,7 @@
     if (!el.range) return;
     var R = RPD.Range;
     var n = { s: 0, m: 0, l: 0 };
-    F.getUnits().forEach(function (u) {
+    F.getBattleUnits().forEach(function (u) {   // 사거리 구성 — 싸우는 개체만(응원 칸 제외)
       if (u.range <= R.SHORT) n.s += 1;
       else if (u.range <= R.MID) n.m += 1;
       else n.l += 1;

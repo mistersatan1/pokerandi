@@ -286,6 +286,7 @@
               <button type="button" class="rf is-on" data-help="keys">단축키 · 조작</button>
               <button type="button" class="rf" data-help="shard">조각 상점</button>
               <button type="button" class="rf" data-help="boss">보스 보상</button>
+              <button type="button" class="rf" data-help="cheer">응원 칸</button>
             </div>
             <button type="button" class="help__close" id="btnHelpClose" aria-label="닫기">×</button>
           </div>
@@ -333,6 +334,11 @@
           <!-- 보스 보상 — 표는 HudPanels.renderBossHelp 가 RewardManager.table/beyond · EconomyManager.bossGoldPreview 로 만든다(세션 66). 값을 여기 적지 않는다 -->
           <section class="help__page" data-page="boss" hidden>
             <div id="helpBoss"></div>
+          </section>
+
+          <!-- 응원 칸 — 표는 CheerUI.renderHelp 가 CheerData 로 만든다(세션 82). 값을 여기 적지 않는다 -->
+          <section class="help__page" data-page="cheer" hidden>
+            <div id="helpCheer"></div>
           </section>
 
           <section class="help__page" data-page="shard" hidden>
@@ -476,6 +482,7 @@
           <button type="button" class="tchip" data-sort="count">수량순</button>
           <button type="button" class="tchip" data-sort="name">이름순</button>
           <button type="button" class="tchip" data-sort="type">타입별</button>
+          <button type="button" class="tchip tchip--cheer" data-filter="cheer" aria-pressed="false" title="응원 칸에 둘 수 있는 포켓몬만">✨ 응원 가능</button>
         </div>
         <div class="owned__grid" id="storageList"></div>
         <div class="ownedpop" id="ownedPop" hidden></div>
@@ -510,6 +517,8 @@
         <h2 class="pane__title"><span class="ico ico--synergy"></span>타입 시너지</h2>
         <span class="pane__count" id="synergyCount"></span>
       </header>
+      <!-- 응원 칸 요약(세션 82) — CheerUI 가 UnitManager.cheer 로 채운다. 누르면 종별 내역 -->
+      <button type="button" class="cheersum" id="cheerSummary" hidden aria-expanded="false"></button>
       <div class="synergy__list" id="synergyBody"></div>
     </section>
 
@@ -669,6 +678,7 @@
 <script src="js/ui/GoldShopUI.js"></script>
 <script src="js/ui/BulkStoreUI.js"></script>
 <script src="js/ui/LegendAdvisorUI.js"></script>
+<script src="js/ui/CheerUI.js"></script>
 <script src="js/ui/EliteUI.js"></script>
 <script src="js/ui/SpellUI.js"></script>
 <script src="js/main.js"></script>

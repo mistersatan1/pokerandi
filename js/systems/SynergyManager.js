@@ -82,7 +82,7 @@
   SynergyManager.dupsOf = function (map) { return dupsOf(map); };
 
   SynergyManager.recompute = function () {
-    var tl = this.tally(RPD.FieldManager.getUnits());
+    var tl = this.tally(RPD.FieldManager.getBattleUnits());   // 응원 칸은 시너지에 안 센다(세션 82)
     var counts = tl.counts, unitCounts = tl.unitCounts, speciesOf = tl.speciesOf;
 
     var bonus = baseBonus();

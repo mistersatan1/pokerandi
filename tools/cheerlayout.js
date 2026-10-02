@@ -2,7 +2,7 @@
  * 테스트판(dist)을 실제 크로미움으로 띄워, 후보 칸을 필드 위에 그리고(게임 칸 그리기에 덧그림) PC · 갤럭시 S24 세로로 찍는다.
  * 후보마다 잰다: 경로와의 거리(칸 가장자리가 길 폭에 안 닿는가: 중심 ≥ 길 반폭 21 + 칸 반 28 = 49) · 기존 칸(확장 포함)과 중심 거리 ≥ 60 ·
  * 필드 안 · 필드 위에 떠 있는 HUD(진행 칩 · 보스 보상 칩 · 웨이브 배너)와 화면에서 겹치는가 · 손가락 크기(화면 px).
- * 캡처: dist/27_cheer_layout_{A|B}_{pc|portrait}.png */
+ * 캡처: dist/27_cheer_layout_{A|B}_{pc|portrait}.png · 응원 칸이 생긴 뒤(세션 82)엔 기존 칸 거리에서 응원 칸을 뺀다 */
 const fs = require('fs'), path = require('path');
 let playwright;
 try { playwright = require('playwright'); } catch (e) { playwright = require('/home/claude/.npm-global/lib/node_modules/playwright'); }
@@ -73,7 +73,7 @@ const PLANS = {
           .map(n => { const b = n.getBoundingClientRect(); return { id: n.id, l: b.left, t: b.top, r: b.right, b: b.bottom }; }).filter(b => b.r > b.l && b.b > b.t);
         const cells = plan.cells.map(cell => {
           const pd = pathDist(cell.x, cell.y);
-          const nearSlot = Math.min(...R.MapData.slots.map(s => Math.hypot(s.x - cell.x, s.y - cell.y)));
+          const nearSlot = Math.min(...R.MapData.slots.filter(s => s.zone !== 'cheer').map(s => Math.hypot(s.x - cell.x, s.y - cell.y)));
           const nearCheer = Math.min(...plan.cells.filter(o => o !== cell).map(o => Math.hypot(o.x - cell.x, o.y - cell.y)));
           const a = R.Renderer._fit.forward(fit, cell.x - 28, cell.y - 28), b = R.Renderer._fit.forward(fit, cell.x + 28, cell.y + 28);
           const rect = { l: cr.left + Math.min(a.x, b.x), t: cr.top + Math.min(a.y, b.y), r: cr.left + Math.max(a.x, b.x), b: cr.top + Math.max(a.y, b.y) };

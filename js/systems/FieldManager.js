@@ -22,6 +22,7 @@
     this.slots = RPD.MapData.slots.map(function (s) {
       var unlocked = s.unlocked;
       var blocked = false;
+      if (s.zone === 'cheer') return buildSlot(s, unlocked, false);   // 응원 칸은 모드 칸 제한(챌린지)과 무관 — 싸우는 칸이 아니다
       if (unlocked) {
         if (opened >= limit) { unlocked = false; blocked = true; }
         else opened += 1;
@@ -58,6 +59,7 @@
           235: RPD.MapData.coverageAt(s.x, s.y, RPD.Range.LONG)
         },
         kind: s.kind || '',
+        zone: s.zone || 'battle',          // 'battle' 전투 칸 · 'cheer' 응원 칸(세션 82)
         kindLabel: s.kindLabel || '',
         note: s.note || ''
       };
@@ -85,8 +87,28 @@
 
   /* 살 수 있는 잠긴 칸만. 모드 제한으로 막힌 칸은 제외한다. */
   FieldManager.lockedSlots = function () {
-    return this.slots.filter(function (s) { return !s.unlocked && !s.blocked; });
+    return this.slots.filter(function (s) { return !s.unlocked && !s.blocked && s.zone !== 'cheer'; });
   };
+  /* 응원 칸(세션 82) */
+  FieldManager.isCheer = function (slotOrIndex) {
+    var s = typeof slotOrIndex === 'number' ? this.get(slotOrIndex) : slotOrIndex;
+    return !!s && s.zone === 'cheer';
+  };
+  FieldManager.cheerSlots = function () { return this.slots.filter(function (s) { return s.zone === 'cheer'; }); };
+  FieldManager.lockedCheerSlots = function () { return this.slots.filter(function (s) { return s.zone === 'cheer' && !s.unlocked; }); };
+  FieldManager.battleSlots = function () { return this.slots.filter(function (s) { return s.zone !== 'cheer'; }); };
+  /* 이 칸에 이 개체를 둘 수 있나 — 응원 칸은 응원 가능 포켓몬만. { ok } · { ok:false, reason:'NOT_CHEERABLE' | 'LOCKED' | 'NO_SLOT' } */
+  FieldManager.canPlace = function (index, unit) {
+    var slot = this.get(index);
+    if (!slot) return { ok: false, reason: 'NO_SLOT' };
+    if (!slot.unlocked) return { ok: false, reason: 'LOCKED' };
+    if (unit && slot.zone === 'cheer' && !(RPD.CheerData && RPD.CheerData.isCheerable(unit.defId))) return { ok: false, reason: 'NOT_CHEERABLE' };
+    return { ok: true };
+  };
+  function reject(index, unit, reason) {
+    RPD.bus.emit('field:rejected', { index: index, unit: unit || null, reason: reason });
+    return false;
+  }
 
   FieldManager.blockedSlots = function () {
     return this.slots.filter(function (s) { return s.blocked; });
@@ -98,10 +120,11 @@
 
   FieldManager.getSelected = function () { return this.get(this.selectedIndex); };
 
+  /* 빈 전투 칸 — 소환 · 상점 · 보상의 "필드 여유"는 전투 칸만 본다(응원 칸은 응원 가능 포켓몬 전용이라 자동으로 채우지 않는다) */
   FieldManager.firstEmpty = function () {
     for (var i = 0; i < this.slots.length; i++) {
       var s = this.slots[i];
-      if (s.unlocked && !s.unit) return s;
+      if (s.unlocked && !s.unit && s.zone !== 'cheer') return s;
     }
     return null;
   };
@@ -109,20 +132,35 @@
   FieldManager.emptyCount = function () {
     var n = 0;
     for (var i = 0; i < this.slots.length; i++) {
-      if (this.slots[i].unlocked && !this.slots[i].unit) n += 1;
+      var s = this.slots[i];
+      if (s.unlocked && !s.unit && s.zone !== 'cheer') n += 1;
     }
     return n;
   };
 
-  FieldManager.unitCount = function () {
-    return this.slots.length - this.emptyCount() -
-           this.slots.filter(function (s) { return !s.unlocked; }).length;
-  };
+  FieldManager.unitCount = function () { return this.getBattleUnits().length; };
 
-  FieldManager.getUnits = function () {
+  /* 개체 목록은 둘로 나눴다(세션 82 — getUnits 를 없앴다. 이름을 바꿔 호출처마다 어느 쪽인지 고르게).
+   *   getBattleUnits — 전투 칸의 개체: 공격 · 시너지 · 스킬 · 특성 · 버프를 받는 대상
+   *   getAllUnits    — 응원 칸 포함 필드의 모든 개체: 조합 · 방출 · 잠금 · 저장 · 추천 · 보유 목록 */
+  FieldManager.getBattleUnits = function () {
+    var out = [];
+    for (var i = 0; i < this.slots.length; i++) {
+      if (this.slots[i].unit && this.slots[i].zone !== 'cheer') out.push(this.slots[i].unit);
+    }
+    return out;
+  };
+  FieldManager.getAllUnits = function () {
     var out = [];
     for (var i = 0; i < this.slots.length; i++) {
       if (this.slots[i].unit) out.push(this.slots[i].unit);
+    }
+    return out;
+  };
+  FieldManager.getCheerUnits = function () {
+    var out = [];
+    for (var i = 0; i < this.slots.length; i++) {
+      if (this.slots[i].unit && this.slots[i].zone === 'cheer') out.push(this.slots[i].unit);
     }
     return out;
   };
@@ -172,6 +210,7 @@
   FieldManager.place = function (index, unit) {
     var slot = this.get(index);
     if (!slot || !slot.unlocked || slot.unit) return false;
+    if (!this.canPlace(index, unit).ok) return reject(index, unit, 'NOT_CHEERABLE');
     slot.unit = unit;
     unit.slotIndex = index;
     unit.x = slot.x;
@@ -197,6 +236,9 @@
     var sa = this.get(a), sb = this.get(b);
     if (!sa || !sb || a === b) return false;
     if (!sa.unlocked || !sb.unlocked) return false;
+    // 응원 칸으로 들어가는 쪽이 응원 가능해야 한다(양쪽 다 본다 — 응원 칸 ↔ 전투 칸 맞바꿈)
+    if (sa.unit && !this.canPlace(b, sa.unit).ok) return reject(b, sa.unit, 'NOT_CHEERABLE');
+    if (sb.unit && !this.canPlace(a, sb.unit).ok) return reject(a, sb.unit, 'NOT_CHEERABLE');
 
     var tmp = sa.unit;
     sa.unit = sb.unit;

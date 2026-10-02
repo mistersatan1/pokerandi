@@ -75,6 +75,9 @@
 
     if (!slot) return { ok: false, reason: 'NO_SLOT' };
     if (!slot.unlocked) return { ok: false, reason: 'LOCKED' };
+    // 응원 칸은 응원 가능 포켓몬만 — 창고에서 빼기 전에 본다(빼고 나서 실패하면 개체가 사라진다)
+    var can = RPD.FieldManager.canPlace(slot.index, unit);
+    if (!can.ok) { RPD.bus.emit('field:rejected', { index: slot.index, unit: unit, reason: can.reason }); return { ok: false, reason: can.reason }; }
 
     // 이미 누가 있으면 자리를 맞바꾼다 — 필드가 꽉 차도 교체가 된다
     var swapped = slot.unit;
@@ -114,7 +117,7 @@
     var at = {};
     groups.forEach(function (g) { at[g.id] = g; });
     RPD.FieldManager.slots.forEach(function (s) {
-      if (!s.unit) return;
+      if (!s.unit || s.zone === 'cheer') return;   // 응원 칸은 일괄 창고로에서 뺀다
       var g = at[G.tierSlotOf(s.unit.def)];
       if (!g) return;
       if (s.unit.locked) g.locked += 1; else g.units.push({ unit: s.unit, slot: s.index });
@@ -159,7 +162,7 @@
 
   /* 필드 + 창고를 합친 보유 현황 — 조합식이 이걸 본다 */
   StorageManager.allUnits = function () {
-    return RPD.FieldManager.getUnits().concat(this.units);
+    return RPD.FieldManager.getAllUnits().concat(this.units);   // 응원 칸 포함 — 조합 · 주문 · 추천의 보유
   };
 
   /* ---------- 판 이어하기(RunSave · 세션 70) — 라운드 시작 때의 상태만 ---------- */

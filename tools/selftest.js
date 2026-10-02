@@ -943,7 +943,7 @@ section('랜덤 소환 (SummonManager)');
   const r1 = SM.summon();
   check('소환이 성공한다', r1.ok === true, `reason=${r1.reason}`);
   check('골드가 차감된다', GM.gold === goldBefore - cost, `gold=${GM.gold}`);
-  check('빈 칸에 배치된다', F.getUnits().length === 1);
+  check('빈 칸에 배치된다', F.getAllUnits().length === 1);
   check('개체에 실효 스탯이 채워진다', r1.unit.attack > 0 && r1.unit.dps > 0);
   check('환급 근거가 기록된다', r1.unit.investedGold === cost);
 
@@ -1203,11 +1203,11 @@ section('합성 / 진화 / 각성 (FusionManager)');
 
   const r1 = FM.fuse();
   check('합성이 성공한다', r1.ok === true);
-  check('재료 3마리가 1마리로 줄어든다', F.getUnits().length === 1, `units=${F.getUnits().length}`);
-  check('결과물이 진화체다', F.getUnits()[0].defId === 'charmeleon');
+  check('재료 3마리가 1마리로 줄어든다', F.getAllUnits().length === 1, `units=${F.getAllUnits().length}`);
+  check('결과물이 진화체다', F.getAllUnits()[0].defId === 'charmeleon');
   check('진화하면 실제로 강해진다',
-    F.getUnits()[0].dps > PD.dps(PD.get('charmander')),
-    `${Math.round(PD.dps(PD.get('charmander')))} → ${Math.round(F.getUnits()[0].dps)}`);
+    F.getAllUnits()[0].dps > PD.dps(PD.get('charmander')),
+    `${Math.round(PD.dps(PD.get('charmander')))} → ${Math.round(F.getAllUnits()[0].dps)}`);
   check('합성 후 후보 목록이 비워진다', FM.list().length === 0);
 
   // 3단계까지 올린 뒤 각성
@@ -1218,9 +1218,9 @@ section('합성 / 진화 / 각성 (FusionManager)');
   check('최종 단계 3마리는 각성 후보가 된다', awakenList[0].kind === 'AWAKEN',
     `kind=${awakenList[0] && awakenList[0].kind}`);
 
-  const beforeDps = F.getUnits()[0].dps;
+  const beforeDps = F.getAllUnits()[0].dps;
   FM.fuse();
-  const awakened = F.getUnits()[0];
+  const awakened = F.getAllUnits()[0];
   check('각성이 적용된다', awakened.awakened === true);
   check('각성하면 강해진다', awakened.dps > beforeDps,
     `${Math.round(beforeDps)} → ${Math.round(awakened.dps)}`);
@@ -1228,7 +1228,7 @@ section('합성 / 진화 / 각성 (FusionManager)');
 
   // 각성체 3마리는 더 갈 데가 없다
   board([final, final, final]);
-  F.getUnits().forEach(u => { u.awakened = true; });
+  F.getAllUnits().forEach(u => { u.awakened = true; });
   UM.recomputeAll();
   const capped = FM.list().filter(f => f.kind !== 'TIERUP');
   check('각성체는 더 합성되지 않는다', capped.length === 0, `count=${capped.length}`);
@@ -1249,18 +1249,18 @@ section('합성 / 진화 / 각성 (FusionManager)');
 
   const branchResult = FM.fuse();
   check('분기는 즉시 합성되지 않고 대기한다',
-    branchResult.kind === 'BRANCH' && F.getUnits().length === 3);
+    branchResult.kind === 'BRANCH' && F.getAllUnits().length === 3);
   check('대기 상태가 기록된다', FM.pending !== null);
 
   const picked = branchEntry.result[1];
   FM.chooseBranch(picked);
-  check('고른 갈래로 진화한다', F.getUnits()[0].defId === picked, `got=${F.getUnits()[0].defId}`);
+  check('고른 갈래로 진화한다', F.getAllUnits()[0].defId === picked, `got=${F.getAllUnits()[0].defId}`);
   check('대기 상태가 해제된다', FM.pending === null);
 
   board(['eevee', 'eevee', 'eevee']);
   FM.fuse();
   FM.cancelBranch();
-  check('분기를 취소하면 재료가 남는다', F.getUnits().length === 3 && FM.pending === null);
+  check('분기를 취소하면 재료가 남는다', F.getAllUnits().length === 3 && FM.pending === null);
 
   board(['eevee', 'eevee', 'eevee']);
   FM.fuse();
@@ -1288,10 +1288,10 @@ section('합성 / 진화 / 각성 (FusionManager)');
   check('결과 등급이 한 단계 위다', tier[0].result === 'T2', `result=${tier[0].result}`);
 
   FM.fuse(tier[0].key);
-  const upped = F.getUnits()[0];
+  const upped = F.getAllUnits()[0];
   check('등급 합성이 상위 등급을 만든다', upped.tier === 'T2', `tier=${upped.tier}`);
   check('등급 합성 결과는 1단계다', upped.def.stage === 1);
-  check('재료가 소모된다', F.getUnits().length === 1);
+  check('재료가 소모된다', F.getAllUnits().length === 1);
 
   // 종 합성이 등급 합성보다 우선한다
   board([commons[0], commons[0], commons[0]]);
@@ -1317,25 +1317,25 @@ section('합성 / 진화 / 각성 (FusionManager)');
   F.get(1).unit.level = 4;
   UM.recomputeAll();
   FM.fuse();
-  check('진화하면 재료의 강화는 사라진다', F.getUnits()[0].level === 0,
-    `level=${F.getUnits()[0].level}`);
-  check('결과물이 강화가 많던 칸에 앉는다', F.getUnits()[0].slotIndex === 1,
-    `slot=${F.getUnits()[0].slotIndex}`);
+  check('진화하면 재료의 강화는 사라진다', F.getAllUnits()[0].level === 0,
+    `level=${F.getAllUnits()[0].level}`);
+  check('결과물이 강화가 많던 칸에 앉는다', F.getAllUnits()[0].slotIndex === 1,
+    `slot=${F.getAllUnits()[0].slotIndex}`);
 
   board([final, final, final]);
   F.get(2).unit.level = 3;
   UM.recomputeAll();
   FM.fuse();
-  check('각성은 강화를 유지한다', F.getUnits()[0].level === 3, `level=${F.getUnits()[0].level}`);
+  check('각성은 강화를 유지한다', F.getAllUnits()[0].level === 3, `level=${F.getAllUnits()[0].level}`);
 
   // 투자 골드 승계 — 합성이 손해가 되면 아무도 안 한다
   board(['charmander', 'charmander', 'charmander']);
-  F.getUnits().forEach(u => { u.investedGold = 30; });
+  F.getAllUnits().forEach(u => { u.investedGold = 30; });
   FM.fuse();
-  check('투자 골드가 결과물에 승계된다', F.getUnits()[0].investedGold === 90,
-    `invested=${F.getUnits()[0].investedGold}`);
+  check('투자 골드가 결과물에 승계된다', F.getAllUnits()[0].investedGold === 90,
+    `invested=${F.getAllUnits()[0].investedGold}`);
   check('환급액도 그만큼 오른다',
-    RPD.EconomyManager.sellValue(F.getUnits()[0]) === 45);
+    RPD.EconomyManager.sellValue(F.getAllUnits()[0]) === 45);
 
   // 합성 대기 슬롯 조회 (렌더러가 테두리를 빛낼 때 쓴다)
   board(['charmander', 'charmander', 'charmander']);
@@ -1465,7 +1465,7 @@ section('타입 시너지 (SynergyManager)');
 
   // 시너지가 실효 스탯에 실제로 반영된다
   board([flying[0]]);
-  const soloSpeed = F.getUnits()[0].attackSpeed;
+  const soloSpeed = F.getAllUnits()[0].attackSpeed;
   board(withType('FLYING', 4));
   const synSpeed = F.get(0).unit.attackSpeed;
   check('비행 시너지가 공격속도를 실제로 올린다', synSpeed > soloSpeed,
@@ -1473,7 +1473,7 @@ section('타입 시너지 (SynergyManager)');
 
   const dragons = withType('DRAGON', 4);
   board([dragons[0]]);
-  const soloCrit = F.getUnits()[0].critRate;
+  const soloCrit = F.getAllUnits()[0].critRate;
   board(dragons);
   check('드래곤 시너지가 치명타율을 올린다', F.get(0).unit.critRate > soloCrit,
     `${soloCrit.toFixed(2)} → ${F.get(0).unit.critRate.toFixed(2)}`);
@@ -1741,7 +1741,7 @@ section('보스 패턴 (BossManager)');
 
   check('침묵 패턴이 발동한다', silenced.length > 0, `count=${silenced.length}`);
   if (silenced.length) {
-    const disabled = F.getUnits().filter(u => UM.isDisabled(u));
+    const disabled = F.getAllUnits().filter(u => UM.isDisabled(u));
     check('침묵이 실제로 포켓몬을 막는다', disabled.length > 0, `count=${disabled.length}`);
     check('침묵 대상 수가 설정과 맞는다',
       silenced[0].result.slots.length === 2, `count=${silenced[0].result.slots.length}`);

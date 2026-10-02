@@ -26,6 +26,10 @@
     slotHover: '#ffd23f',
     slotSelected: '#ffd23f',
     lockedPad: 'rgba(18,48,28,0.26)',
+    cheerPad: 'rgba(255,128,196,0.24)',
+    cheerEdge: 'rgba(255,170,215,0.92)',
+    cheerFlag: '#e8559a',
+    cheerLockedPad: 'rgba(170,55,120,0.45)',
     muted: 'rgba(24,52,30,0.72)',
     entry: '#6fd48a',
     exit: '#e0554f',
@@ -364,9 +368,11 @@
 
     ctx.save();
 
+    var cheer = slot.zone === 'cheer';
     roundRect(ctx, x, y, s, s, r);
-    ctx.fillStyle = slot.unlocked ? PALETTE.slotPad : PALETTE.lockedPad;
+    ctx.fillStyle = !slot.unlocked ? (cheer ? PALETTE.cheerLockedPad : PALETTE.lockedPad) : cheer ? PALETTE.cheerPad : PALETTE.slotPad;
     ctx.fill();
+    if (cheer) drawCheerFlag(ctx, slot);
 
     // 잠긴 확장 칸 — 가격을 그대로 보여 준다. 눌러 봐야 알 수 있으면 안 된다.
     if (!slot.unlocked) {
@@ -413,14 +419,22 @@
     if (!slot.unit) {
       // 빈 슬롯 — 점선. "여기 놓을 수 있다"를 설명 없이 전달한다.
       ctx.setLineDash([5, 5]);
-      ctx.strokeStyle = hovered ? PALETTE.slotHover : PALETTE.slotEdgeEmpty;
+      ctx.strokeStyle = hovered ? (cheer && !cheerOk() ? 'rgba(224,85,79,0.9)' : PALETTE.slotHover) : cheer ? PALETTE.cheerEdge : PALETTE.slotEdgeEmpty;
       ctx.lineWidth = hovered ? 2 : 1.4;
       roundRect(ctx, x + 1, y + 1, s - 2, s - 2, r - 1);
       ctx.stroke();
       ctx.setLineDash([]);
     } else {
+      if (cheer) {
+        // "응원 중" — 숨쉬는 분홍 빛. 싸우지 않는 칸이라는 걸 사거리 원 대신 이걸로 알린다
+        var glow = 0.5 + 0.5 * Math.sin(RPD.CombatManager.clock * 3 + slot.index);
+        roundRect(ctx, x - 3, y - 3, s + 6, s + 6, r + 3);
+        ctx.strokeStyle = 'rgba(255,128,196,' + (0.30 + glow * 0.45).toFixed(2) + ')';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
       ctx.strokeStyle = selected ? PALETTE.slotSelected
-                      : hovered ? PALETTE.slotHover : PALETTE.slotEdge;
+                      : hovered ? (cheer && !cheerOk() ? 'rgba(224,85,79,0.9)' : PALETTE.slotHover) : cheer ? PALETTE.cheerEdge : PALETTE.slotEdge;
       ctx.lineWidth = selected ? 2.6 : (hovered ? 2 : 1.4);
       roundRect(ctx, x + 1, y + 1, s - 2, s - 2, r - 1);
       ctx.stroke();
@@ -444,11 +458,40 @@
     ctx.restore();
   }
 
+  /* 응원 칸(세션 82) 머리의 작은 깃발 "응원" — 일반 칸과 한눈에 갈리게. 돌린 화면에서도 칸 위(화면 기준)에 똑바로 */
+  function drawCheerFlag(ctx, slot) {
+    var at = RPD.Renderer.at(slot.x, slot.y, 0, -slot.size / 2 - 7);
+    // 휴대폰 세로(필드 90° 돌림)에선 응원 칸 둘이 화면 위아래로 붙는다 — 깃발이 다른 칸에 닿으면 안 그린다(바탕 분홍으로 구별)
+    var F = RPD.FieldManager;
+    for (var i = 0; i < F.slots.length; i++) {
+      var o = F.slots[i];
+      if (o !== slot && Math.abs(at.x - o.x) < o.size / 2 + 10 && Math.abs(at.y - o.y) < o.size / 2 + 10) return;
+    }
+    ctx.save();
+    RPD.Renderer.upright(ctx, at.x, at.y);
+    ctx.fillStyle = slot.unlocked ? PALETTE.cheerFlag : 'rgba(150,70,110,0.75)';
+    roundRect(ctx, at.x - 17, at.y - 7, 34, 14, 7);
+    ctx.fill();
+    ctx.restore();
+    ctx.font = '800 10px ' + RPD.FONT_STACK;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#fff';
+    ctx.fillText('응원', at.x, at.y + 0.5);
+  }
+  /* 끌고 있는(또는 옮기려 고른) 포켓몬이 응원 칸에 들어갈 수 있나 — 안 되면 빨간 테두리 */
+  function cheerOk() {
+    var F = RPD.FieldManager;
+    var from = F.get(F.dragFromIndex) || (RPD.MobileSheet && RPD.MobileSheet.moving >= 0 && F.get(RPD.MobileSheet.moving));
+    var u = from && from.unit;
+    return !u || RPD.CheerData.isCheerable(u.defId);
+  }
+
   /* 선택한 유닛의 사거리 원. "왜 얘가 저 적을 안 때리지?"를 즉시 해소한다. */
   MapRenderer.drawRange = function (ctx) {
     var F = RPD.FieldManager;
     var slot = F.getSelected() || F.get(F.hoverIndex);
-    if (!slot || !slot.unit || !slot.unit.range) return;
+    if (!slot || !slot.unit || !slot.unit.range || slot.zone === 'cheer') return;   // 응원 칸은 싸우지 않는다 — 사거리 없음
 
     ctx.save();
     ctx.beginPath();

@@ -251,8 +251,16 @@
       el.ownedSort.addEventListener('click', function (e) {
         var b = e.target.closest('.tchip');
         if (!b) return;
+        if (b.dataset.filter === 'cheer') {   // [✨ 응원 가능] — 정렬과 따로 켜고 끄는 거름망(세션 82)
+          ownedCheerOnly = !ownedCheerOnly;
+          b.classList.toggle('is-on', ownedCheerOnly);
+          b.setAttribute('aria-pressed', String(ownedCheerOnly));
+          ownedSig = '';
+          renderStorage();
+          return;
+        }
         ownedSort = b.dataset.sort;
-        var all = el.ownedSort.querySelectorAll('.tchip');
+        var all = el.ownedSort.querySelectorAll('.tchip[data-sort]');
         for (var i = 0; i < all.length; i++) all[i].classList.toggle('is-on', all[i] === b);
         ownedSig = '';
         renderStorage();
@@ -351,6 +359,13 @@
           if (r.ok) closeOwnedPop(); else openOwnedPop(def);
           return;
         }
+        if (b.dataset.act === 'cheer') {   // 응원 칸에 두기 — 빈 응원 칸 중 첫 번째(세션 82)
+          var ci = RPD.StorageManager.indexOfSpecies(def), cs = F.cheerSlots().filter(function (s) { return s.unlocked && !s.unit; })[0];
+          if (ci < 0 || !cs) return;
+          var cr = RPD.StorageManager.deploy(ci, cs.index);
+          if (cr.ok) closeOwnedPop(); else openOwnedPop(def);
+          return;
+        }
         if (b.dataset.act === 'lock') {   // 창고 개체 한 마리의 잠금 토글 — 칩마다 한 마리
           var li = parseInt(b.dataset.i, 10), lu = RPD.StorageManager.units[li];
           if (lu && lu.defId === def) RPD.UnitManager.toggleLock(lu);
@@ -364,7 +379,7 @@
             return;
           }
           RPD.EconomyManager.sellStored(si);
-          if (RPD.StorageManager.indexOfSpecies(def) >= 0 || F.getUnits().some(function (u) { return u.defId === def; })) {
+          if (RPD.StorageManager.indexOfSpecies(def) >= 0 || F.getAllUnits().some(function (u) { return u.defId === def; })) {
             openOwnedPop(def);
           } else {
             closeOwnedPop();
@@ -900,7 +915,7 @@
     if (!el.devReadout) return;
     el.devReadout.textContent =
       RPD.Loop.fps + ' fps · 적 ' + RPD.EnemyManager.aliveCount() +
-      '체 · 슬롯 ' + F.slots.length + '칸';
+      '체 · 슬롯 ' + F.battleSlots().length + '칸 + 응원 ' + F.cheerSlots().length;
   }
 
   /* ---------- 슬롯 패널 ---------- */
@@ -928,12 +943,18 @@
     if (!slot.unlocked) {
       var afford = GM.canAfford(slot.cost);
       el.slotBody.innerHTML =
-        '<div class="sc__head"><span class="sc__title">잠긴 확장 칸</span>' +
+        '<div class="sc__head"><span class="sc__title">' + (slot.zone === 'cheer' ? '잠긴 응원 칸' : '잠긴 확장 칸') + '</span>' +
           '<span class="sc__tag">' + (slot.label || '확장') + '</span></div>' +
         slotKindHtml(slot) +
         '<div class="sc__buy' + (afford ? ' is-ok' : '') + '">' +
           '<span class="gem gem--coin gem--sm"></span><b>' + slot.cost + '</b>' +
           '<span>' + (afford ? '칸을 한 번 더 누르면 구매합니다' : '골드가 부족합니다') + '</span></div>';
+      positionSlotCard(slot);
+      return;
+    }
+
+    if (slot.zone === 'cheer') {
+      el.slotBody.innerHTML = cheerCardHtml(slot, slot.unit);
       positionSlotCard(slot);
       return;
     }
@@ -1007,10 +1028,27 @@
     '</div>';
   }
 
-  /* 옆 버퍼에게서 받는 패시브 — 왜 공속이 올랐는지 보이게 */
+  /* 받는 버프 — 응원(필드 전체) · 이웃(옆 버퍼)을 나눠 보인다(세션 82). 왜 공속이 올랐는지 보이게 */
   function receivedAura(u) {
-    var x = u.auraExtras;
-    if (!x || !x.from || !x.from.length) return '';
+    var x = u.auraExtras, p = u.auraParts || {};
+    if (!x) return '';
+    var nb = x.neighbor || x, ch = x.cheer || null;
+    var html = '';
+    if (ch && ch.from && ch.from.length) {
+      var cParts = auraParts(ch);
+      if (p.cheer > 0) cParts.unshift('공격 +' + Math.round(p.cheer * 100) + '%');
+      html += '<p class="sc__buffed sc__buffed--cheer" title="응원 칸 ' + ch.from.map(pokeName).join(' · ') + '">📣 응원 · ' + cParts.join(' · ') + '</p>';
+    }
+    if (nb.from && nb.from.length) {
+      var nParts = auraParts(nb);
+      if (p.neighbor > 0) nParts.unshift('공격 +' + Math.round(p.neighbor * 100) + '%');
+      var names = nb.from.map(function (id) { var a = RPD.AuraData.get(id); return a ? a.icon : ''; }).join('');
+      html += '<p class="sc__buffed">' + names + ' 이웃 · ' + nParts.join(' · ') + '</p>';
+    }
+    return html ? '<div class="sc__recv"><span class="sc__recvhd">받는 버프</span>' + html + '</div>' : '';
+  }
+  function pokeName(id) { var d = RPD.PokemonData.get(id); return d ? d.name : id; }
+  function auraParts(x) {
     var parts = [];
     if (x.attackSpeed) parts.push('공속 +' + Math.round(x.attackSpeed * 100) + '%');
     if (x.critRate) parts.push('치명 +' + Math.round(x.critRate * 100) + '%');
@@ -1019,9 +1057,45 @@
     if (x.cooldown) parts.push('쿨다운 -' + Math.round(x.cooldown * 100) + '%');
     if (x.armorPierce) parts.push('방어무시 +' + Math.round(x.armorPierce * 100) + '%');
     if (x.bossDamage) parts.push('보스피해 +' + Math.round(x.bossDamage * 100) + '%');
-    var names = x.from.map(function (id) { var a = RPD.AuraData.get(id); return a ? a.icon : ''; }).join('');
-    return '<p class="sc__buffed">' + names + ' 받는 버프 · ' + parts.join(' · ') + '</p>';
+    return parts;
   }
+
+  /* 응원 칸 카드(세션 82) — 싸우지 않으니 DPS · 사거리 · 공격 대상 · 강화 대신 "무엇을 필드 전체에 주는가" */
+  function cheerCardHtml(slot, u) {
+    var CD = RPD.CheerData, UM = RPD.UnitManager, tot = UM.cheer || UM.cheerTotals();
+    var sum = cheerSummaryText(tot);
+    if (!u) {
+      return '<div class="sc__head"><span class="sc__title">빈 응원 칸</span><span class="sc__tag sc__tag--cheer">응원</span></div>' +
+        '<p class="sc__note">✨ 응원 가능한 포켓몬을 두면 싸우지 않고 버프를 <b>필드 전체</b>에 줍니다. 같은 종은 한 번만 셉니다.</p>' +
+        (sum ? '<p class="sc__buffed sc__buffed--cheer">지금 응원: ' + sum + '</p>' : '');
+    }
+    var tier = RPD.Tiers[u.tier] || RPD.Tiers.T1, e = CD.get(u.defId);
+    var dup = tot.dups.indexOf(u.defId) >= 0 && tot.from.indexOf(u.defId) >= 0 &&
+      F.cheerSlots().filter(function (o) { return o.unit && o.unit.defId === u.defId; })[0] !== slot;
+    return '<div class="sc__unit" style="--tier:' + tier.color + '">' +
+        RPD.UI.sprite(u.def, 'spr--card') +
+        '<div class="sc__who">' +
+          '<span class="sc__tier">' + tier.label + ' · 응원 중</span>' +
+          '<span class="sc__name">' + u.name + (u.locked ? ' <span class="sc__lock" title="잠금 — 재료 · 방출에서 제외">🔒</span>' : '') + '</span>' +
+          '<span class="typerow">' + RPD.UI.typeChips(u.types) + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<p class="sc__cheer">📣 응원: ' + (e ? CD.describe(e) : '—') + ' <small>(필드 전체)</small></p>' +
+      (dup ? '<p class="unitwarn">같은 종이 이미 응원 중 — 효과는 한 번만 셉니다.</p>' : '') +
+      '<p class="sc__note">응원 칸은 싸우지 않습니다 — 공격 · 스킬 · 특성 · 시너지에서 빠지고, 강화할 수 없습니다. 조합 · 주문 재료로는 쓰입니다(창고 → 필드 다음).</p>' +
+      (sum ? '<p class="sc__buffed sc__buffed--cheer">응원 합계: ' + sum + '</p>' : '');
+  }
+  /* ✨ 응원 가능 — 보유 창 · 전투 칸 카드에서 "응원 칸에 두면 무엇을 주나" */
+  function cheerNoteHtml(defId) {
+    var e = RPD.CheerData.get(defId);
+    return e ? '<p class="sc__buffed sc__buffed--cheer">✨ 응원 가능 — 응원 칸에 두면 ' + RPD.CheerData.describe(e) + ' (필드 전체)</p>' : '';
+  }
+  /* "공속 +8% · 방어 무시 +9%" — 응원 칸 전체 합(상한 적용 뒤) */
+  function cheerSummaryText(tot) {
+    if (!tot || !tot.from.length) return '';
+    return RPD.CheerData.describe(tot);
+  }
+  UIManager.cheerSummaryText = cheerSummaryText;
 
   /* 공격속도 — 초당 공격 횟수. 칸이 좁아 숫자와 단위만 넣고, 기본값 대비 변화는 마우스를 올리면 보인다. */
   function aspdHtml(u) {
@@ -1051,7 +1125,11 @@
         : '+' + u.level + ' <small>/ ' + RPD.Config.upgradeMaxLevel + ' · 사거리 +' +
           Math.round(u.level * RPD.Config.upgradeRangeStep * 100) + '%' + covNote(u) + '</small>', false, true]
     ];
-    if (u.auraBonus > 0) stats[5] = ['버프', '+' + Math.round(u.auraBonus * 100) + '%'];
+    if (u.auraBonus > 0) {
+      var ap = u.auraParts || {};
+      stats[5] = ['버프', '+' + Math.round(u.auraBonus * 100) + '%' + (ap.cheer > 0
+        ? ' <small>응원 +' + Math.round(ap.cheer * 100) + '% · 이웃 +' + Math.round((ap.neighbor || 0) * 100) + '%</small>' : '')];
+    }
 
     var html =
       '<div class="sc__unit" style="--tier:' + tier.color + '">' +
@@ -1072,6 +1150,7 @@
       (def.bossDamage ? '<p class="sc__buffed">👑 보스에게 주는 피해 +' + Math.round(def.bossDamage * 100) + '%</p>' : '') +
       UI.trait(def.id, 'trait--card') +
       UI.aura(def.id, 'trait--card') +
+      cheerNoteHtml(def.id) +
       receivedAura(u) +
       UI.skillBox(u.skill, u.skillCooldown <= 0 ? '준비 완료' : Math.ceil(u.skillCooldown) + '초', u.skillCooldown <= 0) +
       UI.passiveBox(def) +
@@ -1086,7 +1165,7 @@
       var better = 0;
       for (var i = 0; i < F.slots.length; i++) {
         var o = F.slots[i];
-        if (!o.unlocked || o.unit) continue;
+        if (!o.unlocked || o.unit || o.zone === 'cheer') continue;
         if (RPD.MapData.coverageOf(o, u.range) > cover) better += 1;
       }
       if (better > 0) {
@@ -1174,6 +1253,7 @@
       el.upgrade.disabled = !playable || !canUp || !GM.canAfford(upCost);
       if (el.upgradeCost) {
         el.upgradeCost.textContent = !hasUnit ? '칸 선택'
+          : slot.zone === 'cheer' ? '응원 칸은 강화 불가'
           : slot.unit.def.range >= RPD.Range.GLOBAL ? '전체 사거리'
           : (canUp ? upCost + 'G' : '최대');
       if (hasUnit && el.upgrade.setAttribute) {
@@ -1711,6 +1791,7 @@
    * 조합에 곧 쓰일 종은 초록 점이 붙고 앞에 온다. 누르면 배치·조합식 창이 뜬다. */
   var ownedSig = '';
   var ownedSort = 'field';   // field | tier | count | name
+  var ownedCheerOnly = false;   // [✨ 응원 가능] 거름망(세션 82)
 
   /* 보유 목록 정렬 규칙.
    * 기본은 "필드 먼저" — 지금 싸우는 것과 쟁여 둔 것을 눈으로 가르는 게 우선이다.
@@ -1746,12 +1827,13 @@
     var order = [];
     function add(u, inStore) {
       var g = groups[u.defId];
-      if (!g) { g = groups[u.defId] = { def: u.def, total: 0, stored: 0, field: 0, locked: 0 }; order.push(u.defId); }
+      if (!g) { g = groups[u.defId] = { def: u.def, total: 0, stored: 0, field: 0, locked: 0, cheer: 0 }; order.push(u.defId); }
       g.total += 1;
+      if (inStore === 'cheer') g.cheer += 1;
       if (u.locked) g.locked += 1;
-      if (inStore) g.stored += 1; else g.field += 1;
+      if (inStore === true) g.stored += 1; else g.field += 1;
     }
-    F.getUnits().forEach(function (u) { add(u, false); });
+    F.slots.forEach(function (s) { if (s.unit) add(s.unit, s.zone === 'cheer' ? 'cheer' : false); });   // 보유 목록 — 응원 칸 포함(필드로 센다)
     SG.units.forEach(function (u) { add(u, true); });
     return { groups: groups, order: order };
   }
@@ -1774,25 +1856,26 @@
 
     var og = ownedGroups();
     var mats = materialSet();
-    var rows = og.order.map(function (id) {
+    var rows = og.order.filter(function (id) { return !ownedCheerOnly || RPD.CheerData.isCheerable(id); }).map(function (id) {
       var g = og.groups[id];
       return { id: id, g: g, mat: !!mats.usedIn[id], tierIdx: RPD.tierRank(g.def.tier) };
     }).sort(OWNED_SORTS[ownedSort] || OWNED_SORTS.field);
 
     if (el.ownedCount) {
-      var units = F.getUnits().length + SG.units.length;
+      var units = F.getAllUnits().length + SG.units.length;
       el.ownedCount.textContent = rows.length ? rows.length + '종 · ' + units + '마리' : '';
     }
 
-    var sig = ownedSort + '#' + rows.map(function (r) {
-      return r.id + r.g.field + '/' + r.g.stored + (r.g.locked ? 'L' + r.g.locked : '') + (r.mat ? 'm' : '');
+    var sig = ownedSort + (ownedCheerOnly ? '*' : '') + '#' + rows.map(function (r) {
+      return r.id + r.g.field + '/' + r.g.stored + (r.g.locked ? 'L' + r.g.locked : '') + (r.g.cheer ? 'c' + r.g.cheer : '') + (r.mat ? 'm' : '');
     }).join('|');
     if (sig === ownedSig && el.storageList.innerHTML) return;
     ownedSig = sig;
 
     if (!rows.length) {
-      el.storageList.innerHTML =
-        '<p class="empty">아직 없습니다. 소환하면 여기에 모입니다.</p>';
+      el.storageList.innerHTML = ownedCheerOnly
+        ? '<p class="empty">응원 가능한 포켓몬이 없습니다. ✨ 표시가 붙은 포켓몬을 응원 칸에 둘 수 있어요.</p>'
+        : '<p class="empty">아직 없습니다. 소환하면 여기에 모입니다.</p>';
       return;
     }
 
@@ -1816,7 +1899,7 @@
       });
     });
     // 서로 다른 종 기준(세션 77 · 80) — 패널 · 실제 시너지와 같은 셈(SynergyManager.tally)
-    var tl = RPD.SynergyManager.tally(F.getUnits());
+    var tl = RPD.SynergyManager.tally(F.getBattleUnits());   // 시너지는 전투 칸만
     var fieldCount = tl.counts;
     var order = Object.keys(groups).sort(function (a, b) {
       return (fieldCount[b] || 0) - (fieldCount[a] || 0) || groups[b].length - groups[a].length;
@@ -1850,10 +1933,11 @@
         (r.g.stored ? ' has-stored' : '') + (r.g.field ? '' : ' is-storedOnly') +
         '" data-def="' + r.id + '" style="--tier:' + t.color +
         '" title="' + r.g.def.name + ' · ' + t.label +
-        (r.g.stored ? ' · 창고 ' + r.g.stored : '') + (r.mat ? ' · 조합 재료' : '') + '">' +
+        (r.g.stored ? ' · 창고 ' + r.g.stored : '') + (r.mat ? ' · 조합 재료' : '') + (RPD.CheerData.isCheerable(r.id) ? ' · ✨ 응원 가능' : '') + '">' +
         RPD.UI.sprite(r.g.def, 'spr--cell') +
         '<span class="scell__n">' + r.g.total + '</span>' +
         (r.g.locked ? '<span class="scell__lock" title="잠근 ' + r.g.locked + '마리">🔒' + (r.g.locked > 1 ? r.g.locked : '') + '</span>' : '') +
+        (RPD.CheerData.isCheerable(r.id) ? '<span class="scell__cheer' + (r.g.cheer ? ' is-on' : '') + '" title="' + (r.g.cheer ? '응원 중' : '응원 가능') + '">' + (r.g.cheer ? '📣' : '✨') + '</span>' : '') +
         (r.g.stored ? '<span class="scell__store">창고 ' + r.g.stored + '</span>' : '') +
       '</button>';
   }
@@ -1911,9 +1995,11 @@
           var t = RPD.Types[id]; return t ? '<span class="typechip" style="--tc:' + t.color + '">' + UI.typeIcon(id) + t.label + '</span>' : '';
         }).join('') + '</span></div></div>' +
       UI.trait(defId, 'trait--pop') + UI.aura(defId, 'trait--pop') +
-      '<div class="op__counts"><span>필드 <b>' + g.field + '</b></span><span>창고 <b>' + g.stored + '</b></span></div>' +
+      cheerNoteHtml(defId) +
+      '<div class="op__counts"><span>필드 <b>' + (g.field - (g.cheer || 0)) + '</b></span>' + (g.cheer ? '<span>응원 <b>' + g.cheer + '</b></span>' : '') + '<span>창고 <b>' + g.stored + '</b></span></div>' +
       '<div class="op__acts">' +
         '<button type="button" class="btn btn--primary" data-act="deploy"' + (g.stored ? '' : ' disabled') + '>필드에 배치</button>' +
+        (RPD.CheerData.isCheerable(defId) ? '<button type="button" class="btn btn--ghost btn--cheer" data-act="cheer"' + (g.stored && F.cheerSlots().some(function (s) { return s.unlocked && !s.unit; }) ? '' : ' disabled') + '>응원 칸에 두기</button>' : '') +
         '<button type="button" class="btn btn--ghost" data-act="select"' + (g.field ? '' : ' disabled') + '>필드에서 보기</button>' +
         '<button type="button" class="btn btn--danger" data-act="sell"' + (sellable ? '' : ' disabled') + '>' +
           (g.stored && !sellable ? '잠금 해제 후 방출' : '창고에서 방출') +

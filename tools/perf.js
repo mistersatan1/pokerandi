@@ -56,7 +56,7 @@ function heavyBattle({ wave, speed }) {
   R.UnitManager.recomputeAll(); R.bus.emit('field:changed', {});
   R.GameManager.life = 9999;
   R.Loop.setSpeed(speed); R.Loop.setPaused(false);
-  return { units: F.getUnits().length };
+  return { units: F.getAllUnits().length };
 }
 
 (async () => {

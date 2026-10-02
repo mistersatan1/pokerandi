@@ -227,8 +227,11 @@ section('두 갈래 경로 · 칸 종류');
   check('두 길 모두 끊기지 않는다(순간이동 없음) · 끝이 화면 오른쪽 밖', jump < 3.5 && P0.pointAt(P0.length).x >= RPD.VIEW.width && P1.pointAt(P1.length).x >= RPD.VIEW.width, jump.toFixed(2));
 
   const F = RPD.FieldManager; F.init();
-  const base = F.slots.filter(s => s.unlocked), ext = F.slots.filter(s => s.expansion);
+  const base = F.slots.filter(s => s.unlocked && s.zone !== 'cheer'), ext = F.slots.filter(s => s.expansion);
+  const cheer = F.slots.filter(s => s.zone === 'cheer');
   check('칸 수: 기본 20(세션 57 명당 +2) + 확장 8', base.length === 20 && ext.length === 8 && M.baseSlotCount === 20, base.length + '+' + ext.length);
+  check('응원 칸 4(무료 2 + 골드 2 · 세션 82)', cheer.length === 4 && cheer.filter(s => s.unlocked).length === 2 && cheer.filter(s => !s.unlocked).map(s => s.cost).join(',') === '400,900',
+    cheer.map(s => (s.unlocked ? '열림' : s.cost)).join(','));
 
   // 긴 사거리로 못 덮는 구간 — 기본 칸만으로, 모든 조각(입구 · 위 · 아래 · 합류 뒤)의 모든 점
   const holes = [];
@@ -382,9 +385,9 @@ section('조합식 (RecipeManager)');
   const r = RM.craft(testRecipe.id);
   check('조합이 성공한다', r.ok === true, `reason=${r.reason}`);
   check('재료가 소모되고 결과물만 남는다',
-    F.getUnits().length === 1 && F.getUnits()[0].defId === testRecipe.id);
-  check('결과물이 재료 합보다 강하다', F.getUnits()[0].dps > before,
-    `${Math.round(before)} → ${Math.round(F.getUnits()[0].dps)}`);
+    F.getAllUnits().length === 1 && F.getAllUnits()[0].defId === testRecipe.id);
+  check('결과물이 재료 합보다 강하다', F.getAllUnits()[0].dps > before,
+    `${Math.round(before)} → ${Math.round(F.getAllUnits()[0].dps)}`);
   check('첫 조합은 발견으로 표시된다', r.firstTime === true);
   check('두 번째부터는 발견이 아니다', RM.discovered[testRecipe.id] === true);
 
@@ -433,14 +436,14 @@ section('OR-조합식 · 히든');
   check('두 경로가 목록에 따로 보인다', RM.view.filter(v => v.resultId === 'machoke').length === 2);
   const r1 = RM.craft('machoke');
   check('결과 id 로 부르면 되는 경로를 찾아 조합한다', r1.ok && r1.route === 1, `route=${r1.route} reason=${r1.reason}`);
-  check('대체 경로 재료가 소모된다', F.getUnits().length === 1 && F.getUnits()[0].defId === 'machoke');
+  check('대체 경로 재료가 소모된다', F.getAllUnits().length === 1 && F.getAllUnits()[0].defId === 'machoke');
 
   // 두 경로가 다 될 때, 경로 이름으로 고른 쪽을 쓴다
   fresh(1);
   ['machop', 'machop', 'bellsprout', 'bulbasaur'].forEach((id, i) => F.place(i, UM.create(id)));
   UM.recomputeAll(); RM.refresh();
   const r2 = RM.craft('machoke#2');
-  const left = F.getUnits().map(u => u.defId).sort().join(',');
+  const left = F.getAllUnits().map(u => u.defId).sort().join(',');
   check('경로 이름(machoke#2)으로 고르면 그 재료를 쓴다', r2.ok && left === 'machoke,machop,machop', left);
   const r3 = RM.craft('machoke');
   check('결과 id 로 부르면 첫 경로부터 쓴다', r3.ok && r3.route === 0);
@@ -520,9 +523,9 @@ section('자동 배치');
   GM.gold = 9999999;
   for (let i = 0; i < 5; i++) SM.summon();
   check('연속 소환이 서로 다른 칸에 앉는다',
-    new Set(F.getUnits().map(u => u.slotIndex)).size === F.getUnits().length);
+    new Set(F.getAllUnits().map(u => u.slotIndex)).size === F.getAllUnits().length);
   check('플레이어가 수동으로 옮길 수 있다', (() => {
-    const u = F.getUnits()[0];
+    const u = F.getAllUnits()[0];
     const from = u.slotIndex;
     const empty = F.firstEmpty();
     F.swap(from, empty.index);
@@ -647,7 +650,7 @@ section('진행 · 보스 · 게임오버');
 
   GM.reset('NORMAL'); F.init(); EM.reset(); WM.reset();
   check('재시작하면 상태가 돌아온다',
-    GM.state === RPD.GameState.READY && F.getUnits().length === 0 && EM.aliveCount() === 0);
+    GM.state === RPD.GameState.READY && F.getAllUnits().length === 0 && EM.aliveCount() === 0);
 }
 
 
@@ -717,7 +720,7 @@ section('골드 상점');
   for (let i = 0; i < 2; i++) G.buy('tier', 'T2');
   F.place(0, UM.create('caterpie')); F.place(1, UM.create('caterpie'));
   UM.recomputeAll(); RM.refresh(); RM.craft('metapod');
-  const meta = F.getUnits().find(x => x.defId === 'metapod');
+  const meta = F.getAllUnits().find(x => x.defId === 'metapod');
   check('조합으로 만든 결과물도 등급 업그레이드를 그대로 받는다',
     !!meta && Math.abs(meta.attack / (meta.def.attack) - (1 + 2 * G.CFG.tierStep)) < 0.02,
     meta ? (meta.attack / meta.def.attack).toFixed(3) : '없음');
@@ -938,7 +941,7 @@ section('사거리 강화');
   const EC = RPD.EconomyManager, step = RPD.Config.upgradeRangeStep;
   fresh(1);
   // 구석/근접 칸을 골라 사거리 효과가 드러나게 — 커버리지가 가장 작은 열린 칸
-  const slots = F.slots.filter(sl => sl.unlocked);
+  const slots = F.slots.filter(sl => sl.unlocked && sl.zone !== 'cheer');
   const corner = slots.slice().sort((a, b) => a.coverage[155] - b.coverage[155])[0];
   const u = UM.create('charmander');
   F.place(corner.index, u); UM.recomputeAll();
@@ -965,7 +968,7 @@ section('사거리 강화');
   a.level = 4; b.level = 4;
   F.place(0, a); F.place(1, b); UM.recomputeAll(); RM.refresh();
   RM.craft('metapod');
-  const m = F.getUnits().find(x => x.defId === 'metapod');
+  const m = F.getAllUnits().find(x => x.defId === 'metapod');
   check('조합 결과물이 재료 강화의 절반을 사거리로 이어받는다',
     !!m && m.level > 0 && m.range > m.def.range, m ? `lv${m.level} ${m.def.range}→${m.range}` : '없음');
 }
@@ -1001,10 +1004,10 @@ section('정예 소환');
   check('정예가 살아 있어도 라운드는 넘어간다', WM.wave > 12 && e.alive, `wave=${WM.wave} alive=${e.alive}`);
 
   // 처치 — 골드 + 포켓몬
-  const g0 = GM.gold, units0 = F.getUnits().length + RPD.StorageManager.units.length;
+  const g0 = GM.gold, units0 = F.getAllUnits().length + RPD.StorageManager.units.length;
   let got = null; RPD.bus.on('elite:result', p => { got = p; });
   EM.kill(e);
-  const units1 = F.getUnits().concat(RPD.StorageManager.units);
+  const units1 = F.getAllUnits().concat(RPD.StorageManager.units);
   check('처치하면 참가비 × rewardMul 골드를 받는다', GM.gold - g0 === Math.round(fee * t2.rewardMul), `+${GM.gold - g0}`);
   check('처치하면 정해진 등급의 포켓몬이 한 마리 들어온다',
     units1.length === units0 + 1 && got && got.unit && got.unit.def.tier === t2.unitTier && !got.unit.def.hidden);
@@ -1206,10 +1209,10 @@ section('경제');
 
   /* 라운드 무료 지급 — 소환을 대체하지 않고 바닥을 깐다 */
   GM.reset('NORMAL'); F.init(); SM.reset();
-  const before = F.getUnits().length;
+  const before = F.getAllUnits().length;
   const given = SM.grantRound();
   check('라운드마다 무료로 받는다', given.length === C.roundGrant, `${given.length}마리`);
-  check('받은 것도 필드에 자동 배치된다', F.getUnits().length === before + given.length);
+  check('받은 것도 필드에 자동 배치된다', F.getAllUnits().length === before + given.length);
   check('무료 지급은 흔함만 준다', given.every(u => u.tier === 'T1'),
     `tiers=${given.map(u => u.tier)}`);
   check('무료 지급은 환급되지 않는다', given.every(u => u.investedGold === 0));

@@ -107,13 +107,26 @@
     add(ex.x, ex.y, ex.kind, { row: 4, unlocked: false, cost: ex.cost, label: ex.label, expansion: true, exit: ex.kind === 'exit' });
   });
 
+  /* 응원 칸 4칸(세션 82 · 배치안 A "출구 옆 모서리") — 싸우지 않고, 응원 가능 포켓몬(auras.js CheerData)의 버프를 필드 전체에 준다.
+   * zone: 'cheer'(전투 칸은 'battle'). 기본 2칸 + 골드 2칸(400 · 900G — 확장 칸과 같은 해금 방식). 경로에서 80px 이상 · 기존 칸과 118px 이상 떨어진 자리
+   * (tools/cheerlayout.js 가 잰다). 커버리지 · 이웃 버프 · 소환 자동 배치는 이 칸을 안 본다. */
+  var CHEER = [
+    { x: 900, y: 120 }, { x: 900, y: 480 },
+    { x: 968, y: 120, cost: 400, label: '응원 칸(위)' }, { x: 968, y: 480, cost: 900, label: '응원 칸(아래)' }
+  ];
+  CHEER.forEach(function (c) {
+    add(c.x, c.y, 'cheer', { row: 5, zone: 'cheer', unlocked: !c.cost, cost: c.cost || 0, label: c.label || '응원 칸', expansion: false });
+  });
+  slots.forEach(function (s) { if (!s.zone) s.zone = 'battle'; });
+
   /* 칸 종류 이름 · 설명(정보 카드) */
   var KIND_INFO = {
     center: { label: '명당', note: '두 길 사이 — 위 · 아래 길로 오는 적을 모두 본다.' },
     fork:   { label: '갈림길', note: '입구 줄기 끝 — 모든 적이 지나가고, 두 길의 시작을 본다.' },
     upper:  { label: '위 길만', note: '위 길로 오는 적(절반)만 본다. 대신 길이 가까이 감싼다.' },
     lower:  { label: '아래 길만', note: '아래 길로 오는 적(절반)만 본다. 대신 길이 가까이 감싼다.' },
-    exit:   { label: '출구 방어', note: '두 길이 합쳐진 뒤 — 빠져나가려는 모든 적이 지나간다.' }
+    exit:   { label: '출구 방어', note: '두 길이 합쳐진 뒤 — 빠져나가려는 모든 적이 지나간다.' },
+    cheer:  { label: '응원', note: '응원 칸 — 싸우지 않고, 응원 가능한 포켓몬의 버프를 필드 전체에 준다.' }
   };
   slots.forEach(function (s) { var k = KIND_INFO[s.kind]; if (k) { s.kindLabel = k.label; s.note = k.note; } });
 

@@ -34,7 +34,7 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     R.UnitManager.recomputeAll();
     R.GameManager.gold = 1420;
     R.bus.emit('field:changed', {});
-    return F.getUnits().length;
+    return F.getAllUnits().length;
   }, wave);
 
   // ① 골드 상점
@@ -573,8 +573,8 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     const xinfo = await xp.evaluate(() => {
       const R = window.RPD, F = R.FieldManager;
       R.Loop.setPaused(true);
-      const us = F.getUnits().filter(u => window.__exec[u.uid]).sort((a, b) => window.__exec[b.uid] - window.__exec[a.uid]);
-      const u = us[0] || F.getUnits().find(x => x.defId === 'haunter');
+      const us = F.getAllUnits().filter(u => window.__exec[u.uid]).sort((a, b) => window.__exec[b.uid] - window.__exec[a.uid]);
+      const u = us[0] || F.getAllUnits().find(x => x.defId === 'haunter');
       F.select(u.slotIndex);
       return { synergy: (R.SynergyManager.active || []).filter(a => a.typeId === 'GHOST').map(a => a.label || a.count), unit: u.name,
         total: Math.round(u.totalDamage), exec: Math.round(window.__exec[u.uid] || 0),
@@ -1084,8 +1084,8 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     const snap = () => {
       const R = window.RPD, F = R.FieldManager, S = R.StorageManager, GM = R.GameManager, GS = R.GoldShopManager;
       const lv = o => Object.keys(o).sort().map(k => k + o[k]).join(',');
-      return { round: GM.wave, gold: GM.gold, life: GM.life, fieldUnits: F.getUnits().length, storageUnits: S.units.length,
-        species: F.getUnits().concat(S.units).map(u => u.defId + '/' + (u.level || 0)).sort().join(' '),
+      return { round: GM.wave, gold: GM.gold, life: GM.life, fieldUnits: F.getAllUnits().length, storageUnits: S.units.length,
+        species: F.getAllUnits().concat(S.units).map(u => u.defId + '/' + (u.level || 0)).sort().join(' '),
         tickets: R.SummonManager.tickets, shards: R.ShardManager.shards, shop: lv(GS.typeLv) + ' | ' + lv(GS.tierLv), eliteBan: R.EliteManager.banUntil,
         mode: GM.mode.label };
     };
@@ -1407,10 +1407,10 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
       const conf = await bp.evaluate(() => ({ shown: !document.getElementById('bulkConfirm').hidden, display: getComputedStyle(document.getElementById('bulkConfirm')).display, text: document.getElementById('bulkConfirmText').textContent, stored: window.RPD.StorageManager.units.length }));
       if (!conf.shown || conf.stored !== 0 || conf.display === 'none') bad(mode + ': 히든 포함인데 확인 없이 갔다 ' + JSON.stringify(conf));
       await bp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '22_bulk_' + mode + '_a2_confirm.png') });
-      const before = await bp.evaluate(() => window.RPD.FieldManager.getUnits().length + window.RPD.StorageManager.units.length);
+      const before = await bp.evaluate(() => window.RPD.FieldManager.getAllUnits().length + window.RPD.StorageManager.units.length);
       if (mode === 'pc') await bp.click('#btnBulkYes'); else await bp.tap('#btnBulkYes');
       await bp.waitForTimeout(220);
-      const after = await bp.evaluate(() => ({ total: window.RPD.FieldManager.getUnits().length + window.RPD.StorageManager.units.length, stored: window.RPD.StorageManager.units.map(u => u.def.name), msg: window.RPD.BulkStoreUI.lastMessage,
+      const after = await bp.evaluate(() => ({ total: window.RPD.FieldManager.getAllUnits().length + window.RPD.StorageManager.units.length, stored: window.RPD.StorageManager.units.map(u => u.def.name), msg: window.RPD.BulkStoreUI.lastMessage,
         bar: (document.getElementById('infoBar') || {}).textContent || '', open: !document.getElementById('bulkOverlay').hidden, undo: window.RPD.UndoManager.count() }));
       if (after.total !== before) bad(mode + ': 유닛 총수가 바뀌었다 ' + before + '→' + after.total);
       if (after.stored.length !== 2 || after.open) bad(mode + ': 결과 ' + JSON.stringify(after));
@@ -1654,6 +1654,15 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
   report.push({ bytype: btReport });
   if (btProblems.length) process.exitCode = 1;
 
+  /* ㉘ 응원 칸(세션 82) — tools/cheershots.js(단독으로도 돈다). (b) 빈 응원 칸 (c) 2마리 + 요약 줄 (d) 응원 칸 카드 (e) 받는 버프 (f) 거절 알림 (g) 2라운드 */
+  {
+    const ch = await require('./cheershots.js').run(browser);
+    console.log('cheer', JSON.stringify(ch.report));
+    console.log('cheer problems', JSON.stringify(ch.problems));
+    report.push({ cheer: ch.report });
+    if (ch.problems.length) process.exitCode = 1;
+  }
+
   /* ---------- 홈 화면 앱(세션 53 · 모바일 ④ 세션 71) ----------
    * 설치 · 오프라인은 인터넷 주소에서만 되니, 원본 폴더(dist 아님)를 이 자리에서 작은 웹 서버로 띄워 연다(localhost 는 https 와 같게 친다).
    * 확인: 크롬이 "설치할 수 있다"고 보는가(설치 불가 사유 0) · 서비스 워커 · 오프라인 저장 · 인터넷을 끊고 다시 열어도 켜지고 처음 보는 그림이 나오는가 ·
@@ -1753,7 +1762,7 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
   await prepAppPage(ap);
   await ap.waitForTimeout(2600);
   app.offline = await ap.evaluate(() => {
-    const R = window.RPD, units = R.FieldManager.getUnits();
+    const R = window.RPD, units = R.FieldManager.getAllUnits();
     return { booted: !!(R.Game && R.GameManager.state), online: navigator.onLine,
       styled: getComputedStyle(document.querySelector('.hud')).display !== 'block',
       sprites: units.filter(u => R.Assets.isReady(u.def.sprite)).length + '/' + units.length };

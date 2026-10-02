@@ -162,7 +162,7 @@
     if (!s || !s.unit) return false;
     M.moving = s.index;
     M.kinds = {};
-    F.slots.forEach(function (x) { if (x.unlocked && !x.blocked) M.kinds[x.index] = RPD.UI.slotKind(x).short; });
+    F.slots.forEach(function (x) { if (x.unlocked && !x.blocked) M.kinds[x.index] = x.zone === 'cheer' ? '응원' : RPD.UI.slotKind(x).short; });
     F.cancelDrag();
     M.closeDetail();
     var bd = body(); if (bd && bd.classList) bd.classList.add('is-moving');
@@ -198,6 +198,14 @@
   };
   M.FINGER = FINGER;
 
+  /* 옮길 수 있는 칸인가 — 응원 칸은 응원 가능한 포켓몬만(세션 82). 맞바꿈이면 상대도 이쪽 칸에 들어갈 수 있어야 한다 */
+  M.canMoveTo = function (s) {
+    var from = F.get(M.moving);
+    if (!s || !from || !from.unit || !s.unlocked || s.blocked) return false;
+    if (!F.canPlace(s.index, from.unit).ok) return false;
+    return !s.unit || F.canPlace(from.index, s.unit).ok;
+  };
+
   /* 이동 모드 그리기 — 옮길 수 있는 칸 반짝임 + 칸 태그. 논리 좌표(세로 화면 90° 돌림은 Renderer 가 맡는다) */
   function drawMove(ctx) {
     if (M.moving < 0) return;
@@ -215,6 +223,7 @@
         ctx.setLineDash([]);
         return;
       }
+      if (!M.canMoveTo(s)) return;   // 못 가는 칸(응원 불가 포켓몬의 응원 칸 등)은 반짝이지 않는다
       ctx.globalAlpha = 0.35 + 0.55 * pulse;
       ctx.strokeStyle = s.unit ? '#62a4ff' : '#ffd84a';     // 빈 칸 금색 · 바꿀 칸 파랑
       ctx.lineWidth = 4;
@@ -253,6 +262,19 @@
       html = '<div class="ib__who ib__who--move"><span class="ib__name">옮길 칸을 누르세요</span>' +
         '<span class="ib__meta">' + (mu ? mu.name + ' · ' : '') + '빈 칸 금색 · 바꿀 칸 파랑</span></div>' +
         '<div class="ib__acts">' + btn('cancel', '취소', '', false, 'ib__btn--cancel') + '</div>';
+    } else if (s && s.unit && s.zone === 'cheer') {
+      // 응원 칸(세션 82) — DPS 대신 "응원: … (필드 전체)", [강화] 없음
+      var cu = s.unit, ct = RPD.Tiers[cu.tier] || RPD.Tiers.T1;
+      html = '<div class="ib__who" style="--tier:' + ct.color + '">' + U.sprite(cu.def, 'spr--ib') +
+        '<span class="ib__txt"><span class="ib__name">' + cu.name + '</span>' +
+        '<span class="ib__meta"><b style="color:' + ct.color + '">' + ct.label + '</b><span class="ib__sep"> · </span>' +
+          '<span class="ib__cheer">📣 응원: ' + RPD.CheerData.describe(RPD.CheerData.get(cu.defId)) + ' (필드 전체)</span></span></span></div>' +
+        '<div class="ib__acts">' +
+          btn('move', '이동', '', false) +
+          btn('lock', A.lock && A.lock.on ? '🔒' : '🔓', A.lock && A.lock.on ? '해제' : '잠금', A.lock ? A.lock.disabled : false, 'ib__btn--lock' + (A.lock && A.lock.on ? ' is-on' : '')) +
+          btn('store', '창고로', '', A.store ? A.store.disabled : false) +
+          btn('sell', '방출', A.lock && A.lock.on ? '🔒' : (A.sell ? A.sell.value : ''), A.sell ? A.sell.disabled : false, 'ib__btn--danger') +
+        '</div>';
     } else if (s && s.unit) {
       var u = s.unit, tier = RPD.Tiers[u.tier] || RPD.Tiers.T1;
       html = '<div class="ib__who" style="--tier:' + tier.color + '">' + U.sprite(u.def, 'spr--ib') +
@@ -266,6 +288,9 @@
           btn('upgrade', '강화', A.upgrade ? A.upgrade.cost : '', A.upgrade ? A.upgrade.disabled : false) +
           btn('sell', '방출', A.lock && A.lock.on ? '🔒' : (A.sell ? A.sell.value : ''), A.sell ? A.sell.disabled : false, 'ib__btn--danger') +
         '</div>';
+    } else if (s && s.zone === 'cheer') {
+      html = '<div class="ib__who"><span class="ib__txt"><span class="ib__name">' + (s.unlocked ? '빈 응원 칸' : '잠긴 응원 칸 · ' + s.cost + 'G') + '</span>' +
+        '<span class="ib__meta">✨ 응원 가능한 포켓몬만 · 버프를 필드 전체에' + (s.unlocked ? '' : ' — 한 번 더 누르면 구매') + '</span></span></div>';
     } else if (s) {
       var k = U.slotKind(s);
       html = '<div class="ib__who"><span class="ib__txt"><span class="ib__name">' + (s.unlocked ? '빈 칸' : '잠긴 칸 · ' + s.cost + 'G') + '</span>' +

@@ -77,6 +77,13 @@
     });
 
     // 소환된 포켓몬이 어느 칸에 앉았는지 눈으로 잡아 준다
+    // 등급 프레임 반짝 쓸림(세션 85) — 희귀함 이상을 칸에 놓는 순간(소환 · 조합 · 이동 · 창고에서)
+    RPD.bus.on('render:resize', function () { frameCache = {}; });
+    RPD.bus.on('field:placed', function (p) {
+      var u = p && p.unit;
+      if (u && (RANK[u.tier] || 1) >= 4) u._sheenAt = nowSec();
+    });
+
     RPD.bus.on('summon:result', function (r) {
       if (!r.ok || !r.unit) return;
       var color = (RPD.Tiers[r.tier] || {}).color || '#fff';
@@ -165,6 +172,138 @@
     return 'rgba(' + parseInt(h.slice(0, 2), 16) + ',' + parseInt(h.slice(2, 4), 16) + ',' + parseInt(h.slice(4, 6), 16) + ',' + a + ')';
   }
 
+  /* ---------- 등급 프레임(세션 85) ----------
+   *   T1 얇은 단색 · T2 굵게 + 모서리 컷 · T3 겹선 + 보석 1 · T4 호일(그라데이션) + 보석 2 + 놓는 순간 반짝 쓸림
+   *   T5 이상 홀로(여러 색) + 보석 3 + 발밑 소환진(천천히 돈다 · 효과 "최소"면 멈춤) + 반짝 쓸림. 불멸 · 초월의 오라는 위에서 그대로.
+   * 그리기 비용: 칸마다 선 몇 줄 · 그라데이션 하나(T4 이상만) — 28칸이어도 가볍다(perf.js 로 전후 비교). */
+  var RANK = { T1: 1, T2: 2, T3: 3, T4: 4, T5: 5, T6: 5, T7: 5 };
+  var SHEEN_SEC = 0.7;
+  function nowSec() { return (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) / 1000; }
+  function fxLevel() { return RPD.Effects && RPD.Effects.levelId ? RPD.Effects.levelId() : 'normal'; }
+  UnitRenderer.RANK = RANK;
+
+  // 모서리를 잘라 낸 사각형 — 둥근 카드(웹 UI) 대신 "패" · "카드 프레임" 느낌
+  function chamferPath(ctx, x, y, w, h, c) {
+    ctx.beginPath();
+    ctx.moveTo(x + c, y); ctx.lineTo(x + w - c, y); ctx.lineTo(x + w, y + c);
+    ctx.lineTo(x + w, y + h - c); ctx.lineTo(x + w - c, y + h); ctx.lineTo(x + c, y + h);
+    ctx.lineTo(x, y + h - c); ctx.lineTo(x, y + c); ctx.closePath();
+  }
+  function roundPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, w, h, r); else ctx.rect(x, y, w, h);
+  }
+  function lighten(hex, k) {
+    var n = parseInt(String(hex).slice(1), 16), r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    return 'rgb(' + Math.round(r + (255 - r) * k) + ',' + Math.round(g + (255 - g) * k) + ',' + Math.round(b + (255 - b) * k) + ')';
+  }
+  // 등급 보석 — 화면 기준 위쪽 가장자리 가운데(왼쪽 위 H · 잠금, 오른쪽 위 +강화와 안 겹친다)
+  function drawGems(ctx, cx, cy, half, n, color) {
+    var gap = 9.5;
+    for (var i = 0; i < n; i++) {
+      var p = RPD.Renderer.at(cx, cy, (i - (n - 1) / 2) * gap, -half);
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y - 5); ctx.lineTo(p.x + 4, p.y); ctx.lineTo(p.x, p.y + 5); ctx.lineTo(p.x - 4, p.y); ctx.closePath();
+      ctx.fillStyle = color; ctx.fill();
+      ctx.lineWidth = 1.3; ctx.strokeStyle = 'rgba(10,26,54,0.9)'; ctx.stroke();
+      ctx.beginPath(); ctx.arc(p.x - 0.9, p.y - 1.3, 0.9, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fill();
+    }
+  }
+
+  /* 움직이지 않는 부분(바탕 · 바깥선 · 등급선 · 겹선 · 보석) — 등급마다 한 번 구워 캐시한다(frameImage).
+   * 처음엔 매 프레임 그렸더니 유닛 레이어가 두 배가 됐다(perf.js 4배 느림: 초당 40ms → 80~100ms · 세션 85) */
+  function drawFrameStatic(ctx, cx, cy, half, tier) {
+    var rank = RANK[tier.id] || 1;
+    var x = cx - half, y = cy - half, w = half * 2;
+    var path = rank >= 2 ? function (inset) { chamferPath(ctx, x + inset, y + inset, w - inset * 2, w - inset * 2, 9 - inset * 0.6); }
+                         : function (inset) { roundPath(ctx, x + inset, y + inset, w - inset * 2, w - inset * 2, 10); };
+    // 바탕 — 낮은 등급일수록 옅게
+    path(0);
+    ctx.fillStyle = 'rgba(10,26,54,' + (0.10 + rank * 0.025).toFixed(3) + ')';
+    ctx.fill();
+    // 어두운 바깥선(필드의 밝은 풀밭 위에서 등급색이 뜨게) → 등급선
+    path(0);
+    ctx.strokeStyle = 'rgba(10,26,54,0.6)';
+    ctx.lineWidth = rank === 1 ? 3 : 4.6;
+    ctx.stroke();
+    path(0);
+    if (rank >= 5) {
+      var hg = ctx.createLinearGradient(x, y, x + w, y + w);   // 홀로 — 등급색 · 금 · 하늘 · 등급색
+      hg.addColorStop(0, tier.color); hg.addColorStop(0.35, '#ffe07a'); hg.addColorStop(0.65, '#9ff0ff'); hg.addColorStop(1, tier.color);
+      ctx.strokeStyle = hg; ctx.lineWidth = 3.4;
+    } else if (rank === 4) {
+      var fg = ctx.createLinearGradient(x, y, x + w, y + w);   // 호일 — 등급색 사이에 밝은 띠
+      fg.addColorStop(0, tier.color); fg.addColorStop(0.45, lighten(tier.color, 0.65)); fg.addColorStop(0.55, lighten(tier.color, 0.65)); fg.addColorStop(1, tier.color);
+      ctx.strokeStyle = fg; ctx.lineWidth = 3.2;
+    } else {
+      ctx.strokeStyle = tier.color; ctx.lineWidth = rank === 1 ? 1.6 : rank === 2 ? 2.6 : 2.8;
+    }
+    ctx.stroke();
+    // T3 이상 — 안쪽 겹선 · 보석
+    if (rank >= 3) {
+      path(4.5);
+      ctx.strokeStyle = hexA(tier.color, 0.55); ctx.lineWidth = 1; ctx.stroke();
+      drawGems(ctx, cx, cy, half, rank >= 5 ? 3 : rank - 2, rank >= 5 ? '#ffe07a' : lighten(tier.color, 0.25));
+    }
+  }
+
+  /* 캐시 — 등급 · 칸 크기 · 화면 배율 · 돌림(세로 화면은 보석이 화면 위쪽 = 논리 왼쪽)마다 한 장. 화면 크기가 바뀌면 비운다 */
+  var frameCache = {};
+  var FRAME_PAD = 8;
+  UnitRenderer.clearFrameCache = function () { frameCache = {}; };
+  function frameImage(tier, half) {
+    if (typeof document === 'undefined' || !document.createElement) return null;
+    var R = RPD.Renderer, k = Math.max(1, Math.round((R.scale || 1) * (R.dpr || 1) * 4) / 4);
+    var key = tier.id + '|' + half + '|' + k + '|' + (R.rotated ? 1 : 0);
+    if (frameCache[key] !== undefined) return frameCache[key];
+    var side = (half + FRAME_PAD) * 2;
+    var c = document.createElement('canvas');
+    c.width = Math.ceil(side * k); c.height = Math.ceil(side * k);
+    var cctx = c.getContext && c.getContext('2d');
+    if (!cctx) { frameCache[key] = null; return null; }
+    cctx.setTransform(k, 0, 0, k, 0, 0);
+    drawFrameStatic(cctx, side / 2, side / 2, half, tier);
+    frameCache[key] = c;
+    return c;
+  }
+
+  /* T4 이상 — 놓는 순간 반짝 한 번 쓸림(0.7초) · 효과 "최소"면 없음. 포켓몬 그림 위에 그려야 보인다 */
+  function drawSheen(ctx, slot, unit, half) {
+    if (!unit._sheenAt || (RANK[unit.tier] || 1) < 4 || fxLevel() === 'minimal') return;
+    var k = (nowSec() - unit._sheenAt) / SHEEN_SEC;
+    if (k > 1) { unit._sheenAt = 0; return; }
+    if (k < 0) return;
+    var x = slot.x - half, y = slot.y - half, w = slot.size;
+    ctx.save();
+    chamferPath(ctx, x, y, w, w, 9); ctx.clip();
+    var bx = x - w + k * w * 3;
+    var sg = ctx.createLinearGradient(bx, y, bx + w * 0.6, y + w);
+    sg.addColorStop(0, 'rgba(255,255,255,0)'); sg.addColorStop(0.5, 'rgba(255,255,255,0.6)'); sg.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = sg; ctx.fillRect(x, y, w, w);
+    ctx.restore();
+  }
+  function drawTierFrame(ctx, slot, unit, tier, half) {
+    var rank = RANK[tier.id] || 1;
+    // T5 이상 — 발밑 소환진(포켓몬 그림 뒤 · 칸 안). 천천히 돈다 · 효과 "최소"면 멈춤
+    if (rank >= 5) {
+      var spin = fxLevel() === 'minimal' ? 0 : nowSec() * 0.6;
+      ctx.save();
+      ctx.beginPath(); ctx.arc(slot.x, slot.y + 4, half * 0.78, 0, Math.PI * 2);
+      ctx.fillStyle = hexA(tier.color, 0.14); ctx.fill();
+      ctx.setLineDash([5, 4]); ctx.lineDashOffset = -spin * 20;
+      ctx.lineWidth = 1.6; ctx.strokeStyle = hexA(tier.color, 0.7); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+    var img = frameImage(tier, half);
+    if (img) {
+      var side = (half + FRAME_PAD) * 2;
+      ctx.drawImage(img, slot.x - side / 2, slot.y - side / 2, side, side);
+    } else {
+      drawFrameStatic(ctx, slot.x, slot.y, half, tier);   // 캔버스를 못 만드는 환경(검사)
+    }
+  }
+
   function drawUnit(ctx, slot, unit, selected) {
     var tier = RPD.Tiers[unit.tier] || RPD.Tiers.T1;
     /* UI 리디자인: 포켓몬이 작아 보이지 않게 칸(56px)을 거의 꽉 채운다.
@@ -196,22 +335,10 @@
       ctx.beginPath(); ctx.arc(slot.x, slot.y, rad, 0, Math.PI * 2); ctx.fill();
     }
 
-    /* 등급은 칸 테두리 색으로 읽는다.
-     * 예전에는 모서리 보석 하나뿐이라 필드에서 등급이 눈에 안 들어왔다. */
+    /* 등급 프레임(리디자인 ① · 세션 85) — 색 하나로는 필드에서 T3 · T5 가 비슷하게 읽혔다.
+     * 색은 그대로 두고 모양 · 층 · 움직임을 등급마다 쌓는다(색각 이상에도 갈리게). 보석 개수 = T3 1 · T4 2 · T5 이상 3 */
     var half = slot.size / 2;
-    var tx = slot.x - half, ty = slot.y - half;
-    ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(tx, ty, slot.size, slot.size, 10);
-    else ctx.rect(tx, ty, slot.size, slot.size);
-    ctx.fillStyle = 'rgba(10,26,54,0.16)';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(10,26,54,0.55)';
-    ctx.lineWidth = 4;
-    ctx.stroke();
-    ctx.strokeStyle = tier.color;
-    ctx.lineWidth = 2.6;
-    ctx.stroke();
-
+    drawTierFrame(ctx, slot, unit, tier, half);
     /* 히든(주문으로만 만드는 개체) — 테두리는 강함 등급 색 그대로, 왼쪽 위 모서리에 H 표시.
      * 히든은 등급이 아니라 얻는 법이라 색을 따로 쓰지 않는다. */
     if (unit.def && unit.def.hidden) {
@@ -255,6 +382,7 @@
       def: unit.def,
       awakened: unit.awakened
     });
+    drawSheen(ctx, slot, unit, half);
 
     // 진화 단계는 아래쪽 점으로. 숫자를 쓰면 작은 칸에서 안 읽힌다.
     var stage = unit.def.stage || 1;

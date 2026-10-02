@@ -219,6 +219,37 @@ run('등급별 포켓몬을 모두 그린다', () => {
   RPD.UnitRenderer.draw(ctx);
 });
 
+run('등급 프레임(세션 85) — T1~T7 · 희귀함 이상만 놓는 순간 반짝 · 효과 최소에서도 그린다', () => {
+  RPD.FieldManager.init();
+  const PD = RPD.PokemonData;
+  const ids = ['T1', 'T2', 'T3', 'T4', 'T5'].map(t => PD.list.find(d => d.tier === t && !d.hidden && !d.form).id).concat(['mewtwo', 'charizard_transcend']);
+  const us = ids.map((id, i) => { const u = RPD.UnitManager.create(id); RPD.FieldManager.place(i, u); return u; });
+  RPD.UnitManager.recomputeAll();
+  const sheen = us.map(u => !!u._sheenAt);
+  if (sheen.join() !== 'false,false,false,true,true,true,true') throw new Error('반짝 쓸림 대상 ' + ids.map((id, i) => id + ':' + sheen[i]).join(' '));
+  if (RPD.UnitRenderer.RANK.T1 >= RPD.UnitRenderer.RANK.T3 || RPD.UnitRenderer.RANK.T5 !== RPD.UnitRenderer.RANK.T7) throw new Error('등급 순위표');
+  const g0 = calls.createLinearGradient || 0;
+  RPD.UnitRenderer.draw(ctx);
+  if (!((calls.createLinearGradient || 0) > g0)) throw new Error('호일 · 홀로 그라데이션을 안 그렸다');
+  if (RPD.Effects) { RPD.Effects.force('minimal'); RPD.UnitRenderer.draw(ctx); RPD.Effects.force(null); }
+});
+
+run('잠긴 칸(세션 85) — 못 살 때는 가격을 안 쓰고, 살 수 있거나 마우스를 올리면 쓴다', () => {
+  RPD.FieldManager.init();
+  const texts = [], c = makeCtx();
+  c.fillText = function (t) { texts.push(String(t)); };
+  const priced = () => texts.filter(t => /^\d+G$/.test(t)).length;
+  const locked = RPD.FieldManager.lockedSlots();
+  RPD.GameManager.gold = 0; RPD.FieldManager.setHover(-1); RPD.FieldManager.select(-1);
+  RPD.MapRenderer.drawSlots(c);
+  const cheerLocked = RPD.FieldManager.lockedCheerSlots ? RPD.FieldManager.lockedCheerSlots().length : 0;
+  if (priced() !== 0) throw new Error('골드 0 인데 가격 ' + priced() + '개');
+  texts.length = 0; RPD.FieldManager.setHover(locked[0].index); RPD.MapRenderer.drawSlots(c);
+  if (priced() !== 1) throw new Error('마우스를 올린 칸만 가격 — ' + priced());
+  texts.length = 0; RPD.FieldManager.setHover(-1); RPD.GameManager.gold = 999999; RPD.MapRenderer.drawSlots(c);
+  if (priced() !== locked.length + cheerLocked) throw new Error('다 살 수 있는데 가격 ' + priced() + ' / ' + (locked.length + cheerLocked));
+});
+
 run('조합 재료가 되는 칸이 강조된다', () => {
   // v1 의 자유 합성(fusion:changed) 자리를 v2 의 조합식이 대신한다
   RPD.FieldManager.init();

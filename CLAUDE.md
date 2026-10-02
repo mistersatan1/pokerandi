@@ -42,6 +42,7 @@ node tools/perf.js 4  # 휴대폰 성능 — CPU 4배 느린 갤럭시 흉내로
 | `js/ui/DexCard.js` | 도감 세부 카드(세션 61) — 수치는 `UnitManager.baseStats`(임시 개체 + recompute, 판 안 버프 중립). 칸 카드와 같이 쓰는 조각은 `Icons.js`(UI.typeChips · skillBox · passiveBox · isSecret) |
 | `css/mobile.css` | 휴대폰(1100px 미만) 레이아웃 — 가장 마지막에 불러온다. 필드 90° 돌림은 `Renderer.js`(`--field-rotate`). 필드 고정 · 시트 · 정보 바 · 이동 모드는 `js/ui/MobileSheet.js`(세션 65) |
 | `js/data/music.js` · `js/core/MusicFiles.js` | 배경음악 파일 — 장면별(calm · battle · boss · hidden · immortal · transcend) `assets/music/*.mp3` · 곡별 음량 · 겹침 1초. 없으면 합성(AudioManager). `<audio>` 로만(file:// 가능). 실제 재생 검사 `node tools/musicplay.js` |
+| `js/render/UnitRenderer.js` 등급 프레임 | 리디자인 ①(세션 85) — 등급을 색 + 모양으로(T1 단색 · T2 모서리 컷 · T3 겹선 + 보석 1 · T4 호일 + 보석 2 · T5+ 홀로 + 보석 3 + 소환진). 정적 부분은 `frameImage` 캐시(매 프레임 그리면 유닛 레이어 2배 — perf.js 로 확인). 잠긴 칸은 살 수 있을 때 · 가리킬 때만 가격(`MapRenderer.drawSlot`). 캡처 `tools/tiershots.js` |
 | `js/render/FramePacer.js` | 언제 · 얼마나 곱게 그릴지 — 전투 최대 60fps · 쉬는 중 10fps · 느리면 화질 사다리(해상도 2→1.5→1.25→1→30fps). 게임 규칙 · 시간은 안 건드림 |
 | `js/systems/UnitManager.js` 의 `locked` | 포켓몬 잠금(세션 74) — 재료(조합 · 주문 · 메타몽) · 방출에서 빠진다. 조합식 줄 "0/1 🔒1" 은 `RecipeManager.countsOf()`. 새 "재료 · 방출" 경로를 만들면 `.locked` 를 건너뛸 것(검사: bootsmoke "포켓몬 잠금"). 키 L |
 | `js/systems/SynergyManager.js` | 시너지는 **서로 다른 종(defId) 기준**(응원 칸 포함 · 세션 83)(세션 77 — 구구 2마리 = 비행 1). 패널은 "비행 1/2 · 구구 ×2는 1종으로". 임계값(`RPD.Synergies`)은 조정안 **B** 적용(상위 단계 −1 · 독 · 노말 첫 단계 2 — VERSION 세션 77, `SYN_PRESET` 은 autoplay 실험용). 종 수 셈은 `SynergyManager.tally` 한 곳(패널 · 보유 창 [타입별] 머리 공용) |

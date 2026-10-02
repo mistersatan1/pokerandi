@@ -26,6 +26,7 @@
     slotHover: '#ffd23f',
     slotSelected: '#ffd23f',
     lockedPad: 'rgba(18,48,28,0.26)',
+    lockedPadQuiet: 'rgba(18,48,28,0.10)',
     cheerPad: 'rgba(255,128,196,0.24)',
     cheerEdge: 'rgba(255,170,215,0.92)',
     cheerFlag: '#e8559a',
@@ -370,7 +371,8 @@
 
     var cheer = slot.zone === 'cheer';
     roundRect(ctx, x, y, s, s, r);
-    ctx.fillStyle = !slot.unlocked ? (cheer ? PALETTE.cheerLockedPad : PALETTE.lockedPad) : cheer ? PALETTE.cheerPad : PALETTE.slotPad;
+    var quietLock = !slot.unlocked && !cheer && !hovered && !selected && RPD.GameManager.gold < slot.cost;   // 못 사는 잠긴 칸은 바탕도 옅게(세션 85)
+    ctx.fillStyle = !slot.unlocked ? (cheer ? PALETTE.cheerLockedPad : quietLock ? PALETTE.lockedPadQuiet : PALETTE.lockedPad) : cheer ? PALETTE.cheerPad : PALETTE.slotPad;
     ctx.fill();
     if (cheer) drawCheerFlag(ctx, slot);
 
@@ -393,15 +395,26 @@
         return;
       }
 
+      /* 리디자인 ①(세션 85) — 잠긴 칸 가격표 12개가 늘 떠 있어 필드에서 시선을 뺏었다.
+       * 살 수 있을 때(금색 = 지금 할 수 있는 것) · 마우스를 올렸을 때 · 골랐을 때만 자물쇠 + 가격. 나머지는 흐린 점선 + 작은 자물쇠 */
       var affordable = RPD.GameManager.gold >= slot.cost;
+      var loud = affordable || hovered || selected;
       ctx.setLineDash([3, 4]);
       ctx.strokeStyle = hovered
         ? (affordable ? PALETTE.slotHover : 'rgba(224,85,79,0.7)')
-        : 'rgba(24,52,30,0.40)';
+        : affordable ? 'rgba(255,210,63,0.55)' : 'rgba(24,52,30,0.22)';
       ctx.lineWidth = hovered ? 2 : 1.4;
       roundRect(ctx, x + 1, y + 1, s - 2, s - 2, r - 1);
       ctx.stroke();
       ctx.setLineDash([]);
+
+      if (!loud) {
+        ctx.globalAlpha = 0.45;
+        drawLock(ctx, slot.x, slot.y, PALETTE.muted, 0.7);
+        ctx.globalAlpha = 1;
+        ctx.restore();
+        return;
+      }
 
       var lockAt = RPD.Renderer.at(slot.x, slot.y, 0, -8), costAt = RPD.Renderer.at(slot.x, slot.y, 0, 15);
       drawLock(ctx, lockAt.x, lockAt.y, affordable ? '#ffd23f' : PALETTE.muted);
@@ -506,9 +519,10 @@
     ctx.restore();
   };
 
-  function drawLock(ctx, cx, cy, color) {
+  function drawLock(ctx, cx, cy, color, scale) {
     ctx.save();
     RPD.Renderer.upright(ctx, cx, cy);   // 필드를 돌려 그려도 자물쇠는 똑바로
+    if (scale && scale !== 1) { ctx.translate(cx, cy); ctx.scale(scale, scale); ctx.translate(-cx, -cy); }
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
     ctx.lineWidth = 2;

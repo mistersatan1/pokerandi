@@ -1654,6 +1654,15 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
   report.push({ bytype: btReport });
   if (btProblems.length) process.exitCode = 1;
 
+  /* ㉙ 리디자인 ①(세션 85) 등급 프레임 · 잠긴 칸 — tools/tiershots.js(단독으로도 돈다). 29_tier_* */
+  {
+    const tr = await require('./tiershots.js').run(browser);
+    console.log('tier', JSON.stringify(tr.report));
+    console.log('tier problems', JSON.stringify(tr.problems));
+    report.push({ tier: tr.report });
+    if (tr.problems.length) process.exitCode = 1;
+  }
+
   /* ㉘ 응원 칸(세션 82) — tools/cheershots.js(단독으로도 돈다). (b) 빈 응원 칸 (c) 2마리 + 요약 줄 (d) 응원 칸 카드 (e) 받는 버프 (f) 거절 알림 (g) 2라운드 */
   {
     const ch = await require('./cheershots.js').run(browser);

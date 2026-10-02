@@ -82,7 +82,7 @@
   SynergyManager.dupsOf = function (map) { return dupsOf(map); };
 
   SynergyManager.recompute = function () {
-    var tl = this.tally(RPD.FieldManager.getBattleUnits());   // 응원 칸은 시너지에 안 센다(세션 82)
+    var tl = this.tally(RPD.FieldManager.getAllUnits());   // 응원 칸도 시너지 종 수에 센다(세션 83 — 세션 82 엔 뺐다). 효과는 싸우는 개체가 받는다
     var counts = tl.counts, unitCounts = tl.unitCounts, speciesOf = tl.speciesOf;
 
     var bonus = baseBonus();

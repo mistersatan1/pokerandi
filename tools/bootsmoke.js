@@ -2819,14 +2819,19 @@ check('응원 칸 — 처음 2칸 무료 · 400G · 900G 를 사기 전엔 못 �
   if (CH.F.lockedSlots().some(s => s.zone === 'cheer')) throw new Error('확장 칸 목록(lockedSlots)에 응원 칸이 섞였다');
 });
 
-check('응원 칸 — getBattleUnits 엔 없고 getAllUnits 엔 있다 · 싸우지 않는다(공격 · 시너지 · 강화)', () => {
+check('응원 칸 — getBattleUnits 엔 없고 getAllUnits 엔 있다 · 싸우지 않는다(공격 · 강화) · 시너지에는 센다', () => {
   chFresh();
   const [c0] = chOpen();
   const m = CH.UM.create('clefable');           // 버퍼 · 장거리 — 빼먹으면 지나가는 적을 때린다
   CH.F.place(c0.index, m); CH.UM.recomputeAll();
   if (CH.F.getBattleUnits().indexOf(m) >= 0 || CH.F.getAllUnits().indexOf(m) < 0) throw new Error('분류가 틀렸다');
-  if (RPD.SynergyManager.tally(CH.F.getBattleUnits()).counts.FAIRY) throw new Error('응원 칸이 시너지에 들어갔다');
-  if (RPD.SynergyManager.counts && RPD.SynergyManager.counts.FAIRY) throw new Error('시너지 매니저가 응원 칸을 셌다');
+  // 시너지 — 응원 칸도 종 수에 센다(세션 83). 필드의 같은 종과는 합쳐 1종
+  if (RPD.SynergyManager.countOf('FAIRY') !== 1) throw new Error('응원 칸 픽시가 시너지에 안 셌다 ' + RPD.SynergyManager.countOf('FAIRY'));
+  CH.F.place(chBattle()[0].index, CH.UM.create('clefable')); CH.UM.recomputeAll();
+  if (RPD.SynergyManager.countOf('FAIRY') !== 1) throw new Error('필드 픽시 + 응원 칸 픽시가 2종으로 셌다');
+  CH.F.remove(chBattle()[0].index); CH.F.place(chBattle()[0].index, CH.UM.create('clefairy')); CH.UM.recomputeAll();
+  if (RPD.SynergyManager.countOf('FAIRY') !== 2) throw new Error('필드 삐삐 + 응원 칸 픽시가 2종이 아니다');
+  CH.F.remove(chBattle()[0].index); CH.UM.recomputeAll();
   if (RPD.EconomyManager.canUpgrade(m) || RPD.EconomyManager.upgrade(c0.index).ok) throw new Error('응원 칸이 강화된다');
   RPD.GameManager.setState('RUNNING');
   for (let i = 0; i < 6; i++) RPD.EnemyManager.spawn('armored', 30);

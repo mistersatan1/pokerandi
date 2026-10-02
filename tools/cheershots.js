@@ -66,6 +66,10 @@ async function run(browser) {
     if (mode === 'portrait') await p.evaluate(() => window.RPD.HudPanels.setDrawer('synergy'));
     await p.waitForTimeout(450);
     const c = await p.evaluate(() => { const s = document.getElementById('cheerSummary'); return { hidden: s.hidden, text: s.textContent.replace(/\s+/g, ' ').trim() }; });
+    // 시너지 — 응원 칸 셀러(물)도 센다(세션 83): 필드 거북왕 + 응원 셀러 = 물 2종
+    c.water = await p.evaluate(() => ({ n: window.RPD.SynergyManager.countOf('WATER'),
+      row: ((document.querySelector('#synergyBody .synrow[data-type="WATER"]') || {}).textContent || '').replace(/\s+/g, ' ').trim() }));
+    if (c.water.n !== 2 || !/물\s*2/.test(c.water.row)) bad('(c) 응원 칸이 시너지에 안 셌다 ' + JSON.stringify(c.water));
     if (c.hidden || !/공격력 \+5%/.test(c.text) || !/공속 \+4%/.test(c.text) || !/방어 무시 \+5%/.test(c.text)) bad('(c) 요약 줄 ' + JSON.stringify(c));
     await p.click('#cheerSummary').catch(() => {});
     await p.waitForTimeout(200);

@@ -1082,7 +1082,7 @@
       '</div>' +
       '<p class="sc__cheer">📣 응원: ' + (e ? CD.describe(e) : '—') + ' <small>(필드 전체)</small></p>' +
       (dup ? '<p class="unitwarn">같은 종이 이미 응원 중 — 효과는 한 번만 셉니다.</p>' : '') +
-      '<p class="sc__note">응원 칸은 싸우지 않습니다 — 공격 · 스킬 · 특성 · 시너지에서 빠지고, 강화할 수 없습니다. 조합 · 주문 재료로는 쓰입니다(창고 → 필드 다음).</p>' +
+      '<p class="sc__note">응원 칸은 싸우지 않습니다 — 공격 · 스킬 · 특성에서 빠지고 강화할 수 없지만, 타입 시너지에는 셉니다. 조합 · 주문 재료로는 쓰입니다(창고 → 필드 다음).</p>' +
       (sum ? '<p class="sc__buffed sc__buffed--cheer">응원 합계: ' + sum + '</p>' : '');
   }
   /* ✨ 응원 가능 — 보유 창 · 전투 칸 카드에서 "응원 칸에 두면 무엇을 주나" */
@@ -1899,7 +1899,7 @@
       });
     });
     // 서로 다른 종 기준(세션 77 · 80) — 패널 · 실제 시너지와 같은 셈(SynergyManager.tally)
-    var tl = RPD.SynergyManager.tally(F.getBattleUnits());   // 시너지는 전투 칸만
+    var tl = RPD.SynergyManager.tally(F.getAllUnits());   // 시너지는 필드 전체(응원 칸 포함 · 세션 83)
     var fieldCount = tl.counts;
     var order = Object.keys(groups).sort(function (a, b) {
       return (fieldCount[b] || 0) - (fieldCount[a] || 0) || groups[b].length - groups[a].length;

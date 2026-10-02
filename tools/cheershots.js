@@ -143,7 +143,25 @@ async function run(browser) {
     await shot('g_round2');
     await p.evaluate(() => window.RPD.Loop.setPaused(true));
 
-    report[mode] = { b, c, d: { text: dText.slice(0, 120), up: d.up }, e, f: f.said, g };
+    // (h) 불멸 이상(뮤) — 응원 칸엔 못 두고, 전투 칸에 두면 필드 전체(세션 83). 먼 칸 포켓몬 카드에 "📣 응원" 이 붙는다
+    await p.evaluate(prep, { wave: 52, units: ['charizard', 'blastoise', 'venusaur', 'pikachu', 'mew'], cheer: ['shellder'] });
+    const h = await p.evaluate(() => {
+      const R = window.RPD, F = R.FieldManager;
+      const mew = F.slots.find(s => s.unit && s.unit.defId === 'mew');
+      const far = F.slots.filter(s => s.unit && s.zone !== 'cheer' && s.unit.defId !== 'mew').sort((a, b) => Math.hypot(b.x - mew.x, b.y - mew.y) - Math.hypot(a.x - mew.x, a.y - mew.y))[0];
+      const rejected = !F.place(F.cheerSlots()[1].index, R.UnitManager.create('mew'));
+      F.select(far.index);
+      return { rejected, field: R.UnitManager.cheer.field, farDist: Math.round(Math.hypot(far.x - mew.x, far.y - mew.y)), farCheer: far.unit.auraParts.cheer };
+    });
+    if (mode === 'portrait') { await p.evaluate(() => window.RPD.MobileSheet.openDetail()); await p.waitForTimeout(450); }
+    else await p.waitForTimeout(300);
+    h.recv = await p.evaluate(() => (document.querySelector('.sc__recv') || { innerText: '' }).innerText.replace(/\s+/g, ' '));
+    h.sum = await p.evaluate(() => document.getElementById('cheerSummary').textContent.replace(/\s+/g, ' '));
+    if (!h.rejected || h.field.join() !== 'mew' || !(h.farCheer > 0) || !/응원/.test(h.recv) || !/뮤 \(필드 · 불멸\)/.test(h.sum)) bad('(h) ' + JSON.stringify(h));
+    await shot('h_mew_field');
+    if (mode === 'portrait') await p.evaluate(() => window.RPD.MobileSheet.closeDetail());
+
+    report[mode] = { h, b, c, d: { text: dText.slice(0, 120), up: d.up }, e, f: f.said, g };
     if (errs.length) bad('페이지 오류 ' + errs[0]);
     await ctx.close();
   }

@@ -286,16 +286,20 @@
    * 응원 칸에 둔 응원 가능 포켓몬(auras.js CheerData)의 버프 합계. 다른 종끼리는 더하고, 같은 종은 한 번(dups 에 남긴다),
    * 축마다 상한(AuraData.cap · 공격력은 CheerData.capAttack). recomputeAll 이 한 번만 세고 모든 전투 유닛에 얹는다. */
   var CHEER_KEYS = ['attackSpeed', 'critRate', 'critDamage', 'range', 'cooldown', 'armorPierce', 'bossDamage'];
-  UnitManager.cheerTotals = function () {
+  UnitManager.cheerTotals = function (skipFieldId) {
     var F = RPD.FieldManager, CD = RPD.CheerData;
-    var out = { attack: 0, attackSpeed: 0, critRate: 0, critDamage: 0, range: 0, cooldown: 0, armorPierce: 0, bossDamage: 0, from: [], dups: [], raw: {} };
+    var out = { attack: 0, attackSpeed: 0, critRate: 0, critDamage: 0, range: 0, cooldown: 0, armorPierce: 0, bossDamage: 0, from: [], dups: [], field: [], raw: {} };
     if (!CD) return out;
     var seen = {};
     for (var i = 0; i < F.slots.length; i++) {
       var s = F.slots[i];
-      if (s.zone !== 'cheer' || !s.unlocked || !s.unit) continue;
+      if (!s.unlocked || !s.unit) continue;
       var id = s.unit.defId, e = CD.get(id);
       if (!e) continue;
+      // 응원 칸의 응원 가능 종 · 전투 칸의 불멸 이상 버퍼(세션 83 — 응원 칸 없이도 필드 전체)
+      if (s.zone === 'cheer' ? e.onField : !e.onField) continue;
+      if (skipFieldId && id === skipFieldId) continue;   // 필드 전체 버프는 자기 자신에겐 안 준다(이웃 버프와 같게)
+      if (e.onField && !seen[id]) out.field.push(id);
       if (seen[id]) { out.dups.push(id); continue; }
       seen[id] = true;
       out.from.push(id);
@@ -331,9 +335,10 @@
       }
       slot.unit.cheering = false;
       var nbAtk = auraBonusFor(i);
-      UnitManager.recompute(slot.unit, nbAtk + cheer.attack, mergeExtras(auraExtrasFor(i), cheer));
+      var ch = cheer.field.indexOf(slot.unit.defId) >= 0 ? UnitManager.cheerTotals(slot.unit.defId) : cheer;   // 뮤 자신은 자기 전체 버프를 안 받는다
+      UnitManager.recompute(slot.unit, nbAtk + ch.attack, mergeExtras(auraExtrasFor(i), ch));
       var m = RPD.SynergyManager.bonus.auraMul;
-      slot.unit.auraParts = { neighbor: nbAtk * m, cheer: cheer.attack * m };   // 정보 카드 "응원 +5% · 이웃 +12%"
+      slot.unit.auraParts = { neighbor: nbAtk * m, cheer: ch.attack * m };   // 정보 카드 "응원 +5% · 이웃 +12%"
     }
     RPD.bus.emit('units:recomputed');
   };

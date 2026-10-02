@@ -82,6 +82,8 @@
       if (d && d.auraAttack) e.attack = round3(d.auraAttack * (RPD.RoleTuning ? RPD.RoleTuning.aura(d.role) : 1) * CHEER_SCALE);
       CHEER_AXES.forEach(function (k) { if (k !== 'attack' && a[k]) e[k] = round3(a[k] * CHEER_SCALE); });
       e.source = 'aura';
+      // 불멸 이상(T6+)은 응원 칸에 못 둔다 — 비싼 유닛이라 필드에서 쓰이게. 대신 전투 칸에 있으면 이 값이 필드 전체에 간다(세션 83)
+      if (d && RPD.tierRank && RPD.tierRank(d.tier) >= RPD.tierRank('T6')) e.onField = true;
       out[id] = e;
     });
     Object.keys(CHEER_DIRECT).forEach(function (id) {
@@ -103,8 +105,10 @@
     table: function () { if (!cheerTable) cheerTable = buildCheer(); return cheerTable; },
     reset: function () { cheerTable = null; },            // 검사 · 실험(autoplay CHEER_SET)이 표를 바꾼 뒤
     get: function (id) { return this.table()[id] || null; },
-    isCheerable: function (id) { return !!this.table()[id]; },
-    ids: function () { return Object.keys(this.table()); },
+    isCheerable: function (id) { var e = this.table()[id]; return !!e && !e.onField; },
+    ids: function () { var t = this.table(); return Object.keys(t).filter(function (id) { return !t[id].onField; }); },
+    /* 전투 칸에 두면 응원 값을 필드 전체에 주는 종(불멸 이상 버퍼 — 지금은 뮤) */
+    fieldIds: function () { var t = this.table(); return Object.keys(t).filter(function (id) { return t[id].onField; }); },
     /* 축마다 상한 */
     capOf: function (k) { return k === 'attack' ? CHEER_CAP_ATTACK : CAP[k]; },
     /* "공속 +4% · 방어 무시 +5%" — 화면 공용 */

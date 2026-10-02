@@ -2941,21 +2941,48 @@ check('응원 칸 — 이웃 버프는 그대로(피카츄 옆 삐삐 사거리 
   if (!(u.range >= r1) || !u.auraExtras.neighbor || !u.auraExtras.cheer) throw new Error('이웃 + 응원이 합쳐지지 않는다');
 });
 
-check('응원 칸 — 표의 17종이 다 실제 포켓몬 · 설명서 표 · 응원 칸 카드가 같은 표로 그린다', () => {
+check('응원 칸 — 표의 16종(+ 필드 전체 불멸 1)이 다 실제 포켓몬 · 설명서 표 · 응원 칸 카드가 같은 표로 그린다', () => {
   chFresh();
   const ids = CH.CD.ids();
-  if (ids.length !== 17) throw new Error('응원 가능 ' + ids.length + '종');
+  if (ids.length !== 16 || CH.CD.fieldIds().join() !== 'mew') throw new Error('응원 가능 ' + ids.length + '종 · 필드 전체 ' + CH.CD.fieldIds());
   const bad = ids.filter(id => !RPD.PokemonData.get(id));
   if (bad.length) throw new Error('없는 포켓몬: ' + bad);
   if (ids.some(id => !CH.CD.describe(CH.CD.get(id)))) throw new Error('효과가 빈 종이 있다');
   const help = RPD.CheerUI.renderHelp();
   const rows = (help.match(/<tr><td>/g) || []).length;
-  if (rows !== ids.length) throw new Error('설명서 표 ' + rows + '줄');
+  if (rows !== ids.length + CH.CD.fieldIds().length) throw new Error('설명서 표 ' + rows + '줄');
+  if (!/불멸 이상/.test(help)) throw new Error('설명서에 불멸 이상 안내가 없다');
   if (ids.some(id => help.indexOf(CH.CD.describe(CH.CD.get(id))) < 0)) throw new Error('설명서 수치가 표와 다르다');
   if (!/필드 전체/.test(help)) throw new Error('설명서에 "필드 전체" 가 없다');
   // 버퍼 9종은 이웃 버프 × SCALE
   const g = CH.CD.get('golduck'), a = RPD.AuraData.get('golduck');
   if (Math.abs(g.armorPierce - Math.round(a.armorPierce * CH.CD.SCALE * 1000) / 1000) > 1e-9) throw new Error('골덕 = 이웃 × SCALE 이 아니다');
+});
+
+check('불멸 이상(뮤) — 응원 칸엔 못 두고, 전투 칸에 두면 옆 칸은 원래 이웃 값 · 필드 전체는 응원 값(세션 83)', () => {
+  chFresh();
+  const bs = chBattle();
+  if (CH.CD.isCheerable('mew') || CH.F.place(chOpen()[0].index, CH.UM.create('mew'))) throw new Error('뮤가 응원 칸에 들어갔다');
+  const far = bs[bs.length - 1], hub = bs.find(s => Math.hypot(s.x - far.x, s.y - far.y) > 400);
+  const nb = bs.find(s => s !== hub && Math.hypot(s.x - hub.x, s.y - hub.y) <= 150);
+  const uf = CH.UM.create('charmander'), un = CH.UM.create('charmander');
+  CH.F.place(far.index, uf); CH.F.place(nb.index, un); CH.UM.recomputeAll();
+  const f0 = uf.attackSpeed, n0 = un.attackSpeed;
+  CH.F.place(hub.index, CH.UM.create('mew')); CH.UM.recomputeAll();
+  const e = CH.CD.get('mew'), a = RPD.AuraData.get('mew');
+  if (Math.abs(uf.attackSpeed / f0 - (1 + e.attackSpeed)) > 0.005) throw new Error('먼 칸이 응원 값을 못 받았다 ' + (uf.attackSpeed / f0).toFixed(3));
+  if (Math.abs(un.attackSpeed / n0 - (1 + a.attackSpeed + e.attackSpeed)) > 0.005) throw new Error('옆 칸이 원래 이웃 값 + 응원 값이 아니다 ' + (un.attackSpeed / n0).toFixed(3));
+  if (CH.UM.cheer.field.join() !== 'mew' || !(uf.auraParts.cheer > 0)) throw new Error('필드 전체 기록 ' + JSON.stringify(CH.UM.cheer.field));
+  // 두 마리여도 한 번
+  CH.F.place(bs.find(s => !s.unit).index, CH.UM.create('mew')); CH.UM.recomputeAll();
+  if (Math.abs(uf.attackSpeed / f0 - (1 + e.attackSpeed)) > 0.005) throw new Error('뮤 두 마리가 두 번 셌다');
+  // 창고로 보내면 사라진다
+  CH.F.slots.filter(s => s.unit && s.unit.defId === 'mew').forEach(s => CH.F.remove(s.index)); CH.UM.recomputeAll();
+  if (Math.abs(uf.attackSpeed - f0) > 1e-9) throw new Error('뮤를 빼도 남았다');
+  // 옛 저장(뮤가 응원 칸에) — 잃지 않고 전투 칸으로
+  chFresh();
+  CH.F.loadState({ unlocked: [], units: [{ slot: chOpen()[0].index, unit: CH.UM.serialize(CH.UM.create('mew')) }] });
+  if (chOpen()[0].unit || !CH.F.getBattleUnits().some(u => u.defId === 'mew')) throw new Error('옛 저장의 응원 칸 뮤가 사라졌거나 응원 칸에 남았다');
 });
 
 check('응원 칸 — 판 이어하기가 응원 칸(산 칸 · 개체)을 저장 · 복원한다', () => {

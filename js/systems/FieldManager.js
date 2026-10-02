@@ -284,7 +284,14 @@
     (s.unlocked || []).forEach(function (i) { var slot = self.get(i); if (slot && !slot.blocked) slot.unlocked = true; });
     (s.units || []).forEach(function (e) {
       var slot = self.get(e.slot), u = RPD.UnitManager.revive(e.unit);
-      if (slot && slot.unlocked && u) self.place(e.slot, u);
+      if (!slot || !slot.unlocked || !u) return;
+      // 규칙이 바뀌어 그 칸에 못 두게 된 개체(세션 83 — 뮤는 더는 응원 칸에 못 둔다)는 빈 전투 칸 → 창고로. 저장본의 개체를 잃지 않는다
+      if (!self.canPlace(e.slot, u).ok || slot.unit) {
+        var alt = self.firstEmpty();
+        if (!(alt && self.place(alt.index, u)) && RPD.StorageManager) RPD.StorageManager.add(u);
+        return;
+      }
+      self.place(e.slot, u);
     });
   };
 

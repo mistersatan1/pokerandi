@@ -34,6 +34,9 @@
       rows.push({ id: id, html: '<li' + (counted ? '' : ' class="is-dup"') + '>' + name(id) + ' — ' + RPD.CheerData.describe(e) +
         (counted ? '' : ' <small>(같은 종 · 한 번만)</small>') + '</li>' });
     });
+    (tot.field || []).forEach(function (id) {   // 전투 칸의 불멸 이상 버퍼(세션 83)
+      rows.push({ id: id, html: '<li>' + name(id) + ' <small>(필드 · 불멸)</small> — ' + RPD.CheerData.describe(RPD.CheerData.get(id)) + '</li>' });
+    });
     var capped = RPD.CheerData.AXES.filter(function (k) { return tot.raw[k] > tot[k] + 1e-9; })
       .map(function (k) { return RPD.CheerData.LABEL[k]; });
     return '<span class="cheersum__hd">📣 응원</span><span>' + RPD.CheerData.describe(tot) + '</span>' +
@@ -57,11 +60,11 @@
     var slots = RPD.FieldManager.slots.filter(function (s) { return s.zone === 'cheer'; });
     var free = slots.filter(function (s) { return !s.cost; }).length;
     var paid = slots.filter(function (s) { return s.cost; }).map(function (s) { return s.cost + 'G'; });
-    var rows = CD.ids().map(function (id) {
+    var rows = CD.ids().concat(CD.fieldIds()).map(function (id) {
       var d = RPD.PokemonData.get(id), e = CD.get(id), t = RPD.Tiers[d.tier];
       var known = !d.hidden || (RPD.SaveManager.hasSeen && RPD.SaveManager.hasSeen(id));   // 아직 못 만난 히든은 이름을 가린다
       return { rank: RPD.tierRank(d.tier), html: '<tr><td>' + (known ? d.name : '???') + ' <small style="color:' + t.color + '">' + t.label + '</small></td>' +
-        '<td>' + CD.describe(e) + '</td><td>' + (e.source === 'aura' ? '버퍼(이웃 버프 × ' + CD.SCALE + ')' : '응원 전용') + '</td></tr>' };
+        '<td>' + CD.describe(e) + '</td><td>' + (e.onField ? '<b>필드에 두면 전체</b>(불멸 · 응원 칸 불가)' : e.source === 'aura' ? '버퍼(이웃 버프 × ' + CD.SCALE + ')' : '응원 전용') + '</td></tr>' };
     }).sort(function (a, b) { return a.rank - b.rank; }).map(function (r) { return r.html; });
     var html =
       '<h3>응원 칸</h3>' +
@@ -71,6 +74,7 @@
         '<li>공격 · 스킬 · 특성에서 빠지고 강화(사거리)도 안 됩니다. <b>타입 시너지에는 셉니다</b>(같은 종은 필드와 합쳐 1종). 응원 칸끼리는 서로 버프를 주지 않아요.</li>' +
         '<li><b>같은 종은 한 번만</b> 셉니다. 다른 종은 더해지고, 축마다 상한이 있어요(공격력 +' + Math.round(CD.capAttack * 100) + '%까지).</li>' +
         '<li>보유한 포켓몬이라 조합 · 주문 재료로 쓰입니다(창고 → 필드 → 응원 칸 순서 · 잠그면 빠짐). 방출 · 잠금 · 이동도 됩니다.</li>' +
+        '<li><b>불멸 이상</b> 버퍼(' + CD.fieldIds().map(name).join(' · ') + ')는 응원 칸에 못 둡니다 — 대신 <b>전투 칸에 두면</b> 옆 칸은 원래 이웃 버프, 필드 전체에는 응원 값을 줍니다.</li>' +
         '<li>일괄 창고로 · 자동 배치 · 소환은 응원 칸을 건드리지 않아요. 이웃 버프(버퍼 옆 칸)는 그대로입니다.</li>' +
       '</ul>' +
       '<table class="help__keys cheerhelp"><thead><tr><th>포켓몬</th><th>응원(필드 전체)</th><th>출처</th></tr></thead><tbody>' + rows.join('') + '</tbody></table>';

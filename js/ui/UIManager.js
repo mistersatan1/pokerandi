@@ -1088,6 +1088,7 @@
   /* ✨ 응원 가능 — 보유 창 · 전투 칸 카드에서 "응원 칸에 두면 무엇을 주나" */
   function cheerNoteHtml(defId) {
     var e = RPD.CheerData.get(defId);
+    if (e && e.onField) return '<p class="sc__buffed sc__buffed--cheer">🌟 불멸 — 전투 칸에 두면 ' + RPD.CheerData.describe(e) + ' 를 필드 전체에(옆 칸은 원래 이웃 버프 · 응원 칸에는 못 둔다)</p>';
     return e ? '<p class="sc__buffed sc__buffed--cheer">✨ 응원 가능 — 응원 칸에 두면 ' + RPD.CheerData.describe(e) + ' (필드 전체)</p>' : '';
   }
   /* "공속 +8% · 방어 무시 +9%" — 응원 칸 전체 합(상한 적용 뒤) */

@@ -57,15 +57,16 @@
   //    0.11 → 17.5%(+8.1%p). 그래서 0.11. 버퍼를 응원 칸에 두면 이웃 자리보다 총효과가 절반쯤이다(VERSION 세션 82).
   var CHEER_SCALE = 0.11;
   var CHEER_CAP_ATTACK = 0.30;
+  /* 응원 전용 8종 — 세션 84 에 처음 값(요청 초안)의 ×0.5. 세션 82 측정: 8종만 써도 노멀 클리어 24%(응원 없음 9.4%)라 목표(약 10%)를 넘었다 */
   var CHEER_DIRECT = {
-    bulbasaur: { attack: 0.04 },
-    oddish:    { range: 0.03 },
-    nidoran_f: { armorPierce: 0.04 },
-    gastly:    { critRate: 0.03 },
-    exeggcute: { attackSpeed: 0.04 },
-    vulpix:    { critDamage: 0.12 },
-    koffing:   { bossDamage: 0.06 },
-    shellder:  { attack: 0.05, armorPierce: 0.05 }
+    bulbasaur: { attack: 0.02 },
+    oddish:    { range: 0.015 },
+    nidoran_f: { armorPierce: 0.02 },
+    gastly:    { critRate: 0.015 },
+    exeggcute: { attackSpeed: 0.02 },
+    vulpix:    { critDamage: 0.06 },
+    koffing:   { bossDamage: 0.03 },
+    shellder:  { attack: 0.025, armorPierce: 0.025 }
   };
   var CHEER_FROM_AURA = ['clefairy', 'jigglypuff', 'psyduck', 'golduck', 'chansey', 'mr_mime', 'wigglytuff', 'clefable', 'mew'];
   var CHEER_AXES = ['attack', 'attackSpeed', 'critRate', 'critDamage', 'range', 'cooldown', 'armorPierce', 'bossDamage'];

@@ -1690,6 +1690,15 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     if (sy.problems.length) process.exitCode = 1;
   }
 
+  /* ㉝ 리디자인 ⑤(세션 89) 조합식 줄 — tools/recipeshots.js(단독으로도 돈다). 33_recipe_* */
+  {
+    const rc = await require('./recipeshots.js').run(browser);
+    console.log('recipe', JSON.stringify(rc.report));
+    console.log('recipe problems', JSON.stringify(rc.problems));
+    report.push({ recipe: rc.report });
+    if (rc.problems.length) process.exitCode = 1;
+  }
+
   /* ㉘ 응원 칸(세션 82) — tools/cheershots.js(단독으로도 돈다). (b) 빈 응원 칸 (c) 2마리 + 요약 줄 (d) 응원 칸 카드 (e) 받는 버프 (f) 거절 알림 (g) 2라운드 */
   {
     const ch = await require('./cheershots.js').run(browser);

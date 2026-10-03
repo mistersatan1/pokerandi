@@ -179,7 +179,8 @@
    * 플레이어가 신경 써서 잡아 둔 위치를 존중한다. */
   /* 재료가 어디 있는지 찾는다. 창고를 먼저 쓴다 —
    * 필드에 올려 둔 것은 지금 싸우고 있으니 가급적 건드리지 않는다. */
-  function findMaterials(recipe) {
+  /* 재료마다 쓸 개체를 찾는다 — 못 찾은 칸은 null 로 남긴다(메타몽 대체 전). 조합 · 화면 힌트가 같은 순서를 쓴다 */
+  function locate(recipe) {
     var usedField = {}, usedStore = {};
     var out = [];
     var SM = RPD.StorageManager;
@@ -209,6 +210,16 @@
       }
       out.push(found);
     }
+    return { out: out, usedField: usedField, usedStore: usedStore };
+  }
+
+  /* 조합식 줄을 가리키면 필드의 재료 칸을 반짝이는 힌트(세션 89 · RPD.MatHint)용 — 읽기만 한다.
+   * ids: 재료 id 배열. 결과: 재료마다 { where: 'store'|'field', at } 또는 null(없음) */
+  RecipeManager.locate = function (ids) { return locate({ materials: ids || [] }).out; };
+
+  function findMaterials(recipe) {
+    var L = locate(recipe), out = L.out, usedField = L.usedField, usedStore = L.usedStore;
+    var SM = RPD.StorageManager;
 
     // 못 찾은 칸이 흔함 하나뿐이면 메타몽으로 채운다
     var missingIdx = [];

@@ -174,6 +174,8 @@
   .pane--recipes .pane__head { flex-wrap: nowrap; }
   .pane--recipes .pane__head .tabs { order: 0; flex: 1 1 0; min-width: 0; overflow-x: auto; }
   .pane--recipes .pane__head .pane__count { display: none; }
+  /* 절반 높이에서는 등급 칩을 접는다 — 탭 · 다음 목표 · 칩이 높이를 다 먹어 조합식 줄이 하나도 안 보였다(세션 89). 칩은 전체 높이에서 */
+  body[data-sheet="half"] .pane--recipes .tierfilter { display: none; }
   body[data-sheet="peek"] .board > .book .book__card, body[data-sheet="peek"].is-slotsheet .slotcard { overflow: hidden; }
 
   /* 손잡이 — 맨 위 시트의 윗변(가로는 왼쪽 변)에 걸친다 */
@@ -425,6 +427,7 @@
 @media (max-width: 1099.98px) {
   .legend .gshop__hint { display: none; }
   .legendbtn { min-height: 40px; }
+  .spr--goal { width: 32px; height: 32px; }
   .spr--lg { width: 40px; height: 40px; }
   .lgcard { padding: 6px 8px; gap: 4px; }
   .lgchip { padding: 2px 6px 2px 2px; font-size: 11.5px; gap: 2px; }

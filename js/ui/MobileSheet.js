@@ -415,11 +415,11 @@
     bindGrip();
     bindField();
 
-    // 탭(서랍) — 열면 절반 높이 시트
+    // 탭(서랍) — 열면 절반 높이 시트. 가로는 전체 너비(절반이면 시트가 약 175px 라 조합식 줄이 겹쳐 그려졌다 — 세션 90 · 자세한 칸 정보와 같은 규칙)
     var H = RPD.HudPanels;
     if (H && H.setDrawer) {
       var setDrawer = H.setDrawer;
-      H.setDrawer = function (tab) { var next = setDrawer.apply(H, arguments); if (next) M.setSize('half'); M.sync(); return next; };
+      H.setDrawer = function (tab) { var next = setDrawer.apply(H, arguments); if (next) M.setSize(landscape() ? 'full' : 'half'); M.sync(); return next; };
     }
     // 창(골드 상점 · 정예 · 조합 사전) — 열리면 전체 높이 시트
     if (typeof global.MutationObserver === 'function') {

@@ -677,7 +677,9 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     await gp.touchscreen.tap(B.x, B.y); await gp.waitForTimeout(150);
     await gp.evaluate(() => window.RPD.HudPanels.setDrawer('recipes')); await gp.waitForTimeout(450);
     const sheetInfo = await gp.evaluate(() => { const p = document.querySelector('.pane--recipes').getBoundingClientRect(); return { size: document.body.getAttribute('data-sheet'), w: Math.round(p.width), h: Math.round(p.height) }; });
-    if (sheetInfo.size !== 'half') bad('조합식 탭을 열었는데 절반 시트가 아님: ' + sheetInfo.size);
+    // 세로는 절반 · 가로는 전체 너비(세션 90 — 절반이면 약 175px 라 조합식 줄이 겹쳐 그려졌다)
+    const wantSize = /landscape/.test(dev) ? 'full' : 'half';
+    if (sheetInfo.size !== wantSize) bad('조합식 탭을 열었는데 ' + wantSize + ' 시트가 아님: ' + sheetInfo.size);
     await same('조합식 시트 절반');
     await gp.screenshot({ path: require('path').join(__dirname, '..', 'dist', '16_m1_' + tag + '_c_recipes_half.png') });
 
@@ -1697,6 +1699,15 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     console.log('recipe problems', JSON.stringify(rc.problems));
     report.push({ recipe: rc.report });
     if (rc.problems.length) process.exitCode = 1;
+  }
+
+  /* ㉞ 리디자인 ⑥(세션 90) 토큰 정리 — tools/tokenshots.js(단독으로도 돈다). 34_token_* · PC 조합식 줄 수 · 필드 크기 */
+  {
+    const tk = await require('./tokenshots.js').run(browser);
+    console.log('token', JSON.stringify(tk.report));
+    console.log('token problems', JSON.stringify(tk.problems));
+    report.push({ token: tk.report });
+    if (tk.problems.length) process.exitCode = 1;
   }
 
   /* ㉘ 응원 칸(세션 82) — tools/cheershots.js(단독으로도 돈다). (b) 빈 응원 칸 (c) 2마리 + 요약 줄 (d) 응원 칸 카드 (e) 받는 버프 (f) 거절 알림 (g) 2라운드 */

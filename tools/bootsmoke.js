@@ -2692,6 +2692,65 @@ check('시너지 패널(세션 88) — 켜짐 · 곧 켜짐 · 아직 없음 묶
   if (fly.length !== 2) throw new Error('비행 기여 칸 링 ' + fly.length + ' / 2 (전체 ' + rings.length + ')');
 });
 
+check('조합식 줄(세션 89) — 재료 진행 칸 · 완성 가능 줄은 한 번만 반짝 · 줄 ↔ 필드 재료 칸(조합과 같은 순서 · 모르는 히든 제외) · 다음 목표 줄', () => {
+  MS.forceMobile = false; RPD.Config.autosave = false;
+  RPD.Game.restart(); RPD.Game.startRun('NORMAL', 'NORMAL');
+  RPD.GameManager.life = 999; RPD.GameManager.setWave(20);
+  RPD.FieldManager.init(); RPD.StorageManager.reset();
+  const F = RPD.FieldManager, open = F.slots.filter(x => x.unlocked && x.zone !== 'cheer');
+  F.place(open[0].index, RPD.UnitManager.create('abra'));                // 슬리프 = 캐이시 + 고오스 → 1/2
+  RPD.UnitManager.recomputeAll(); RPD.bus.emit('field:changed', {}); RPD.RecipeManager.refresh();
+  clickTab('all'); clickChip('ALL');
+  const h = panelHtml('recipeList');
+  const row = (h.match(/<button type="button" class="rrow[^"]*" data-result="drowzee"[\s\S]*?<\/button>/) || [''])[0];
+  if (!row) throw new Error('슬리프 줄이 없다');
+  if (!/<span class="rprog"[^>]*aria-label="재료 1\/2"[^>]*><i class="is-on"><\/i><i><\/i><\/span>/.test(row)) throw new Error('진행 칸이 아니다: ' + (row.match(/<span class="rprog[\s\S]*?<\/span>/) || [''])[0]);
+  // 완성 가능 줄은 늘 숨 쉬지 않는다 — 막 완성 가능해진 줄(is-fresh)만 두 번
+  const css = fs.readFileSync(path.join(ROOT, 'css/ui.css'), 'utf8');
+  const blk = css.slice(css.indexOf('.rrow.is-ready {'), css.indexOf('}', css.indexOf('.rrow.is-ready {')));
+  if (/infinite/.test(blk)) throw new Error('완성 가능 줄이 계속 반짝인다');
+  if (!/\.rrow\.is-ready\.is-fresh \{ animation: readyGlow [^;]* 2; \}/.test(css)) throw new Error('막 완성 가능해진 줄 반짝임이 없다');
+  // 줄 ↔ 필드: 필드의 캐이시 칸이 반짝인다
+  const MH = RPD.MatHint;
+  MH.show(['abra', 'gastly'], true);
+  if (JSON.stringify(MH.slots()) !== JSON.stringify([open[0].index])) throw new Error('필드 재료 칸 ' + JSON.stringify(MH.slots()));
+  // 창고에 캐이시가 있으면 조합은 창고 것을 쓴다 — 필드 칸은 안 반짝인다
+  RPD.StorageManager.add(RPD.UnitManager.create('abra')); RPD.bus.emit('storage:changed', {});
+  if (MH.slots().length || MH.list.length) throw new Error('창고 재료가 먼저인데 필드 칸이 반짝인다');
+  RPD.StorageManager.reset();
+  // 잠근 개체는 재료가 아니다
+  F.get(open[0].index).unit.locked = true;
+  if (MH.slots().length) throw new Error('잠근 칸이 반짝인다');
+  F.get(open[0].index).unit.locked = false;
+  // 아직 모르는 히든 재료는 찾지 않는다(어느 칸이 정답인지 새지 않게)
+  RPD.SaveManager.data.spells = {};
+  const hid = RPD.PokemonData.list.find(d => d.hidden && RPD.UI.isSecret(d.id));
+  F.place(open[1].index, RPD.UnitManager.create(hid.id));
+  MH.show([hid.id], true);
+  if (MH.slots().length) throw new Error('모르는 히든 재료 칸이 반짝인다');
+  MH.clear();
+  // 모자란 줄을 누르면(손가락) 1.6초 힌트 · 완성 가능 줄은 조합
+  const l = listeners.recipeList.click;
+  const fake = { dataset: { result: 'drowzee', key: 'drowzee' }, classList: { contains: () => false, add() {}, remove() {} }, offsetWidth: 0 };
+  l.forEach(fn => fn({ target: { closest: sel => (sel === '.rrow' ? fake : null) } }));
+  if (!MH.isBusy() || MH.hold || JSON.stringify(MH.list) !== JSON.stringify([open[0].index])) throw new Error('모자란 줄을 눌러도 힌트가 없다 ' + JSON.stringify({ busy: MH.isBusy(), hold: MH.hold, list: MH.list }));
+  if (!listeners.recipeList.pointerover || !listeners.recipeList.pointerleave) throw new Error('가리키기 힌트가 없다');
+  MH.clear();
+  // 다음 목표 — 추천 1위 전설 · 재료가 다 있으면 "조합 가능!"
+  RPD.SpellData.list.forEach(sp => { RPD.SaveManager.data.spells[sp.id] = 1; });
+  ['vulpix', 'rapidash', 'magmar'].forEach(id => RPD.StorageManager.add(RPD.UnitManager.create(id)));
+  RPD.RecipeManager.refresh();
+  RPD.LegendAdvisor.invalidate(); RPD.LegendAdvisor.compute();
+  RPD.LegendAdvisorUI.renderGoal();
+  const g = String(nodes.btnLegend.innerHTML);
+  if (g.indexOf('다음 목표') < 0 || g.indexOf(RPD.PokemonData.get('ninetales').name) < 0 || g.indexOf('조합 가능') < 0) throw new Error('다음 목표 줄: ' + g.replace(/<[^>]+>/g, ' '));
+  // 1위를 고르는 계산은 라운드 끝 · 조합 · 주문 뒤에만(소환마다 안 한다)
+  const src = fs.readFileSync(path.join(ROOT, 'js/ui/LegendAdvisorUI.js'), 'utf8');
+  if (!/\['wave:cleared', 'recipe:crafted', 'spell:cast'\]\.forEach\(function \(ev\) \{ RPD\.bus\.on\(ev, goalLater\); \}\)/.test(src)) throw new Error('다음 목표 계산 시점이 바뀌었다');
+  RPD.LegendAdvisor.invalidate(); RPD.LegendAdvisorUI.renderGoal();
+  if (String(nodes.btnLegend.innerHTML).indexOf('전설 추천') < 0) throw new Error('추천 전에는 [★ 전설 추천] 버튼이어야 한다');
+});
+
 /* ---------- 전설 추천(세션 78) ---------- */
 console.log('\n전설 추천 — LegendAdvisor');
 const LA = RPD.LegendAdvisor;

@@ -43,6 +43,7 @@ self.PRECACHE = {
   "js/render/FramePacer.js",
   "js/render/FxRenderer.js",
   "js/render/MapRenderer.js",
+  "js/render/MatHint.js",
   "js/render/Renderer.js",
   "js/render/SpriteFactory.js",
   "js/render/UnitRenderer.js",

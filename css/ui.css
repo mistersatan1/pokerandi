@@ -367,8 +367,9 @@
   border: 2px solid var(--gold);
   background: linear-gradient(90deg, rgba(255, 201, 60, 0.16), rgba(255, 201, 60, 0.04)), var(--panel-2);
   box-shadow: 0 0 0 1px rgba(255, 201, 60, 0.25), 0 0 16px rgba(255, 201, 60, 0.18);
-  animation: readyGlow 1.8s ease-in-out infinite;
 }
+/* 막 완성 가능해진 줄만 두 번 반짝이고 멈춘다(세션 89 — 예전엔 완성 가능 줄 전부가 계속 숨 쉬었다) */
+.rrow.is-ready.is-fresh { animation: readyGlow 0.9s ease-in-out 2; }
 .rrow.is-ready:active { transform: scale(0.98); }
 .rrow.is-crafting { animation: craftFlash .25s ease-out; }
 .rrow.is-nope { animation: nope .3s; }
@@ -391,7 +392,7 @@
 /* 테두리 색은 오직 등급을 뜻한다. 재료가 없다는 건 흑백과 수치로 말한다 —
  * 빨간 테두리를 겹치면 등급색과 섞여 읽기 어려워진다. */
 .rmat.is-owned .rmat__n { color: var(--ok); }
-.rmat.is-missing .spr { opacity: 0.55; }
+.rmat.is-missing .spr { opacity: 0.55; border-style: dashed; background: transparent; }   /* 빈 홈 — 테두리 색은 그대로 등급(세션 89) */
 .rmat.is-missing .spr img { filter: grayscale(1) brightness(0.7); }
 .rmat.is-missing .rmat__n { color: var(--faint); }
 
@@ -405,8 +406,10 @@
 .rres__tier { color: var(--tier); font-size: 10px; font-weight: 900; }
 
 .rrow__state { justify-self: end; white-space: nowrap; }
-.rprog { color: var(--muted); font-size: 13px; }
-.rprog b { color: var(--text); font-size: 15px; }
+/* 재료 진행 칸(세션 89) — 모은 칸은 결과 등급색, 남은 칸은 빈 홈 */
+.rprog { display: inline-flex; gap: 3px; align-items: center; vertical-align: middle; }
+.rprog i { width: 9px; height: 13px; border-radius: 3px; border: 1.5px solid var(--line-2); background: var(--inset); }
+.rprog i.is-on { border-color: var(--tier); background: var(--tier); box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.25); }
 .rready {
   display: inline-block;
   padding: 4px 8px; border-radius: 8px;

@@ -233,7 +233,7 @@
           var sp = row.dataset.spell ? RPD.SpellData.get(row.dataset.spell) : RPD.SpellData.list[+row.dataset.spellN];
           // 문구를 다시 안 쳐도 바로 조합한다(일반 조합식과 같은 손맛). 미발견 줄도 같다 — 첫 발견 연출은 SpellManager 의 spell:cast(firstTime)
           if (row.classList.contains('is-ready')) { row.classList.add('is-crafting'); RPD.SpellManager.cast(sp.phrase); }
-          else { row.classList.remove('is-nope'); void row.offsetWidth; row.classList.add('is-nope'); }
+          else { row.classList.remove('is-nope'); void row.offsetWidth; row.classList.add('is-nope'); hintRow(row, false); }
           return;
         }
         if (!row || !row.dataset.result) return;
@@ -244,7 +244,26 @@
           row.classList.remove('is-nope');
           void row.offsetWidth;
           row.classList.add('is-nope');
+          hintRow(row, false);   // 모자란 줄을 누르면 가진 재료가 필드 어디에 있는지 1.6초(손가락 — 가리키기가 없다)
         }
+      });
+    }
+
+    /* 조합식 줄 ↔ 필드 재료 칸(리디자인 ⑤ · 세션 89) — 마우스로 가리키는 동안 그 줄의 재료 칸이 필드에서 반짝인다.
+     * 손가락은 가리키기가 없어(누르면 가짜 mouseover 가 남는다) 마우스만 — 손가락은 위 클릭에서 1.6초 */
+    if (el.recipeList && el.recipeList.addEventListener) {
+      var hintCur = null;
+      el.recipeList.addEventListener('pointerover', function (e) {
+        if (e.pointerType && e.pointerType !== 'mouse') return;
+        var row = e.target.closest && e.target.closest('.rrow');
+        if (row === hintCur) return;
+        hintCur = row;
+        if (row) hintRow(row, true); else if (RPD.MatHint) RPD.MatHint.clear();
+      });
+      el.recipeList.addEventListener('pointerleave', function (e) {
+        if (e.pointerType && e.pointerType !== 'mouse') return;
+        hintCur = null;
+        if (RPD.MatHint && RPD.MatHint.hold) RPD.MatHint.clear();
       });
     }
 
@@ -2266,10 +2285,43 @@
           (v.routeCount > 1 ? '<span class="rres__route" title="같은 결과를 다른 재료로도 만들 수 있다">경로 ' + (v.route + 1) + '</span>' : '') +
         '</span>' +
         '<span class="rrow__state">' +
-          (v.ready ? '<span class="rready">★ 조합 가능!</span>' : '<span class="rprog"><b>' + have + '</b>/' + v.materials.length + '</span>') +
+          (v.ready ? '<span class="rready">★ 조합 가능!</span>' : progPips(have, v.materials.length)) +
         '</span>' +
       '</button>';
     }).join('');
+    /* 완성 가능 줄은 "막 완성 가능해졌을 때" 한 번만 반짝이고 멈춘다(예전: 늘 숨쉬기 — 11줄이면 목록 전체가 깜빡였다) */
+    var nowReady = {};
+    all.forEach(function (v) { if (v.ready) nowReady[v.key] = true; });
+    var nodes = el.recipeList.querySelectorAll ? el.recipeList.querySelectorAll('.rrow.is-ready') : [];
+    for (var ni = 0; ni < nodes.length; ni++) {
+      var dn = nodes[ni].dataset, spN = dn.spellN != null ? RPD.SpellData.list[+dn.spellN] : null;
+      var k = dn.key || (dn.spell ? 'spell:' + dn.spell : spN ? 'spell:' + spN.id : '');
+      if (!recipeReadyPrev[k]) nodes[ni].classList.add('is-fresh');
+    }
+    recipeReadyPrev = nowReady;
+  }
+  var recipeReadyPrev = {};
+
+  /* 재료 진행을 칸으로 — "1/3" 글자 대신 3칸 중 1칸이 찬 모양(리디자인 ⑤ · 세션 89). 숫자는 읽어 주기 · 말풍선에 */
+  function progPips(have, total) {
+    var s = '';
+    for (var i = 0; i < total; i++) s += '<i' + (i < have ? ' class="is-on"' : '') + '></i>';
+    return '<span class="rprog" title="재료 ' + have + '/' + total + '" aria-label="재료 ' + have + '/' + total + '">' + s + '</span>';
+  }
+
+  function hintRow(row, hold) {
+    var ids = rowMaterials(row);
+    if (ids && RPD.MatHint) RPD.MatHint.show(ids, hold);
+  }
+  /* 조합식 줄의 재료 id — 필드 재료 칸 힌트(RPD.MatHint)용 */
+  function rowMaterials(row) {
+    if (!row) return null;
+    if (row.dataset.spell) { var sp = RPD.SpellData.get(row.dataset.spell); return sp ? sp.materials : null; }
+    if (row.dataset.spellN != null) { var sn = RPD.SpellData.list[+row.dataset.spellN]; return sn ? sn.materials : null; }
+    var key = row.dataset.key || row.dataset.result;
+    if (!key) return null;
+    var r = (key.indexOf('#') > 0 && RPD.RecipeData.byRouteKey(key)) || RPD.RecipeData.routesOf(key)[0];
+    return r ? r.materials : null;
   }
 
   /* 필드 조합식의 히든 줄 — [전체] · 등급 칩에는 발견한 것만, [히든] 칩에는 미발견도(결과만 그림자 + ???).
@@ -2313,7 +2365,7 @@
         '<span class="rres__route">' + kind + '</span></span>' +
       '<span class="rrow__state">' +
         '<span class="rspell" title="주문 「' + sp.phrase + '」 — 채팅으로 직접 외쳐도 된다">「' + sp.phrase + '」</span>' +
-        (v.ready ? '<span class="rready">★ 조합 가능!</span>' : '<span class="rprog"><b>' + have + '</b>/' + v.materials.length + '</span>') +
+        (v.ready ? '<span class="rready">★ 조합 가능!</span>' : progPips(have, v.materials.length)) +
       '</span>' +
     '</button>';
   }

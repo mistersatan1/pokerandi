@@ -17,6 +17,8 @@ function prep(opt) {
   const R = window.RPD;
   if (R.TutorialManager && R.TutorialManager.skip) R.TutorialManager.skip();
   document.querySelectorAll('.modepick, .result, .help, .book').forEach(o => o.hidden = true);
+  // 판 시작 때 무작위로 받는 흔함이 응원 가능 종이면 첫 획득 알림이 정보 바를 덮어 (d) 가 가끔 떨어졌다(세션 88) — 알림은 (f) 에서만 본다
+  if (R.SaveManager && R.SaveManager.data) R.SaveManager.data.settings.cheerTipShown = true;
   R.Game.resetAll('NORMAL', 'NORMAL'); R.Game.startRun('NORMAL', 'NORMAL');
   R.GameManager.setWave(opt.wave); R.WaveManager.startRound(opt.wave);
   const F = R.FieldManager;

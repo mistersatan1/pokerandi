@@ -1636,6 +1636,22 @@ run('정보 카드가 필드 클릭을 막지 않는다', () => {
   if (block.indexOf('pointer-events: none') < 0) throw new Error('카드가 클릭을 가로챈다');
 });
 
+run('질감 토큰(세션 90) — 하드 섀도는 토큰으로 · 패널 · 배경 장식 그라데이션 없음 · 다음 목표 그림 크기 · 가로 화면 탭 시트는 전체 너비', () => {
+  const css = ['main', 'game', 'ui', 'mobile'].map(f => fs.readFileSync(path.join(ROOT, 'css/' + f + '.css'), 'utf8'));
+  const main = css[0], all = css.join('\n');
+  ['--edge', '--press-1', '--press-2', '--press-3'].forEach(t => { if (main.indexOf(t + ':') < 0) throw new Error(t + ' 토큰이 없다'); });
+  if (!/--shadow-panel:[^;]*0 0 0 1px var\(--edge\)[^;]*0 4px 0/.test(main) || /--shadow-panel:[^;]*\d+px \d+px rgba/.test(main.replace(/0 4px 0 rgba/, ''))) throw new Error('패널 그림자가 하드 섀도가 아니다');
+  const raw = all.match(/box-shadow: 0 [2-4]px 0 var\(--inset\)/g);
+  if (raw) throw new Error('토큰 밖 누르기 그림자 ' + raw.length + '곳');
+  const body = main.slice(main.indexOf('\nbody {'), main.indexOf('}', main.indexOf('\nbody {')));
+  if (/gradient/.test(body)) throw new Error('배경에 장식 그라데이션');
+  const pane = css[2].slice(css[2].indexOf('.pane {'), css[2].indexOf('}', css[2].indexOf('.pane {')));
+  if (/gradient/.test(pane)) throw new Error('패널에 장식 그라데이션');
+  if (!/\.spr\.spr--goal \{ width: 24px; height: 24px;/.test(css[1])) throw new Error('다음 목표 그림이 .spr(40px)에 덮인다');
+  const ms = fs.readFileSync(path.join(ROOT, 'js/ui/MobileSheet.js'), 'utf8');
+  if (!/var next = setDrawer\.apply\(H, arguments\); if \(next\) M\.setSize\(landscape\(\) \? 'full' : 'half'\)/.test(ms)) throw new Error('가로 화면 탭 시트가 절반 너비(약 175px)로 열린다');
+});
+
 /* ---------- 모바일 ① — 필드를 돌렸을 때 칸 누르기 (세션 51) ---------- */
 console.log('\n모바일 필드 회전');
 {

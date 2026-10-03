@@ -45,7 +45,13 @@
 
   --font: "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, -apple-system, sans-serif;
 
-  --shadow-panel: 0 1px 0 rgba(255,255,255,0.05) inset, 0 6px 18px rgba(2, 8, 24, 0.45);
+  /* 질감 토큰(리디자인 ⑥ · 세션 90) — "도트 게임 장비": 흐린 그림자 대신 외곽선 + 아래로 떨어지는 하드 섀도(번짐 없음).
+   * 누르는 것(버튼 · 칩)은 --press-*, 판(패널 · HUD 칩)은 --shadow-panel. 그림자 색은 하나(--edge) — 예전엔 --inset · 패널색 · 등급색이 섞였다. */
+  --edge:    #030918;
+  --press-1: 0 2px 0 var(--edge);
+  --press-2: 0 3px 0 var(--edge);
+  --press-3: 0 4px 0 var(--edge);
+  --shadow-panel: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 1px var(--edge), 0 4px 0 rgba(3, 9, 24, 0.7);
 }
 
 * { box-sizing: border-box; }
@@ -53,9 +59,7 @@
 html, body { height: 100%; margin: 0; }
 
 body {
-  background:
-    radial-gradient(1400px 600px at 50% -20%, #173067 0%, transparent 60%),
-    var(--bg);
+  background: var(--bg);   /* 장식 그라데이션 없음(세션 90) — 필드와 그림이 주인공 */
   color: var(--text);
   font-family: var(--font);
   font-size: 14px;

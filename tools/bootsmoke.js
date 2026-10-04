@@ -587,6 +587,40 @@ check('조각 상점 탭에서 실제로 살 수 있다', () => {
   clickTab('all');
 });
 
+check('조각 상점(세션 93) — 등급 순(흔함 → 전설) 머리 줄 · 검색(이름 · 초성 · 영어 · 등급) · 검색칸은 한 번만 만든다', () => {
+  RPD.GameManager.setWave(40);
+  RPD.ShardManager.reset(); RPD.ShardManager.add(400, 'test');
+  RPD.RecipeManager.refresh();
+  clickTab('shards');
+  const tierOf = id => RPD.PokemonData.get(id).tier;
+  const ids = h => [...h.matchAll(/data-buy="([a-z_0-9]+)"/g)].map(m => m[1]);
+  const list = panelHtml('recipeList');
+  const order = ids(list).map(id => RPD.TIER_ORDER.indexOf(tierOf(id)));
+  for (let i = 1; i < order.length; i++) if (order[i] < order[i - 1]) throw new Error('등급 순이 아니다 ' + ids(list)[i]);
+  const heads = [...list.matchAll(/<div class="shopgroup"[^>]*><b>([^<]+)<\/b>/g)].map(m => m[1]);
+  const tiersShown = [...new Set(ids(list).map(tierOf))].map(t => RPD.Tiers[t].label);
+  if (JSON.stringify(heads) !== JSON.stringify(tiersShown)) throw new Error('등급 머리 줄 ' + heads + ' / ' + tiersShown);
+  const tf = panelHtml('tierFilter');
+  if ((tf.match(/id="shardSearch"/g) || []).length !== 1) throw new Error('검색칸이 없다');
+  const search = q => {
+    (listeners.tierFilter.input || []).forEach(fn => fn({ target: { id: 'shardSearch', value: q } }));
+    return ids(panelHtml('recipeList'));
+  };
+  let r = search('파이리'); if (r.indexOf('charmander') < 0 || r.length > 3) throw new Error('이름 검색 ' + r);
+  r = search('ㅍㅇㄹ'); if (r.indexOf('charmander') < 0) throw new Error('초성 검색 ' + r);
+  r = search('squirtle'); if (JSON.stringify(r) !== '["squirtle"]') throw new Error('영어 검색 ' + JSON.stringify(r));
+  r = search('전설'); if (!r.length || r.some(id => tierOf(id) !== 'T5')) throw new Error('등급 검색 ' + r);
+  r = search('없는포켓몬'); if (r.length || panelHtml('recipeList').indexOf('맞는 포켓몬이 없습니다') < 0) throw new Error('빈 결과 안내');
+  // 사도 검색칸은 그대로(다시 만들면 치던 글자 · 초점이 날아간다)
+  search('파이리');
+  const before = panelHtml('tierFilter');
+  (listeners.recipeList.click || []).forEach(fn => fn({ target: { closest: sel => (sel === '.shoprow' ? { dataset: { buy: 'charmander' } } : null) } }));
+  if (panelHtml('tierFilter') !== before) throw new Error('구매 뒤 검색칸을 다시 만들었다');
+  search('');
+  clickTab('all');
+  if (panelHtml('tierFilter').indexOf('shardSearch') >= 0) throw new Error('조합식 탭에 검색칸이 남았다');
+});
+
 check('선택한 칸을 창고로 보낼 수 있다', () => {
   clickTab('all');
   RPD.StorageManager.reset();

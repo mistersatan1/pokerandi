@@ -619,6 +619,13 @@
 .shoprow:hover:not(:disabled) { background: var(--panel-3); border-color: var(--line-2); }
 .shoprow:active:not(:disabled) { transform: translateY(2px); }
 .shoprow:disabled { opacity: 0.5; }
+/* 조각 상점 검색 · 등급 머리 줄(세션 93) */
+.pane--recipes.is-shop .legendbar { display: none; }
+.tierfilter > .shopsearch { flex: 1 1 auto; }
+.shopsearch { flex: 1; min-width: 0; padding: 5px 10px; border-radius: 9px; border: 1px solid var(--line-2); background: var(--inset); color: var(--text); font: 700 13px var(--font); }
+.shopsearch:focus { outline: 2px solid var(--gold); outline-offset: 0; }
+.shopgroup { display: flex; align-items: baseline; gap: 6px; padding: 6px 4px 1px; color: var(--tier); font-size: 12px; font-weight: 900; border-bottom: 1px solid color-mix(in srgb, var(--tier) 35%, transparent); }
+.shopgroup small { color: var(--muted); font-size: 10.5px; font-weight: 700; }
 .shoprow.is-need { box-shadow: inset 0 0 0 1px rgba(94, 224, 138, 0.55); }
 .shoprow .spr { width: 42px; height: 42px; border-radius: 10px; border: 2px solid var(--tier); }
 .shoprow__main { display: grid; min-width: 0; }

@@ -292,5 +292,16 @@
     RPD.bus.on('recipe:crafted', function () { if (!el.overlay.hidden) render(); });
   };
 
+  /* 이름 찾기 — 이름 · 영어 id · 초성(ㅍㅇㄹ → 파이리) · 등급 이름. 조각 상점 검색(세션 93)도 같이 쓴다 */
+  Book.nameMatch = function (def, query) {
+    var q = String(query || '').trim().toLowerCase().replace(/\s+/g, '');
+    if (!q) return true;
+    var name = def.name.replace(/\s+/g, '');
+    if (name.indexOf(q) >= 0 || def.id.indexOf(q) >= 0) return true;
+    if (isChoOnly(q) && choseong(name).indexOf(q) >= 0) return true;
+    var tier = RPD.Tiers[def.tier];
+    return !!(tier && tier.label.indexOf(q) >= 0);
+  };
+
   RPD.RecipeBook = Book;
 })(typeof window !== 'undefined' ? window : globalThis);

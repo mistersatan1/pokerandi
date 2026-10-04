@@ -311,6 +311,11 @@
     }
 
     if (el.tierFilter) {
+      el.tierFilter.addEventListener('input', function (e) {   // 조각 상점 검색칸(세션 93)
+        if (!e.target || e.target.id !== 'shardSearch') return;
+        shardQuery = e.target.value;
+        if (recipeFilter === 'shards') renderShardShop();
+      });
       el.tierFilter.addEventListener('click', function (e) {
         var b = e.target.closest('.tchip');
         if (!b) return;
@@ -1777,9 +1782,22 @@
     if (icon) node.insertBefore(icon, node.firstChild);
   }
 
+  /* 조각 상점(세션 93) — 등급 순(흔함 → 전설)으로 묶고 등급마다 머리 줄. 같은 등급 안에서는 조합에 바로 필요 → 곧 필요 → 값 → 이름.
+   * 위 등급 칩 줄 자리에 검색칸(이름 · 초성 · 영어 · 등급 이름 — RecipeBook.nameMatch). 칸은 한 번만 만들어 글자를 치는 동안 초점이 안 빠진다. */
+  var shardQuery = '';
+  /* 조각 상점일 때는 조합식 패널의 "다음 목표 · 전설 추천" 줄을 접는다 — 상점과 상관없고, 휴대폰 절반 시트에서 상점 줄이 하나도 안 보였다 */
+  function shopMode(on) {
+    var pane = el.recipeList && el.recipeList.parentNode;
+    if (pane && pane.classList) pane.classList.toggle('is-shop', !!on);
+  }
   function renderShardShop() {
     setRecipeTitle('조각 상점');
-    if (el.tierFilter) el.tierFilter.innerHTML = '';
+    if (el.tierFilter && el.tierFilter.classList) el.tierFilter.classList.add('is-shop');   // 휴대폰 절반 시트에서도 검색칸은 보이게
+    shopMode(true);
+    if (el.tierFilter && String(el.tierFilter.innerHTML).indexOf('id="shardSearch"') < 0) {
+      el.tierFilter.innerHTML = '<input type="search" class="shopsearch" id="shardSearch" placeholder="이름 · 초성(ㅍㅇㄹ) · 영어 · 등급" aria-label="조각 상점 검색" autocomplete="off" value="' +
+        String(shardQuery).replace(/[&<>"]/g, '') + '">';
+    }
     var SH = RPD.ShardManager;
     var UI = RPD.UI;
     var needed = RPD.RecipeManager.missingMaterials(1);
@@ -1797,14 +1815,13 @@
         tierIdx: RPD.TIER_ORDER.indexOf(def.tier)
       };
     }).filter(function (r) {
-      // 아직 열리지 않은 등급은 목록에 두되 맨 뒤로 — 무엇이 열릴지는 보여 준다
-      return true;
+      return !RPD.RecipeBook || !RPD.RecipeBook.nameMatch || RPD.RecipeBook.nameMatch(r.def, shardQuery);
     }).sort(function (a, b) {
+      if (a.tierIdx !== b.tierIdx) return a.tierIdx - b.tierIdx;   // 흔함 → 전설
       if (a.need !== b.need) return a.need ? -1 : 1;
       if (a.soon !== b.soon) return a.soon ? -1 : 1;
-      if (a.state.ok !== b.state.ok) return a.state.ok ? -1 : 1;
-      if (a.tierIdx !== b.tierIdx) return b.tierIdx - a.tierIdx;
-      return a.state.price - b.state.price;
+      if (a.state.price !== b.state.price) return a.state.price - b.state.price;
+      return a.def.name.localeCompare(b.def.name);
     });
 
     if (el.recipeCount) {
@@ -1814,20 +1831,33 @@
 
     recipeSig = '';   // 탭을 되돌아오면 조합식을 다시 그린다
 
+    if (!rows.length) {
+      el.recipeList.innerHTML = '<p class="empty">"' + String(shardQuery).replace(/[&<>"]/g, '') + '" 에 맞는 포켓몬이 없습니다.</p>';
+      return;
+    }
+    var counts = {};
+    rows.forEach(function (r) { counts[r.def.tier] = (counts[r.def.tier] || 0) + 1; });
+    var lastTier = null;
     el.recipeList.innerHTML = rows.map(function (r) {
       var t = RPD.Tiers[r.def.tier];
+      var head = '';
+      if (r.def.tier !== lastTier) {
+        lastTier = r.def.tier;
+        head = '<div class="shopgroup" style="--tier:' + t.color + '"><b>' + t.label + '</b><small>' + counts[r.def.tier] + '종</small></div>';
+      }
       var why = r.state.ok ? ''
         : r.state.reason === 'LOCKED' ? r.state.unlockRound + '라운드부터'
         : r.state.reason === 'NO_ROOM' ? '자리 없음'
         : '조각 부족';
-      return '<button type="button" class="shoprow' + (r.state.ok ? ' is-buyable' : '') +
+      return head + '<button type="button" class="shoprow' + (r.state.ok ? ' is-buyable' : '') +
         (r.need ? ' is-need' : '') + '" data-buy="' + r.def.id + '" style="--tier:' + t.color + '"' +
         (r.state.ok ? '' : ' disabled') + '>' +
         UI.sprite(r.def, 'spr--shop') +
         '<span class="shoprow__main">' +
           '<span class="shoprow__name">' + r.def.name + '</span>' +
           '<span class="shoprow__tier">' + t.label + (r.need ? ' · 조합에 바로 필요' : (r.soon ? ' · 곧 필요' : '')) +
-            (r.active ? '' : ' · 이번 판 소환 안 됨') + '</span>' +
+            // 예전 "이번 판 소환 안 됨"은 판마다 계열을 뽑던 시절 것 — r.active 를 아무도 안 채워 모든 줄에 붙었다(세션 93에 고침)
+            (r.def.summon ? '' : ' · 소환으로 안 나옴') + '</span>' +
         '</span>' +
         '<span class="shoprow__price"><span class="shoprow__gem">◆</span>' + r.state.price + '</span>' +
         (why ? '<span class="shoprow__why">' + why + '</span>' : '<span class="shoprow__why is-ok">구매</span>') +
@@ -2118,6 +2148,8 @@
    * 한 줄로 늘어놓으면 "전설만 보고 싶다"가 불가능하다. */
   function renderTierFilter() {
     if (!el.tierFilter) return;
+    if (el.tierFilter.classList) el.tierFilter.classList.remove('is-shop');
+    shopMode(false);
     var counts = {};
     RPD.RecipeManager.view.forEach(function (v) {
       counts[v.resultTier] = (counts[v.resultTier] || 0) + 1;

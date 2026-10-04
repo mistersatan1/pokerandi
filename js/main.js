@@ -49,6 +49,7 @@
     if (RPD.BossIntro) RPD.BossIntro.init();
     if (RPD.CraftFx) RPD.CraftFx.init();
     if (RPD.MatHint) RPD.MatHint.init();
+    if (RPD.SkillFx) RPD.SkillFx.init();
     RPD.UnitRenderer.init();
     if (RPD.AttackFx) RPD.AttackFx.init();
 
@@ -102,6 +103,7 @@
     if (RPD.AttackFx) RPD.Renderer.addLayer(L.PROJECTILES + 1, function (ctx) { RPD.AttackFx.draw(ctx); });
     RPD.Renderer.addLayer(L.FX, function (ctx) { RPD.FxRenderer.draw(ctx); });
     if (RPD.CraftFx) RPD.Renderer.addLayer(L.FX + 3, function (ctx) { RPD.CraftFx.draw(ctx); });   // 조합 · 소환 연출(세션 87)
+    if (RPD.SkillFx) RPD.Renderer.addLayer(L.FX + 1, function (ctx) { RPD.SkillFx.draw(ctx); });   // 스킬별 고유 연출(세션 94)
     if (RPD.MatHint) RPD.Renderer.addLayer(L.FX + 2, function (ctx) { RPD.MatHint.draw(ctx); });   // 조합식 줄 ↔ 필드 재료 칸(세션 89)
     if (RPD.BossIntro) RPD.Renderer.addLayer(L.FX + 5, function (ctx) { RPD.BossIntro.draw(ctx); });   // 보스 등장 · 처치 비네팅(세션 86)
     RPD.Renderer.addLayer(L.OVERLAY, function (ctx) { RPD.EnemyRenderer.drawBossBar(ctx); });

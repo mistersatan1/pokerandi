@@ -69,6 +69,24 @@ async function run(browser) {
         hscroll: document.documentElement.scrollWidth > window.innerWidth + 1 };
     });
     await p.screenshot({ path: OUT('34_token_' + mode) });
+    // 숫자 도트 폰트(세션 92) — PC 에서 HUD 를 2배로 확대해 모든 숫자 · 기호를 찍는다
+    if (mode === 'pc') {
+      const zc = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
+      const zp = await zc.newPage();
+      await zp.goto(URL); await zp.waitForTimeout(800);
+      await zp.evaluate(prep, { field: FIELD, store: STORE });
+      const font = await zp.evaluate(() => {
+        window.RPD.Loop.setPaused(true);
+        document.querySelector('.chip--gold .chip__num').textContent = '1,234,567,890';
+        document.querySelector('.chip--life .chip__num').textContent = '12.5K/3M';
+        return document.fonts.check('30px PorandiDigits', '0123456789');
+      });
+      await zp.waitForTimeout(200);
+      await zp.screenshot({ path: OUT('34_token_digits'), clip: { x: 50, y: 12, width: 900, height: 52 } });
+      if (!font) bad('숫자 도트 폰트가 안 불렸다');
+      m.digitFont = font;
+      await zc.close();
+    }
     report[mode] = m;
     if (m.hscroll) bad('가로 스크롤');
     if (errs.length) bad('페이지 오류 ' + errs[0]);

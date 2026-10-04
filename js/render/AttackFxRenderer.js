@@ -184,6 +184,8 @@
     });
 
     RPD.bus.on('unit:skill', function (p) {
+      // 고유 연출이 있는 스킬은 SkillFx(세션 94)가 그린다 — 여기 평타 확대 연출은 표에 없는 스킬만
+      if (RPD.SkillFx && RPD.SkillFx.handles && RPD.SkillFx.handles(p && p.skill)) return;
       if (p && p.unit) AttackFx.skill(p.unit, p.target || null);
     });
   };

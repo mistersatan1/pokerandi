@@ -138,6 +138,9 @@
 .chip__label { color: var(--muted); font-size: 13px; font-weight: 800; }
 /* 라운드 · 라이프 · 골드 숫자는 화면에서 가장 크고 굵게 + 하드 섀도(세션 90 — 장비 계기판 숫자처럼) */
 .chip__num { font-size: 27px; font-weight: 900; letter-spacing: -0.02em; line-height: 1; text-shadow: 0 2px 0 var(--edge); }
+/* 숫자 도트 폰트(세션 92 · css/main.css 의 PorandiDigits) — 한 칸 = 0.1em 이라 30px 이면 3px 도트. 굵게 흉내(가짜 볼드)는 도트를 뭉개니 끈다 */
+.chip__num, .summon__cost { font-family: var(--font-num); font-synthesis: none; letter-spacing: 0; }
+.chip__num { font-size: 30px; }
 .chip__sub { font-size: 11px; font-weight: 800; }
 .chip--round .chip__num { min-width: 1.4em; }
 .chip--life .chip__num { color: #fff; }
@@ -199,7 +202,7 @@
 @media (max-height: 820px) {
   .chip, .speed, .iconbtn { height: 40px; }
   .iconbtn { width: 40px; }
-  .chip__num { font-size: 24px; }
+  .chip__num { font-size: 25px; }
 }
 
 /* ================= 포켓몬 그림 ================= */
@@ -616,6 +619,13 @@
 .shoprow:hover:not(:disabled) { background: var(--panel-3); border-color: var(--line-2); }
 .shoprow:active:not(:disabled) { transform: translateY(2px); }
 .shoprow:disabled { opacity: 0.5; }
+/* 조각 상점 검색 · 등급 머리 줄(세션 93) */
+.pane--recipes.is-shop .legendbar { display: none; }
+.tierfilter > .shopsearch { flex: 1 1 auto; }
+.shopsearch { flex: 1; min-width: 0; padding: 5px 10px; border-radius: 9px; border: 1px solid var(--line-2); background: var(--inset); color: var(--text); font: 700 13px var(--font); }
+.shopsearch:focus { outline: 2px solid var(--gold); outline-offset: 0; }
+.shopgroup { display: flex; align-items: baseline; gap: 6px; padding: 6px 4px 1px; color: var(--tier); font-size: 12px; font-weight: 900; border-bottom: 1px solid color-mix(in srgb, var(--tier) 35%, transparent); }
+.shopgroup small { color: var(--muted); font-size: 10.5px; font-weight: 700; }
 .shoprow.is-need { box-shadow: inset 0 0 0 1px rgba(94, 224, 138, 0.55); }
 .shoprow .spr { width: 42px; height: 42px; border-radius: 10px; border: 2px solid var(--tier); }
 .shoprow__main { display: grid; min-width: 0; }
@@ -756,6 +766,23 @@
 .rp__label { margin: 10px 0 5px; color: var(--muted); font-size: 11px; font-weight: 800; }
 .rp__label span { color: var(--faint); }
 .rp__note { margin: 4px 0 0; color: var(--faint); font-size: 12px; }
+/* 조합식 창 "◆ 조각으로 사기"(세션 95) */
+.rp__shard { margin-top: 6px; padding: 6px; border-radius: 10px; background: var(--inset); border: 1px solid rgba(127, 227, 255, 0.25); }
+.rp__shardHd { display: flex; justify-content: space-between; align-items: baseline; margin: 0 0 4px; color: #7fe3ff; font-size: 12px; font-weight: 900; }
+.rp__shardHd small { color: var(--muted); font-weight: 700; }
+.rp__shardRow { display: flex; flex-wrap: wrap; gap: 4px; }
+.rp__buy { display: grid; grid-template-columns: auto auto; grid-template-rows: auto auto; column-gap: 4px; align-items: center; padding: 3px 8px 3px 3px;
+  border-radius: 9px; border: 1px solid var(--line-2); background: var(--panel-2); box-shadow: var(--press-1); color: var(--text); text-align: left; }
+.rp__buy .spr { grid-row: 1 / 3; width: 30px; height: 30px; }
+.rp__buyName { font-size: 11.5px; font-weight: 800; white-space: nowrap; }
+.rp__buyName small { color: var(--muted); }
+.rp__buyPrice { font-family: var(--font-num); font-synthesis: none; font-size: 12px; color: #7fe3ff; }
+.rp__buyWhy { grid-column: 1 / -1; font-size: 10px; color: var(--faint); }
+.rp__buy.is-ok { border-color: rgba(127, 227, 255, 0.6); }
+.rp__buy.is-ok:hover { filter: brightness(1.15); }
+.rp__buy.is-ok:active { transform: translateY(2px); box-shadow: none; }
+.rp__buy:disabled { opacity: 0.55; cursor: not-allowed; }
+.rp__buyAll { margin-top: 5px; background: linear-gradient(180deg, #67d8ff, #2f9fd8); color: #04263a; border-color: rgba(255,255,255,.35); box-shadow: 0 3px 0 #175f80; }
 .rp__recipe { display: flex; align-items: stretch; gap: 4px; flex-wrap: wrap; }
 .rp__recipe .rplus { align-self: center; }
 .rp__mat {

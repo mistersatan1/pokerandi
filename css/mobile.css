@@ -57,7 +57,7 @@
   .hud__brand, .hud__title { display: none; }
   .hud .chip { height: 34px; padding: 0 7px; gap: 4px; }
   .hud .chip__label { font-size: 11px; }
-  .hud .chip__num { font-size: 18px; }
+  .hud .chip__num { font-size: 20px; }
   .hud .gem { width: 17px; height: 17px; }
   .hud .speed { height: 34px; padding: 2px; }
   .hud .speed__btn { width: 30px; font-size: 13px; }
@@ -175,7 +175,7 @@
   .pane--recipes .pane__head .tabs { order: 0; flex: 1 1 0; min-width: 0; overflow-x: auto; }
   .pane--recipes .pane__head .pane__count { display: none; }
   /* 절반 높이에서는 등급 칩을 접는다 — 탭 · 다음 목표 · 칩이 높이를 다 먹어 조합식 줄이 하나도 안 보였다(세션 89). 칩은 전체 높이에서 */
-  body[data-sheet="half"] .pane--recipes .tierfilter { display: none; }
+  body[data-sheet="half"] .pane--recipes .tierfilter:not(.is-shop) { display: none; }   /* 조각 상점 검색칸은 남긴다(세션 93) */
   body[data-sheet="peek"] .board > .book .book__card, body[data-sheet="peek"].is-slotsheet .slotcard { overflow: hidden; }
 
   /* 손잡이 — 맨 위 시트의 윗변(가로는 왼쪽 변)에 걸친다 */
@@ -260,6 +260,12 @@
   .mtab { min-height: 40px; }
   .pane--action .sidebtn { min-width: 40px; }
   .rf, .tchip, .tierfilter > * { min-height: 40px; min-width: 40px; }
+  .shopsearch { font-size: 16px; }   /* 16px 미만이면 아이폰이 누를 때 화면을 확대한다(세션 93) */
+  .rp__buy, .rp__buyAll { min-height: 40px; }   /* 조합식 창 조각 사기(세션 95) — 손가락 기준 */
+  /* 조합식 창을 촘촘하게 — 시트 안에서 "조각으로 사기"까지 한 화면에(세션 95). 사기 줄이 있으면 긴 안내 한 줄은 접는다 */
+  .rp__head .spr { width: 44px; height: 44px; }
+  .rp__mat .spr { width: 34px; height: 34px; }
+  .rp__note:has(+ .rp__shard) { display: none; }
   .pane--recipes .craftbtn, #btnDexOpen { min-height: 40px; }
   .slotcard__close { width: 40px; height: 40px; font-size: 22px; }
   .tgt__chip, .tgt__all { min-height: 40px; padding: 0 12px; }
@@ -309,7 +315,7 @@
   .hud .chip--odds * { font-size: 10px !important; }
   .hud__spacer { flex: 1 1 0; min-width: 0; }
   .hud .chip { padding: 0 6px; }
-  .hud .chip__num { font-size: 16px; }
+  .hud .chip__num { font-size: 18px; }
   .hud .chip--round .chip__label { display: none; }
   .hud .chip--round .chip__num::before { content: "R"; font-size: 11px; color: var(--muted); margin-right: 1px; }
   .hud .chip--round .chip__sub { display: none; }

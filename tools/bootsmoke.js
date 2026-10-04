@@ -621,6 +621,44 @@ check('조각 상점(세션 93) — 등급 순(흔함 → 전설) 머리 줄 · 
   if (panelHtml('tierFilter').indexOf('shardSearch') >= 0) throw new Error('조합식 탭에 검색칸이 남았다');
 });
 
+check('조합식 창에서 바로 조각 구매(세션 95) — 모자란 재료 칩 · 사면 그 자리에서 다시 그림 · 한 번에 사기 · 조각 부족은 막힘 · 히든 재료는 없음', () => {
+  RPD.GameManager.setWave(40);
+  RPD.FieldManager.init(); RPD.StorageManager.reset();
+  RPD.ShardManager.reset();
+  RPD.RecipeManager.refresh();
+  const pop = () => String(nodes.recipePop.innerHTML);
+  const clickPop = (sel, data) => (listeners.recipePop.click || []).forEach(fn => fn({ target: { closest: s2 => (s2.indexOf(sel) >= 0 ? { dataset: data } : null) } }));
+  // 재료 둘 다 없는 비숨김 조합식 하나(슬리프 = 캐이시 + 고오스)
+  RPD.UIManager.openRecipePop('drowzee');
+  let h = pop();
+  if (h.indexOf('조각으로 사기') < 0) throw new Error('조각 사기 줄이 없다');
+  if (!/data-buy="abra"[^>]*disabled/.test(h) || h.indexOf('조각 부족') < 0) throw new Error('조각이 없으면 막혀야 한다');
+  if (h.indexOf('data-buy-all') >= 0) throw new Error('조각이 없는데 한 번에 사기가 보인다');
+  RPD.ShardManager.add(200, 'test');
+  RPD.UIManager.openRecipePop('drowzee');
+  h = pop();
+  if (/data-buy="abra"[^>]*disabled/.test(h)) throw new Error('조각이 있는데 막혀 있다');
+  if (h.indexOf('data-buy-all="abra:1,gastly:1"') < 0) throw new Error('한 번에 사기가 없다 ' + (h.match(/data-buy-all="[^"]*"/) || ''));
+  const s0 = RPD.ShardManager.shards, n0 = RPD.FieldManager.getAllUnits().length + RPD.StorageManager.units.length;
+  clickPop('[data-buy]', { buy: 'abra' });
+  if (RPD.ShardManager.shards >= s0) throw new Error('조각이 안 줄었다');
+  if (RPD.FieldManager.getAllUnits().length + RPD.StorageManager.units.length !== n0 + 1) throw new Error('캐이시가 안 늘었다');
+  h = pop();
+  if (/data-buy="abra"/.test(h)) throw new Error('다 모인 재료 칩이 남았다');
+  if (!/data-buy="gastly"/.test(h)) throw new Error('남은 재료 칩이 사라졌다');
+  clickPop('[data-buy-all]', { buyAll: 'gastly:1' });
+  h = pop();
+  if (h.indexOf('조각으로 사기') >= 0 || h.indexOf('지금 조합하기') < 0) throw new Error('다 사면 조합하기 버튼이 떠야 한다');
+  // 히든 재료는 칩이 없다(조각 상점과 같은 규칙)
+  const hid = RPD.RecipeData.list.find(r => r.materials.some(m => RPD.PokemonData.get(m).hidden));
+  if (hid) {
+    RPD.UIManager.openRecipePop(hid.id);
+    const hh = pop(), hm = hid.materials.filter(m => RPD.PokemonData.get(m).hidden);
+    if (hm.some(m => hh.indexOf('data-buy="' + m + '"') >= 0)) throw new Error('히든 재료를 조각으로 팔고 있다');
+  }
+  nodes.recipePop.hidden = true;
+});
+
 check('선택한 칸을 창고로 보낼 수 있다', () => {
   clickTab('all');
   RPD.StorageManager.reset();

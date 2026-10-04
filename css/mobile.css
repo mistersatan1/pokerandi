@@ -261,6 +261,11 @@
   .pane--action .sidebtn { min-width: 40px; }
   .rf, .tchip, .tierfilter > * { min-height: 40px; min-width: 40px; }
   .shopsearch { font-size: 16px; }   /* 16px 미만이면 아이폰이 누를 때 화면을 확대한다(세션 93) */
+  .rp__buy, .rp__buyAll { min-height: 40px; }   /* 조합식 창 조각 사기(세션 95) — 손가락 기준 */
+  /* 조합식 창을 촘촘하게 — 시트 안에서 "조각으로 사기"까지 한 화면에(세션 95). 사기 줄이 있으면 긴 안내 한 줄은 접는다 */
+  .rp__head .spr { width: 44px; height: 44px; }
+  .rp__mat .spr { width: 34px; height: 34px; }
+  .rp__note:has(+ .rp__shard) { display: none; }
   .pane--recipes .craftbtn, #btnDexOpen { min-height: 40px; }
   .slotcard__close { width: 40px; height: 40px; font-size: 22px; }
   .tgt__chip, .tgt__all { min-height: 40px; padding: 0 12px; }

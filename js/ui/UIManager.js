@@ -289,9 +289,16 @@
 
     if (el.recipePop) {
       el.recipePop.addEventListener('click', function (e) {
-        var b = e.target.closest('[data-go], [data-back], [data-close], [data-craft]');
+        var b = e.target.closest('[data-go], [data-back], [data-close], [data-craft], [data-buy], [data-buy-all]');
         if (!b) return;
         var trail = recipePopTrail.slice();
+        if (b.dataset.buy || b.dataset.buyAll) {   // 조각으로 사기(세션 95) — 사고 그 자리에서 다시 그린다
+          var list = b.dataset.buy ? [{ id: b.dataset.buy, n: 1 }]
+            : b.dataset.buyAll.split(',').map(function (x) { var p = x.split(':'); return { id: p[0], n: +p[1] || 1 }; });
+          buyFromPop(list);
+          openRecipePop(el.recipePop.dataset.def, trail);
+          return;
+        }
         if (b.dataset.close != null) { el.recipePop.hidden = true; return; }
         if (b.dataset.back != null) {
           var prev = trail.pop();
@@ -1683,6 +1690,60 @@
     return RPD.RecipeManager.countsOf().usable;   // 잠근 개체는 뺀 재료 수
   }
 
+  /* 조합식 창 안 "◆ 조각으로 사기" 줄(세션 95) — 모자란 재료 중 조각으로 살 수 있는 것을 칩으로. 누르면 한 마리씩 산다(조각 상점과 같은 ShardManager.buy).
+   * 히든(주문 전용) · 불멸 · 초월 · 아직 모르는 재료는 상점과 같은 규칙으로 빠진다. 못 사면 칩에 이유(조각 부족 · N라운드부터 · 자리 없음).
+   * 모자란 것이 둘 이상이고 전부 살 수 있으면 [한 번에 사기 ◆합계]. 사고 나면 창을 그 자리에서 다시 그린다 — 다 모이면 "★ 지금 조합하기"가 뜬다. */
+  function shardBuyRow(groups, counts) {
+    var SH = RPD.ShardManager;
+    if (!SH) return '';
+    var items = [];
+    groups.forEach(function (g) {
+      var short = g.need - (counts[g.id] || 0);
+      if (short <= 0 || matSecret(g.id)) return;
+      var d = RPD.PokemonData.get(g.id);
+      if (!d || d.hidden || RPD.Tiers[d.tier].special) return;
+      items.push({ id: g.id, def: d, short: short, state: SH.checkBuy(g.id) });
+    });
+    if (!items.length) return '';
+    var total = 0, allOk = true, pieces = 0;
+    items.forEach(function (it) { total += it.state.price * it.short; pieces += it.short; if (!it.state.ok) allOk = false; });
+    var canAll = pieces > 1 && allOk && SH.shards >= total;
+    return '<div class="rp__shard">' +
+      '<p class="rp__shardHd"><span>◆ 조각으로 사기</span><small>보유 ◆' + SH.shards + '</small></p>' +
+      '<div class="rp__shardRow">' + items.map(function (it) {
+        var why = it.state.ok ? '' : it.state.reason === 'LOCKED' ? it.state.unlockRound + 'R부터'
+          : it.state.reason === 'NO_ROOM' ? '자리 없음' : '조각 부족';
+        return '<button type="button" class="rp__buy' + (it.state.ok ? ' is-ok' : '') + '" data-buy="' + it.id + '"' + (it.state.ok ? '' : ' disabled') +
+          ' title="' + it.def.name + ' 한 마리를 조각 ' + it.state.price + '개로 산다' + (it.short > 1 ? ' (모자람 ' + it.short + ')' : '') + '">' +
+          RPD.UI.sprite(it.def, 'spr--rpbuy') +
+          '<span class="rp__buyName">' + it.def.name + (it.short > 1 ? ' <small>×' + it.short + '</small>' : '') + '</span>' +
+          '<span class="rp__buyPrice">◆' + it.state.price + '</span>' +
+          (why ? '<span class="rp__buyWhy">' + why + '</span>' : '') +
+        '</button>';
+      }).join('') + '</div>' +
+      (canAll ? '<button type="button" class="btn btn--block rp__buyAll" data-buy-all="' +
+        items.map(function (it) { return it.id + ':' + it.short; }).join(',') + '">모자란 ' + pieces + '마리 한 번에 사기 ◆' + total + '</button>' : '') +
+    '</div>';
+  }
+  function shardFailMsg(r) {
+    return r.reason === 'NO_SHARD' ? '조각이 ' + r.price + '개 필요합니다'
+      : r.reason === 'LOCKED' ? '아직 열리지 않은 등급입니다'
+      : r.reason === 'NO_ROOM' ? '필드와 창고가 가득 찼습니다'
+      : '살 수 없습니다';
+  }
+  function buyFromPop(list) {
+    var bought = 0, fail = null;
+    for (var i = 0; i < list.length && !fail; i++) {
+      for (var k = 0; k < list[i].n && !fail; k++) {
+        var r = RPD.ShardManager.buy(list[i].id);
+        if (r.ok) bought += 1; else fail = r;
+      }
+    }
+    if (bought) RPD.RecipeManager.refresh();
+    if (fail) RPD.FxRenderer.text(RPD.VIEW.width / 2, 190, shardFailMsg(fail), '#ff8a7a', { size: 15, life: 1.2, jitter: false });
+    return bought;
+  }
+
   function openRecipePop(defId, trail) {
     if (!el.recipePop) return;
     var def = RPD.PokemonData.get(defId);
@@ -1718,7 +1779,8 @@
         (make.ready
           ? '<button type="button" class="btn btn--primary btn--block rp__craft" data-craft="' + make.key + '">★ 지금 조합하기' +
             (makes.length > 1 ? ' (경로 ' + (make.route + 1) + ')' : '') + '</button>'
-          : '<p class="rp__note">부족한 재료 ' + make.missingCount + '개 — 재료를 누르면 그 재료를 만드는 법으로 내려갑니다.</p>');
+          : '<p class="rp__note">부족한 재료 ' + make.missingCount + '개 — 재료를 누르면 그 재료를 만드는 법으로 내려갑니다.</p>' +
+            shardBuyRow(groupMaterials(make.materials), counts));
       }).join('');
     } else if (def.hidden || tier.special) {
       /* 히든·불멸은 주문으로 만든다. 재료와 문구는 언제나 보여 준다
@@ -1735,7 +1797,8 @@
               (g.need > 1 ? ' ×' + g.need : '') + '</span>' +
               '<span class="rp__matN">' + (counts[g.id] || 0) + '/' + g.need + '</span></button>';
           }).join('<span class="rplus">+</span>') + '</div>' +
-          '<p class="rp__note">🔒 조합식 목록에는 없습니다. 재료를 모아 채팅(Enter)으로 「' + sp.phrase + '」</p>'
+          '<p class="rp__note">🔒 조합식 목록에는 없습니다. 재료를 모아 채팅(Enter)으로 「' + sp.phrase + '」</p>' +
+          shardBuyRow(groupIds(sp.materials), counts)
         : '<p class="rp__note">🔒 주문으로만 만듭니다.</p>';
     } else {
       makeHtml = '<p class="rp__note">' + (tier.summonable === false
@@ -1770,6 +1833,9 @@
       '<p class="rp__label">만드는 법</p>' + makeHtml +
       '<p class="rp__label">재료로 쓰이는 곳 <span>' + uses.length + '</span></p>' + usesHtml;
     el.recipePop.hidden = false;
+    // 휴대폰: 조합식 창은 시트 안에 뜬다 — 절반 높이면 "만드는 법" 아래(조각으로 사기 · 조합하기)가 접혀 안 보여 전체 높이로(세션 95)
+    var MS = RPD.MobileSheet;
+    if (MS && MS.isMobile && MS.isMobile() && MS.setSize && MS.size !== 'full') { MS.setSize('full'); if (MS.sync) MS.sync(); }
   }
   UIManager.openRecipePop = function (defId) { openRecipePop(defId, []); };
 
@@ -1871,10 +1937,7 @@
       renderShardShop();
       return;
     }
-    var msg = r.reason === 'NO_SHARD' ? '조각이 ' + r.price + '개 필요합니다'
-      : r.reason === 'LOCKED' ? '아직 열리지 않은 등급입니다'
-      : r.reason === 'NO_ROOM' ? '필드와 창고가 가득 찼습니다'
-      : '살 수 없습니다';
+    var msg = shardFailMsg(r);
     RPD.FxRenderer.text(RPD.VIEW.width / 2, 190, msg, '#ff8a7a', { size: 15, life: 1.2, jitter: false });
   }
 

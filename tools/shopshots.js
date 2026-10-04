@@ -1,7 +1,8 @@
 /* shopshots.js — 조각 상점(세션 93) 캡처. 테스트판(dist)을 실제 크로미움으로 띄워 PC · 갤럭시 S24 세로(시트 절반)로 찍는다.
  *   (a) 조각 상점 탭 — 등급 순 · 등급 머리 줄 · 검색칸
  *   (b) 검색 "ㄹㅈ"(초성 — 리자드 · 리자몽) 친 상태
- * 캡처: dist/36_shop_{a_list|b_search}_{pc|portrait}.png. OUT_TAG=before 면 이름 끝에 _before.
+ *   (c) 조합식 창(슬리프) — 모자란 재료를 조각으로 사는 줄(세션 95) · (d) 하나 산 뒤 그 자리에서 다시 그린 창
+ * 캡처: dist/36_shop_{a_list|b_search|c_pop|d_bought}_{pc|portrait}.png. OUT_TAG=before 면 이름 끝에 _before.
  * 단독 실행 · screenshot.js 에서 run(browser). 먼저 npm run build. */
 const fs = require('fs'), path = require('path');
 let playwright;
@@ -55,7 +56,27 @@ async function run(browser) {
       b.focused = await p.evaluate(() => document.activeElement && document.activeElement.id);
       await p.screenshot({ path: OUT('36_shop_b_search_' + mode) });
     }
-    report[mode] = { a, b };
+    // (c) 조합식 창 — 모자란 재료를 그 자리에서 조각으로(세션 95). 리자드(파이리 ×2 — 하나 있음) · 슬리프(캐이시 + 고오스 — 둘 다 없음)
+    await p.evaluate(() => {
+      const R = window.RPD;
+      R.Loop.setPaused(true);
+      R.ShardManager.add(40, 'shot');
+      // setDrawer 는 같은 탭이면 닫는다(토글) — 이미 열려 있으면 그대로 둔다
+      if (window.innerWidth < 1100 && document.body.getAttribute('data-mtab') !== 'recipes') R.HudPanels.setDrawer('recipes');
+      document.querySelector('#recipeFilter .rf[data-filter="all"]').click();
+      R.UIManager.openRecipePop('drowzee');
+    });
+    await p.waitForTimeout(300);
+    const c = await p.evaluate(() => ({ chips: document.querySelectorAll('#recipePop .rp__buy').length, all: !!document.querySelector('#recipePop .rp__buyAll') }));
+    await p.screenshot({ path: OUT('36_shop_c_pop_' + mode) });
+    let d = null;
+    if (c.chips) {
+      await p.click('#recipePop .rp__buy.is-ok'); await p.waitForTimeout(300);
+      d = await p.evaluate(() => ({ chips: document.querySelectorAll('#recipePop .rp__buy').length, open: !document.getElementById('recipePop').hidden }));
+      await p.screenshot({ path: OUT('36_shop_d_bought_' + mode) });
+    }
+    report[mode] = { a, b, c, d };
+    if (!TAG && (!c.chips || !d || d.chips >= c.chips || !d.open)) bad('조합식 창 조각 사기 ' + JSON.stringify({ c, d }));
     if (!TAG) {
       if (!a.search) bad('검색칸이 안 보인다');
       if (b && (b.rows >= a.rows || b.focused !== 'shardSearch')) bad('검색이 안 줄였거나 초점이 빠졌다 ' + JSON.stringify(b));

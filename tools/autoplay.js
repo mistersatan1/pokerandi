@@ -48,6 +48,8 @@ function boot() {
   R.SummonManager.init(); R.CombatManager.init(); R.RecipeManager.init();
   R.ShardManager.init(); R.BossManager.init(); R.SaveManager.init();
   R.SkillManager.init();
+  // 도감 수 고정(세션 97): DEX=151 이면 도감 보상(전투 · 창고 · 시작 골드 · 조각 · 소환권)을 다 받은 판. 없으면 판을 거듭하며 도감이 쌓인다(예전 그대로)
+  if (process.env.DEX != null) { const dexN = parseInt(process.env.DEX, 10) || 0; R.SaveManager.dexCount = () => dexN; }
   R.SpellManager.init();
   R.RewardManager.init();
   R.TraitManager.init();
@@ -130,6 +132,12 @@ function newGame(modeId) {
   F.init(); GM.reset(modeId, diffId);
   R.SpellManager.reset();
   if (process.env.STORAGE_CAP) SG.capacity = parseInt(process.env.STORAGE_CAP, 10);   // 실험 — 창고 칸을 덮어쓴다(수요 측정은 아주 크게)
+  // 도감 보상의 시작 조각 · 소환권(게임에선 ProgressManager.applyStartBonus — 봇은 화면 · 칭호를 안 불러 여기서). 시작 골드 · 창고는 GM · SG 가 이미 넣었다
+  if (process.env.DEX != null && R.DexBonus) {
+    const dx = R.DexBonus.totals();
+    if (dx.startShards) SH.add(dx.startShards, 'dex');
+    if (dx.startTickets && R.SummonManager.grantTicket) R.SummonManager.grantTicket(dx.startTickets);
+  }
 }
 
 /* ---------- 응원 칸 봇(세션 82) ----------

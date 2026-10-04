@@ -69,6 +69,10 @@
   /* 판을 새로 세울 때(Game.resetAll) 부른다 */
   ProgressManager.applyStartBonus = function () {
     var b = this.bonus();
+    // 도감 보상의 시작 조각 · 소환권(세션 97)도 여기서 같이 준다(시작 골드는 GameManager 가 이미 더한다)
+    var dex = RPD.DexBonus ? RPD.DexBonus.totals() : {};
+    b.tickets += dex.startTickets || 0;
+    b.shards += dex.startShards || 0;
     if (b.gold) {
       RPD.GameManager.gold += b.gold;
       RPD.GameManager.emitStats && RPD.GameManager.emitStats();

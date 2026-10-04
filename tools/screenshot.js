@@ -1737,6 +1737,15 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     if (dc.problems.length) process.exitCode = 1;
   }
 
+  /* ㊳ 도감 보상 세분화 · 창고 확장(세션 97) — tools/dexshots.js. 39_dex_* */
+  {
+    const dx = await require('./dexshots.js').run(browser);
+    console.log('dex', JSON.stringify(dx.report).slice(0, 300));
+    console.log('dex problems', JSON.stringify(dx.problems));
+    report.push({ dex: dx.report });
+    if (dx.problems.length) process.exitCode = 1;
+  }
+
   /* ㉘ 응원 칸(세션 82) — tools/cheershots.js(단독으로도 돈다). (b) 빈 응원 칸 (c) 2마리 + 요약 줄 (d) 응원 칸 카드 (e) 받는 버프 (f) 거절 알림 (g) 2라운드 */
   {
     const ch = await require('./cheershots.js').run(browser);

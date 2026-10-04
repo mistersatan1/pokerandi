@@ -2493,12 +2493,16 @@
     if (el.dexCount) el.dexCount.textContent = have + ' / ' + total;
 
     if (el.dexBonus) {
-      var cur = RPD.DexBonus ? RPD.DexBonus.activeFor(have) : [];
+      // 세션 97 — 단계가 19개로 늘어 종류별 합계 한 줄씩("창고 +12칸")
+      var cur = RPD.DexBonus ? RPD.DexBonus.summary(have) : [];
       var next = RPD.DexBonus ? RPD.DexBonus.nextFor(have) : null;
+      var steps = RPD.DexBonus ? RPD.DexBonus.steps : [];
+      var gotN = steps.filter(function (s) { return have >= s.at; }).length;
       el.dexBonus.innerHTML =
+        '<div class="dex__bonusRow is-head"><span>도감 보상 ' + gotN + ' / ' + steps.length + '단계</span></div>' +
         (cur.length
           ? cur.map(function (b) {
-              return '<div class="dex__bonusRow"><span>' + b.label + '</span><strong>적용 중</strong></div>';
+              return '<div class="dex__bonusRow"><span>' + b.name + '</span><strong>' + b.value + '</strong></div>';
             }).join('')
           : '<div class="dex__bonusRow"><span>아직 보너스가 없습니다</span></div>') +
         (next

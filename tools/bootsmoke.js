@@ -2585,11 +2585,17 @@ check('단일 [창고로] 버튼과 S 단축키는 그대로 · 일괄 창고로
 
 /* ---------- 창고 고정 칸(세션 76 — 골드 확장 삭제) ---------- */
 console.log('\n창고 고정 칸 — 골드 확장 없음');
-check('창고 용량은 새 판에서 Config.storageBase(36) — 확장 함수 · 설정값 · 버튼이 없다', () => {
+check('창고 용량은 새 판에서 Config.storageBase(48 · 세션 97) + 도감 보상 — 확장 함수 · 설정값 · 버튼이 없다', () => {
   MS.forceMobile = false; RPD.Config.autosave = false;
   RPD.Game.restart(); RPD.Game.startRun('NORMAL', 'NORMAL');
   const SG = RPD.StorageManager, C = RPD.Config;
-  if (C.storageBase !== 36 || SG.capacity !== C.storageBase) throw new Error('용량 ' + SG.capacity + ' / storageBase ' + C.storageBase);
+  if (C.storageBase !== 48 || SG.capacity !== SG.baseCapacity()) throw new Error('용량 ' + SG.capacity + ' / storageBase ' + C.storageBase + ' / 기대 ' + SG.baseCapacity());
+  // 도감 보상 창고 칸 — 0종 48 · 15종 52 · 151종 72(세션 97)
+  const saved = RPD.SaveManager.data.pokedex;
+  const fakeDex = n => { const o = {}; RPD.PokemonData.list.slice(0, n).forEach(d => { o[d.id] = 1; }); RPD.SaveManager.data.pokedex = o; };
+  try {
+    [[0, 48], [15, 52], [151, 72]].forEach(([n, want]) => { fakeDex(n); SG.reset(); if (SG.capacity !== want) throw new Error('도감 ' + n + '종 창고 ' + SG.capacity + ' (기대 ' + want + ')'); });
+  } finally { RPD.SaveManager.data.pokedex = saved; SG.reset(); }
   ['expand', 'canExpand', 'expandCost'].forEach(f => { if (typeof SG[f] === 'function') throw new Error('StorageManager.' + f + ' 가 남아 있다'); });
   ['storageStep', 'storageMax', 'storageExpandCost', 'storageExpandGrowth'].forEach(k => { if (k in C) throw new Error('Config.' + k + ' 가 남아 있다'); });
   const html = require('fs').readFileSync(require('path').join(__dirname, '..', 'index.html'), 'utf8');
@@ -2598,7 +2604,7 @@ check('창고 용량은 새 판에서 Config.storageBase(36) — 확장 함수 �
   RPD.GameManager.gold = 99999;
   const gold = RPD.GameManager.gold;
   RPD.bus.emit('storage:changed', SG.units);
-  if (SG.capacity !== C.storageBase || RPD.GameManager.gold !== gold) throw new Error('골드로 용량이 바뀌었다');
+  if (SG.capacity !== SG.baseCapacity() || RPD.GameManager.gold !== gold) throw new Error('골드로 용량이 바뀌었다');
 });
 
 check('창고가 가득 차야 소환이 막힌다 — 필드가 가득 차도 창고에 한 칸이라도 있으면 소환된다', () => {
@@ -2621,11 +2627,11 @@ check('창고가 가득 차야 소환이 막힌다 — 필드가 가득 차도 �
 });
 
 check('이어하기 — 옛 저장(용량 14)은 새 기본값으로 올려 불러온다 · 더 큰 저장 값은 그대로(max)', () => {
-  const SG = RPD.StorageManager, base = RPD.Config.storageBase;
+  const SG = RPD.StorageManager, base = SG.baseCapacity();
   SG.loadState({ capacity: 14, units: [] });
   if (SG.capacity !== base) throw new Error('옛 저장 14 → ' + SG.capacity + ' (기대 ' + base + ')');
-  SG.loadState({ capacity: 40, units: [] });
-  if (SG.capacity !== 40) throw new Error('더 큰 값이 줄었다: ' + SG.capacity);
+  SG.loadState({ capacity: base + 8, units: [] });
+  if (SG.capacity !== base + 8) throw new Error('더 큰 값이 줄었다: ' + SG.capacity);
   SG.loadState({ units: [] });
   if (SG.capacity !== base) throw new Error('용량이 없는 저장 → ' + SG.capacity);
   SG.reset();

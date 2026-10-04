@@ -284,6 +284,47 @@ run('조합 · 소환 연출(세션 87) — 모이는 빛줄기 · 등급만큼 
   if (C.isBusy()) throw new Error('끝났는데 남았다');
 });
 
+run('스킬 연출(세션 94) — 모든 스킬에 고유 연출 · 모티프가 있다 · 효과 3단계 모두 오류 없이 그린다 · 게임 난수 안 씀 · 평타 확대 연출과 안 겹친다', () => {
+  const S = RPD.SkillFx, D = RPD.SkillFxData;
+  const ids = RPD.SkillData.ids();
+  const missing = ids.filter(id => !D[id]);
+  if (missing.length) throw new Error('연출이 없는 스킬 ' + missing.join(', '));
+  const badM = Object.keys(D).filter(id => { const c = D[id]; return c.m === 'combo' ? !(c.parts || []).every(p => S.MOTIFS[p.m]) : !S.MOTIFS[c.m]; });
+  if (badM.length) throw new Error('없는 모티프 ' + badM.join(', '));
+  const stray = Object.keys(D).filter(id => !RPD.SkillData.get(id));
+  if (stray.length) throw new Error('스킬 표에 없는 id ' + stray.join(', '));
+  const enemies = [0, 1, 2, 3, 4].map(i => ({ x: 400 + i * 30, y: 280 + (i % 2) * 40, alive: true }));
+  const realRandom = Math.random;
+  let used = 0;
+  Math.random = function () { used += 1; return realRandom(); };
+  try {
+    ['normal', 'reduced', 'minimal'].forEach(lv => {
+      RPD.Effects.force(lv);
+      ids.forEach(id => {
+        S.reset();
+        const sk = RPD.SkillData.get(id);
+        const owner = RPD.PokemonData.list.find(d => d.skill === id);
+        const unit = { x: 300, y: 300, range: 180, tier: owner ? owner.tier : 'T5', skill: sk };
+        S.play({ unit, skill: sk, target: enemies[0], targets: enemies });
+        if (!S.list.length) throw new Error(id + ' 연출이 안 생겼다');
+        // 직접 그려 오류를 잡는다(S.draw 는 오류 난 연출을 조용히 버린다)
+        S.list.forEach(fx => {
+          for (const k of [0, 0.1, 0.3, 0.5, 0.8, 0.99]) {
+            if (fx.screen) fx.draw(ctx, fx, k, k * fx.dur, 1000);
+            else fx.draw(ctx, fx, k, k * fx.dur);
+          }
+        });
+        S.draw(ctx);
+      });
+    });
+  } finally { Math.random = realRandom; RPD.Effects.force(null); }
+  if (used) throw new Error('연출이 게임 난수(Math.random)를 ' + used + '번 썼다 — Effects.rand 를 쓸 것');
+  const afx = fs.readFileSync(path.join(ROOT, 'js/render/AttackFxRenderer.js'), 'utf8');
+  if (!/if \(RPD\.SkillFx && RPD\.SkillFx\.handles && RPD\.SkillFx\.handles\(p && p\.skill\)\) return;\s*if \(p && p\.unit\) AttackFx\.skill/.test(afx)) throw new Error('고유 연출이 있는 스킬도 평타 확대 연출을 그린다');
+  S.list.forEach(fx => { fx.t0 -= 30; }); S.draw(ctx);
+  if (S.isBusy()) throw new Error('끝났는데 남았다');
+});
+
 run('조합 재료가 되는 칸이 강조된다', () => {
   // v1 의 자유 합성(fusion:changed) 자리를 v2 의 조합식이 대신한다
   RPD.FieldManager.init();

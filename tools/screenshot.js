@@ -1719,6 +1719,15 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     if (sh.problems.length) process.exitCode = 1;
   }
 
+  /* ㊱ 스킬별 고유 연출(세션 94) — tools/skillshots.js(단독으로도 돈다). 37_skill_sheet_* · 37_skill_portrait_* */
+  {
+    const sk = await require('./skillshots.js').run(browser);
+    console.log('skill', Object.keys(sk.report.pc).length + ' skills', JSON.stringify(sk.report.portrait));
+    console.log('skill problems', JSON.stringify(sk.problems));
+    report.push({ skill: sk.report });
+    if (sk.problems.length) process.exitCode = 1;
+  }
+
   /* ㉘ 응원 칸(세션 82) — tools/cheershots.js(단독으로도 돈다). (b) 빈 응원 칸 (c) 2마리 + 요약 줄 (d) 응원 칸 카드 (e) 받는 버프 (f) 거절 알림 (g) 2라운드 */
   {
     const ch = await require('./cheershots.js').run(browser);

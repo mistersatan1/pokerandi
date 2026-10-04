@@ -1666,6 +1666,18 @@ run('숫자 도트 폰트(세션 92) — main.css 안 base64 woff2 · 숫자 · 
   if (!/\.chip__num, \.summon__cost \{ font-family: var\(--font-num\); font-synthesis: none;/.test(ui)) throw new Error('HUD 숫자에 도트 폰트가 안 걸렸다');
 });
 
+run('첫 발견 연출(세션 96) — 첫 발견만 실루엣 → 섬광 · NEW! · 발견 수 · 전용 소리 · 진동 · 효과 최소는 차분하게', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'js/ui/SpellUI.js'), 'utf8');
+  const css = fs.readFileSync(path.join(ROOT, 'css/game.css'), 'utf8');
+  if (!/first \? '<div class="spellscene__art is-silhouette">' \+ RPD\.UI\.shadow\(/.test(src)) throw new Error('첫 발견에 실루엣이 없다');
+  if (!/if \(first\) \{[\s\S]*?firstRevealHtml\(spell, unit, tier\)[\s\S]*?buzz\('discover'\)[\s\S]*?play\('discover'\)/.test(src)) throw new Error('드러나는 순간 연출 · 진동 · 소리가 없다');
+  if (!/spellscene__stamp">NEW!/.test(src) || !/발견 <em>/.test(src)) throw new Error('NEW! · 발견 수가 없다');
+  if (!/el\.scene\.insertAdjacentHTML\('beforeend', '<div class="spellscene__flash"/.test(src)) throw new Error('섬광이 흔들리는 상자 안에 있다(잘린다)');
+  if (!/\.spellscene\.is-calm \.spellscene__rays, \.spellscene\.is-calm \.spellscene__sparks \{ display: none; \}/.test(css)) throw new Error('효과 최소에서 빛살 · 불꽃이 남는다');
+  const hap = fs.readFileSync(path.join(ROOT, 'js/core/Haptics.js'), 'utf8'), au = fs.readFileSync(path.join(ROOT, 'js/core/AudioManager.js'), 'utf8');
+  if (!/discover: \[/.test(hap) || !/discover: +\{ kind:/.test(au)) throw new Error('첫 발견 진동 · 소리 정의가 없다');
+});
+
 /* ---------- 모바일 ① — 필드를 돌렸을 때 칸 누르기 (세션 51) ---------- */
 console.log('\n모바일 필드 회전');
 {

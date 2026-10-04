@@ -62,6 +62,7 @@
     win:        { kind: 'arp',   wave: 'square',   notes: [72, 76, 79, 84, 88], step: 0.12, dur: 0.5, gain: 0.4, cool: 2 },
     spell:      { kind: 'arp',   wave: 'sine',     notes: [60, 67, 72, 76, 79, 84, 88], step: 0.11, dur: 0.6, gain: 0.45, cool: 2 },
     reward:     { kind: 'arp',   wave: 'triangle', notes: [72, 76, 79, 84, 88, 91], step: 0.09, dur: 0.35, gain: 0.4, cool: 1 },
+    discover:   { kind: 'arp',   wave: 'sine',     notes: [79, 84, 88, 91, 96, 100], step: 0.07, dur: 0.7, gain: 0.45, cool: 2 },   // 첫 발견 — 정체가 드러날 때(세션 96)
     deny:       { kind: 'tone',  wave: 'square',   notes: [45], dur: 0.12, gain: 0.22, cool: 0.15 }
   };
 

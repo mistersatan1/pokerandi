@@ -665,6 +665,40 @@ button.dc__mon:hover { background: var(--panel-3); transform: translateY(-2px); 
 .spellscene__line { margin: 0; min-height: 3.2em; padding: 10px 16px; width: 100%; border-radius: 12px; background: rgba(10, 22, 52, 0.92); border: 1px solid color-mix(in srgb, var(--tier) 60%, transparent); color: #fff; font-size: 16px; line-height: 1.5; }
 .spellscene__skip { margin: 0; color: var(--faint); font-size: 11px; }
 .spellscene.is-transcend .spellscene__phrase { font-size: 30px; }
+/* 첫 발견(세션 96) — 실루엣 → 섬광 → 빛살 · 불꽃 · NEW! · 발견 수. 히든 청록 · 불멸 은 · 초월 금(색은 --tier) */
+.spellscene__art.is-silhouette { position: relative; opacity: 1; transform: none; }
+.spellscene.is-first.is-reveal .spellscene__skip { visibility: hidden; }   /* NEW! 와 겹친다 — 눌러서 닫는 건 그대로 */
+.spellscene__art.is-silhouette .spr { background: none; border: 0; box-shadow: none; }
+.spellscene__art.is-silhouette .spr { filter: drop-shadow(0 0 14px var(--tier)); animation: breathe 1.6s ease-in-out infinite; }
+.spellscene__q { position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-size: 64px; font-weight: 900; text-shadow: 0 0 18px var(--tier), 0 4px 0 var(--edge); pointer-events: none; }
+.spellscene__box { isolation: isolate; }
+.spellscene__rays { position: absolute; left: 50%; top: 40%; width: 760px; height: 760px; margin: -380px 0 0 -380px; z-index: -1; border-radius: 50%; pointer-events: none;
+  background: repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--tier) 55%, transparent) 0deg 8deg, transparent 8deg 22deg);
+  -webkit-mask: radial-gradient(circle, #000 18%, transparent 62%); mask: radial-gradient(circle, #000 18%, transparent 62%);
+  animation: raysIn .5s ease-out both, raysSpin 9s linear infinite; }
+.spellscene__flash { position: absolute; inset: 0; background: #fff; pointer-events: none; animation: flashOut .55s ease-out forwards; }
+.spellscene.is-transcend .spellscene__flash { animation: flashOut .55s ease-out forwards, flashOut .5s ease-out .65s forwards; }
+.spellscene__sparks { position: absolute; left: 50%; top: 38%; width: 0; height: 0; pointer-events: none; }
+.spellscene__sparks i { position: absolute; width: 8px; height: 8px; margin: -4px; border-radius: 50%; background: var(--tier); box-shadow: 0 0 10px var(--tier), 0 0 2px #fff;
+  transform: rotate(var(--a)) translateX(0); animation: sparkOut 1s cubic-bezier(.2,.8,.3,1) var(--d) both; }
+.spellscene__new { display: grid; justify-items: center; gap: 2px; animation: newIn .45s cubic-bezier(.2,1.4,.4,1) .2s both; }
+.spellscene__stamp { padding: 2px 12px; border-radius: 8px; background: var(--tier); color: #10131f; font-family: var(--font-num), var(--font); font-synthesis: none; font-size: 22px; letter-spacing: .06em;
+  box-shadow: var(--press-2); transform: rotate(-6deg); }
+.spellscene__name { font-size: 30px; font-weight: 900; color: #fff; text-shadow: 0 0 16px var(--tier), 0 3px 0 var(--edge); }
+.spellscene__count { color: var(--muted); font-size: 13px; font-weight: 800; }
+.spellscene__count em { font-style: normal; color: var(--tier); font-family: var(--font-num), var(--font); font-synthesis: none; font-size: 16px; }
+.spellscene.is-first.is-reveal .spellscene__art .spr { width: 200px; height: 200px; }
+.spellscene.is-immortal.is-first.is-reveal .spellscene__box { animation: sceneShake .45s ease-out; }
+.spellscene.is-transcend.is-first.is-reveal .spellscene__box { animation: sceneShake .6s ease-out; }
+/* 효과 "최소" — 섬광 한 번만(빛살 · 불꽃 · 흔들림 없이) */
+.spellscene.is-calm .spellscene__rays, .spellscene.is-calm .spellscene__sparks { display: none; }
+.spellscene.is-calm .spellscene__box { animation: none !important; }
+@keyframes raysIn { from { opacity: 0; transform: scale(.4); } to { opacity: 1; transform: scale(1); } }
+@keyframes raysSpin { to { rotate: 360deg; } }
+@keyframes flashOut { from { opacity: .95; } to { opacity: 0; } }
+@keyframes sparkOut { 0% { transform: rotate(var(--a)) translateX(0) scale(1.4); opacity: 1; } 100% { transform: rotate(var(--a)) translateX(230px) scale(.3); opacity: 0; } }
+@keyframes newIn { from { opacity: 0; transform: translateY(14px) scale(.7); } to { opacity: 1; transform: none; } }
+@keyframes sceneShake { 0%, 100% { transform: none; } 20% { transform: translate(-6px, 3px); } 40% { transform: translate(6px, -3px); } 60% { transform: translate(-4px, 2px); } 80% { transform: translate(3px, -1px); } }
 @keyframes breathe { 0%,100% { opacity: .7 } 50% { opacity: 1 } }
 
 .spellshard { margin-bottom: 4px; padding: 3px 10px; border-radius: 999px; background: rgba(255, 210, 63, 0.14); border: 1px solid var(--gold); color: var(--gold-hi); font-size: 12px; font-weight: 900; text-align: center; animation: breathe 1.8s infinite; }

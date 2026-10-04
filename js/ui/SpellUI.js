@@ -56,7 +56,31 @@
     setTimeout(function () { say(FAIL_TEXT[r.reason] || '…', 'is-hint'); }, 350);
   };
 
-  /* ---------- 연출 ---------- */
+  /* ---------- 연출 ----------
+   * 첫 발견(세션 96): 대사 동안 그림은 검은 실루엣("?")으로 떠 있고, 끝에 흰 섬광 → 빛살이 돌며 색이 돌아온다.
+   * "NEW!" 도장 · 이름 · 발견 수(히든 N/31 · 불멸 N/5 · 초월 N/2) · 도감 N/154 가 차례로. 불멸은 흔들림 · 초월은 섬광 두 번.
+   * 두 번째부터는 예전 그대로(짧게). 효과 "최소" · 동작 줄이기면 빛살 · 불꽃 · 흔들림 없이 섬광 한 번. */
+  function kindCount(kind) {
+    var all = (RPD.SpellData && RPD.SpellData.list || []).filter(function (s) { return s.kind === kind; });
+    var known = all.filter(function (s) { return RPD.SaveManager.knowsSpell && RPD.SaveManager.knowsSpell(s.id); });
+    return { have: known.length, total: all.length };
+  }
+  function firstRevealHtml(spell, unit, tier) {
+    var KIND = { hidden: '히든', immortal: '불멸', transcend: '초월' }[spell.kind] || tier.label;
+    var kc = kindCount(spell.kind), SV = RPD.SaveManager;
+    var sparks = '';
+    for (var i = 0; i < 14; i++) sparks += '<i style="--a:' + (i * 360 / 14) + 'deg;--d:' + (i % 3) * 0.06 + 's"></i>';
+    return '<div class="spellscene__rays" aria-hidden="true"></div>' +
+
+      '<div class="spellscene__sparks" aria-hidden="true">' + sparks + '</div>' +
+      '<div class="spellscene__new">' +
+        '<span class="spellscene__stamp">NEW!</span>' +
+        '<b class="spellscene__name">' + unit.def.name + '</b>' +
+        '<span class="spellscene__count">' + KIND + ' 발견 <em>' + kc.have + '</em> / ' + kc.total +
+          (SV.dexCount ? ' · 도감 <em>' + SV.dexCount() + '</em> / ' + SV.dexTotal() : '') + '</span>' +
+      '</div>';
+  }
+
   function playScene(p) {
     var spell = p.spell, unit = p.unit, tier = RPD.Tiers[unit.def.tier];   // 색은 결과 포켓몬의 등급
     UI.busy = true;
@@ -68,14 +92,18 @@
       RPD.AudioManager.playScene({ hidden: 'hidden', immortal: 'immortal', transcend: 'transcend' }[spell.kind] || 'boss');
     }
 
-    el.scene.className = 'spellscene is-' + spell.kind;
+    var first = !!p.firstTime;
+    var calm = RPD.Effects && RPD.Effects.levelId && RPD.Effects.levelId() === 'minimal';
+    el.scene.className = 'spellscene is-' + spell.kind + (first ? ' is-first' : '') + (calm ? ' is-calm' : '');
     el.scene.style.setProperty('--tier', tier.color);
     el.scene.innerHTML =
       '<div class="spellscene__glow"></div>' +
       '<div class="spellscene__box">' +
         '<p class="spellscene__tier">' + ({ hidden: '히든 · ' + tier.label, immortal: '불멸', transcend: '초월' }[spell.kind] || tier.label) + ' 조합' + (p.firstTime ? ' · 첫 발견!' : '') + '</p>' +
         '<p class="spellscene__phrase">「' + spell.phrase + '」</p>' +
-        '<div class="spellscene__art is-hidden">' + RPD.UI.sprite(unit.def, 'spr--scene') + '</div>' +
+        // 첫 발견은 대사 동안 실루엣으로 떠 있다(무엇이 나올지 궁금하게) — 정체는 끝에서 색으로
+        (first ? '<div class="spellscene__art is-silhouette">' + RPD.UI.shadow(unit.def, 'spr--scene') + '<span class="spellscene__q">?</span></div>'
+               : '<div class="spellscene__art is-hidden">' + RPD.UI.sprite(unit.def, 'spr--scene') + '</div>') +
         '<p class="spellscene__speaker">' + (spell.speaker || unit.def.name) + '</p>' +
         '<p class="spellscene__line"></p>' +
         '<p class="spellscene__skip">클릭하면 넘어갑니다</p>' +
@@ -91,10 +119,21 @@
       if (done) return;
       done = true;
       clearInterval(typing); clearTimeout(timer);
-      art.classList.remove('is-hidden');
-      lineEl.textContent = unit.def.name + ' 이(가) 합류했다!';
+      if (first) {
+        art.innerHTML = RPD.UI.sprite(unit.def, 'spr--scene');   // 실루엣 → 진짜 그림
+        art.classList.remove('is-silhouette');
+        el.scene.querySelector('.spellscene__box').insertAdjacentHTML('beforeend', firstRevealHtml(spell, unit, tier));
+        // 섬광은 장면 전체에 — 흔들리는 상자 안에 두면(transform) 상자 크기로 잘린다
+        el.scene.insertAdjacentHTML('beforeend', '<div class="spellscene__flash" aria-hidden="true"></div>');
+        lineEl.textContent = unit.def.name + ' 을(를) 처음 발견했다!';
+        if (RPD.Haptics && RPD.Haptics.buzz) RPD.Haptics.buzz('discover');
+        if (RPD.AudioManager && RPD.AudioManager.play) RPD.AudioManager.play('discover');
+      } else {
+        art.classList.remove('is-hidden');
+        lineEl.textContent = unit.def.name + ' 이(가) 합류했다!';
+      }
       el.scene.classList.add('is-reveal');
-      timer = setTimeout(close, 2200);
+      timer = setTimeout(close, first ? (spell.kind === 'transcend' ? 4200 : 3400) : 2200);
     }
     function close() {
       el.scene.hidden = true;

@@ -39,7 +39,7 @@
 
   --hud-h:    60px;
   --side-w:   300px;
-  --dock-h:   clamp(188px, 25vh, 244px);
+  --dock-h:   clamp(204px, calc(25vh + 16px), 260px);   /* 세션 91 — +16px(사용자 결정): 1440×900 조합식 2 → 3줄, 필드 높이 약 −3% */
   --action-w: 248px;
   --gap:      8px;
 
@@ -119,10 +119,10 @@ canvas:focus-visible { outline-offset: -2px; }
   :root { --side-w: 272px; --action-w: 222px; }
 }
 @media (max-height: 820px) {
-  :root { --hud-h: 52px; --dock-h: 176px; --gap: 6px; }
+  :root { --hud-h: 52px; --dock-h: 192px; --gap: 6px; }
 }
 @media (max-height: 700px) {
-  :root { --dock-h: 160px; }
+  :root { --dock-h: 176px; }
 }
 
 /* 조작 방해 막기(모바일 ③ · 세션 68) — 어느 너비에서든.

@@ -1,5 +1,23 @@
 # v2-redesign (진행 중)
 
+## 세션 92 — 숫자 도트 폰트(PorandiDigits · base64 · 사용자 결정)
+
+**왜**: 리디자인 제안 8번("숫자 · 제목 — 골드 · 라이프 · 라운드 숫자를 가장 크고 굵게, 도트 폰트가 필요하면 base64")의 결정 대기 항목을 사용자가 골랐다.
+웹폰트 파일은 더블클릭(file://) 원칙 때문에 못 쓰고, 바깥 도트 폰트는 라이선스 · 크기(한글 포함 수 MB)가 따라온다.
+
+**무엇**
+- `tools/digitfont.py`(새 파일): 5×7 칸 그림으로 숫자 0~9 · `% / + - . , :` · `K M`(1.2K · 3M 표기) 19글자를 그려 fontTools 로 woff2 를 만들고, `css/main.css` 의 `@digits-font` 표시 사이에 base64 로 넣는다.
+  - 폰트 크기: woff2 704바이트 · base64 940자. 테스트판 증가 약 1KB(예상한 "파일 크기 증가"는 사실상 없음).
+  - 숫자는 모두 같은 폭(0.6em)이라 값이 바뀌어도 자리가 안 흔들린다. 한 칸 = 0.1em.
+- `unicode-range` 로 그 글자에만 쓰인다. 한글 · 다른 영문(휴대폰 "R30" 의 R 등)은 원래 글꼴 그대로.
+- 쓰는 곳: HUD 라운드 · 라이프 · 골드(`.chip__num`) · 소환 비용(`.summon__cost`) — 토큰 `--font-num`. 가짜 볼드는 도트를 뭉개 `font-synthesis: none`.
+- 크기: PC 30px(3px 도트) · 높이 820px 이하 25px · 휴대폰 20 · 18px(각각 18 · 16 에서).
+
+**다시 만들기**: `pip install fonttools brotli && python3 tools/digitfont.py`(그림을 고쳤을 때만 — 결과 main.css 를 커밋).
+
+**검사**: uicheck "숫자 도트 폰트(세션 92)"(woff2 머리 · 4KB 이하 · unicode-range · K · M 말고 영문자 없음 · HUD 에 적용 · 가짜 볼드 끔).
+**캡처**: `tools/tokenshots.js` 에 `dist/34_token_digits.png`(PC HUD 2배 확대 · 모든 숫자 · 기호 · `document.fonts.check` 로 실제 로드 확인).
+
 ## 세션 91 — PC 하단 독 높이 +16px(사용자 결정)
 
 **왜**: 세션 90 에서 결정 대기로 남긴 것 — 1440×900 조합식 줄이 2개(+ 셋째 일부)뿐이었다. 사용자가 독 +16px 을 골랐다.

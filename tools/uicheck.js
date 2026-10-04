@@ -1652,6 +1652,20 @@ run('질감 토큰(세션 90) — 하드 섀도는 토큰으로 · 패널 · 배
   if (!/var next = setDrawer\.apply\(H, arguments\); if \(next\) M\.setSize\(landscape\(\) \? 'full' : 'half'\)/.test(ms)) throw new Error('가로 화면 탭 시트가 절반 너비(약 175px)로 열린다');
 });
 
+run('숫자 도트 폰트(세션 92) — main.css 안 base64 woff2 · 숫자 · 기호만(unicode-range) · HUD 숫자에 쓰고 가짜 볼드 끔', () => {
+  const main = fs.readFileSync(path.join(ROOT, 'css/main.css'), 'utf8'), ui = fs.readFileSync(path.join(ROOT, 'css/ui.css'), 'utf8');
+  const m = main.match(/\/\* @digits-font:start[\s\S]*?font-family: "PorandiDigits";[\s\S]*?url\(data:font\/woff2;base64,([A-Za-z0-9+/=]+)\)[\s\S]*?unicode-range: ([^;]+);[\s\S]*?@digits-font:end \*\//);
+  if (!m) throw new Error('@font-face(PorandiDigits · data URL) 가 없다 — python3 tools/digitfont.py');
+  const bin = Buffer.from(m[1], 'base64');
+  if (bin.slice(0, 4).toString('latin1') !== 'wOF2') throw new Error('woff2 가 아니다');
+  if (bin.length > 4096) throw new Error('폰트가 너무 크다 ' + bin.length);
+  const need = ['U+0030', 'U+0039', 'U+0025', 'U+002F'];
+  need.forEach(u => { if (m[2].indexOf(u) < 0) throw new Error('unicode-range 에 ' + u + ' 없음'); });
+  if (/U\+00(4[1-9A-F]|5[0-9A])/.test(m[2].replace(/U\+004B|U\+004D/g, ''))) throw new Error('K · M 말고 영문자가 들어갔다(한글 · 영문은 --font 로)');
+  if (!/--font-num: "PorandiDigits", var\(--font\)/.test(main)) throw new Error('--font-num 토큰이 없다');
+  if (!/\.chip__num, \.summon__cost \{ font-family: var\(--font-num\); font-synthesis: none;/.test(ui)) throw new Error('HUD 숫자에 도트 폰트가 안 걸렸다');
+});
+
 /* ---------- 모바일 ① — 필드를 돌렸을 때 칸 누르기 (세션 51) ---------- */
 console.log('\n모바일 필드 회전');
 {

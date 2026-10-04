@@ -57,7 +57,7 @@
   .hud__brand, .hud__title { display: none; }
   .hud .chip { height: 34px; padding: 0 7px; gap: 4px; }
   .hud .chip__label { font-size: 11px; }
-  .hud .chip__num { font-size: 18px; }
+  .hud .chip__num { font-size: 20px; }
   .hud .gem { width: 17px; height: 17px; }
   .hud .speed { height: 34px; padding: 2px; }
   .hud .speed__btn { width: 30px; font-size: 13px; }
@@ -309,7 +309,7 @@
   .hud .chip--odds * { font-size: 10px !important; }
   .hud__spacer { flex: 1 1 0; min-width: 0; }
   .hud .chip { padding: 0 6px; }
-  .hud .chip__num { font-size: 16px; }
+  .hud .chip__num { font-size: 18px; }
   .hud .chip--round .chip__label { display: none; }
   .hud .chip--round .chip__num::before { content: "R"; font-size: 11px; color: var(--muted); margin-right: 1px; }
   .hud .chip--round .chip__sub { display: none; }

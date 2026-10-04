@@ -44,6 +44,8 @@
   --gap:      8px;
 
   --font: "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, -apple-system, sans-serif;
+  /* 숫자 도트 폰트(세션 92) — 라운드 · 라이프 · 골드 · 소환 비용 숫자만. 글꼴은 0~9 · % / + - . , : K M 뿐(unicode-range) — 나머지 글자는 --font 로 */
+  --font-num: "PorandiDigits", var(--font);
 
   /* 질감 토큰(리디자인 ⑥ · 세션 90) — "도트 게임 장비": 흐린 그림자 대신 외곽선 + 아래로 떨어지는 하드 섀도(번짐 없음).
    * 누르는 것(버튼 · 칩)은 --press-*, 판(패널 · HUD 칩)은 --shadow-panel. 그림자 색은 하나(--edge) — 예전엔 --inset · 패널색 · 등급색이 섞였다. */
@@ -53,6 +55,15 @@
   --press-3: 0 4px 0 var(--edge);
   --shadow-panel: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 1px var(--edge), 0 4px 0 rgba(3, 9, 24, 0.7);
 }
+
+/* @digits-font:start — tools/digitfont.py 가 만든다(손으로 고치지 말 것) */
+@font-face {
+  font-family: "PorandiDigits";
+  src: url(data:font/woff2;base64,d09GMgABAAAAAALAAAoAAAAACpgAAAJ1AAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAABmAAbgqOYItLATYCJANSCywABCAFcgdMGyIIEK4GbJcbOAx2hywmMbhSOixyfPfKpaMYQfylP7vvYqX7UTrGA1qqSswDFvH2QQqfAde8r14GjbJ4VhWEm/nMBjozzx/QCFrz4aB/fzceQYNQTwAHtvNEt25Y4JGaeqXS/Q8Qrta+X1P7LjSex8dFqUh7uGHWANB/eVdWmbpaXYdGVVWfrNGmW7q9FPF81QJVH6ZOCzOHHZX0hmmhgeggbX8koFYqbwbl4ANA/OVCDUhQwBiFAGO0PujToUDNJywrp6DUsAj6RX6Je9PsEbwAtAFAl55GRwFMAEtwh9xAPgAVANo4PI6AJ+BIBOU/BoNAotAkcsXsOgmYRpBCogGYSE0odAegQQWebjoj+JIheaBsaQhCumzTwcxEZ4pHoySdQ4l0LILHWi4dATLFeKAwO3gOXHnZAQ3BtA0dw3OdQLTGt/Wc9sBZZ175V98dds6hEBXKA839LvwPBtsp7qYXoUyvTalAzZz8tITolcZh1N8UrslEZ0fpaWaYo3zUVA8qGxUfKGbGYjMtoVzQuFmy7esphIZEDSDwXEgraSwjHtoLJTlDuctXBmajNPomGahb6+UT4VDHP8XEuFFLFNT1PURXMi4OOP6k2ZG2g+jv6cp9DfEQqmRTUmrVPNO6LZ90hJeMQgnefiu/D0CAgNfvO/f98xv1g5+3kfJtMchpLhQkIGA/5fNmTbFXEEB8bNlCrD3uXBGKTvtUPYYnIuQXEoiopBBGQQFDPXEnok4qAQQHE10iqUK7vwqWef0oMH1/L9hF1YW4O3O2tJM/SpvZp4e6FbPBy9HMHen5/gkojEzMLKxs7BycXHgGKt2O7buFRAAAAAA=) format("woff2");
+  font-display: block;
+  unicode-range: U+0025, U+002B, U+002C, U+002D, U+002E, U+002F, U+0030, U+0031, U+0032, U+0033, U+0034, U+0035, U+0036, U+0037, U+0038, U+0039, U+003A, U+004B, U+004D;
+}
+/* @digits-font:end */
 
 * { box-sizing: border-box; }
 

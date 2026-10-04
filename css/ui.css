@@ -138,6 +138,9 @@
 .chip__label { color: var(--muted); font-size: 13px; font-weight: 800; }
 /* 라운드 · 라이프 · 골드 숫자는 화면에서 가장 크고 굵게 + 하드 섀도(세션 90 — 장비 계기판 숫자처럼) */
 .chip__num { font-size: 27px; font-weight: 900; letter-spacing: -0.02em; line-height: 1; text-shadow: 0 2px 0 var(--edge); }
+/* 숫자 도트 폰트(세션 92 · css/main.css 의 PorandiDigits) — 한 칸 = 0.1em 이라 30px 이면 3px 도트. 굵게 흉내(가짜 볼드)는 도트를 뭉개니 끈다 */
+.chip__num, .summon__cost { font-family: var(--font-num); font-synthesis: none; letter-spacing: 0; }
+.chip__num { font-size: 30px; }
 .chip__sub { font-size: 11px; font-weight: 800; }
 .chip--round .chip__num { min-width: 1.4em; }
 .chip--life .chip__num { color: #fff; }
@@ -199,7 +202,7 @@
 @media (max-height: 820px) {
   .chip, .speed, .iconbtn { height: 40px; }
   .iconbtn { width: 40px; }
-  .chip__num { font-size: 24px; }
+  .chip__num { font-size: 25px; }
 }
 
 /* ================= 포켓몬 그림 ================= */

@@ -131,6 +131,11 @@
 
   SR.init = function () {
     RPD.bus.on('game:reset', function () { SR.reset(); if (RPD.RecipeManager && RPD.RecipeManager.refresh) RPD.RecipeManager.refresh(); });
+    /* "높은 등급 확률 증가"(세션 100) — N 라운드마다 소환권 1장. game:wave 는 라운드 시작 때만 나간다(이어하기 resumeRound 는 안 냄 — 두 번 안 받는다) */
+    RPD.bus.on('game:wave', function (p) {
+      var every = RPD.modeMod('ticketEvery', 0);
+      if (every > 0 && p && p.wave > 0 && p.wave % every === 0 && RPD.SummonManager) RPD.SummonManager.grantTicket(1);
+    });
   };
 
   RPD.SpecialRunManager = SR;

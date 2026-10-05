@@ -55,6 +55,7 @@ function boot() {
   // 특수 런 실험: FIRE_MUL=2 (불꽃만 사용의 불꽃 공격력 배율) · LUCKY_T3=1.8 · LUCKY_COMMON=0.35
   if (process.env.FIRE_MUL) R.SpecialRules.get('fireOnly').mods.typeDamageMul = { FIRE: Number(process.env.FIRE_MUL) };
   if (process.env.FIRE_BOSS) R.SpecialRules.get('fireOnly').mods.finalBossHpMul = R.Modes.NORMAL.modifiers.finalBossHpMul * Number(process.env.FIRE_BOSS);   // 노멀 70R 보스 대비 배율
+  if (process.env.LUCKY_TICKET) R.SpecialRules.get('lucky').mods.ticketEvery = Number(process.env.LUCKY_TICKET);   // 0 이면 소환권 없음
   if (process.env.LUCKY_T3) R.SpecialRules.get('lucky').mods.summonTierMul.T3 = Number(process.env.LUCKY_T3);
   if (process.env.LUCKY_COMMON) R.SpecialRules.get('lucky').mods.minCommonShare = Number(process.env.LUCKY_COMMON);   // 특수 런(세션 99) — SPECIAL=fireOnly,cost2,shuffle,lucky
   R.RewardManager.init();

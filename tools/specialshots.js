@@ -41,6 +41,15 @@ async function run(browser) {
     await p.evaluate(() => { const c = document.querySelector('#modeList .rulepick'); if (c && c.scrollIntoView) c.scrollIntoView({ block: 'center' }); });
     await p.screenshot({ path: OUT('41_special_a_pick_' + mode) });
     if (a.on.join() !== 'fireOnly,shuffle' || a.desc !== 2 || a.saved.join() !== 'fireOnly,shuffle') bad('규칙 고르기 ' + JSON.stringify(a));
+    // (a2) 소환 비용 1.5배 · 높은 등급 확률(매 라운드 소환권)도 켠 화면(세션 100) — 찍고 다시 끈다
+    await p.click('#modeList [data-rule="cost2"]'); await p.waitForTimeout(120);
+    await p.click('#modeList [data-rule="lucky"]'); await p.waitForTimeout(120);
+    const a2 = await p.evaluate(() => document.querySelector('#modeList .rulepick__desc').textContent);
+    await p.evaluate(() => { const c = document.querySelector('#modeList .rulepick'); if (c && c.scrollIntoView) c.scrollIntoView({ block: 'center' }); });
+    await p.screenshot({ path: OUT('41_special_a2_all_' + mode) });
+    if (!/1\.5배/.test(a2) || !/매 라운드 소환권/.test(a2)) bad('바뀐 규칙 설명 ' + a2);
+    await p.click('#modeList [data-rule="cost2"]'); await p.waitForTimeout(120);
+    await p.click('#modeList [data-rule="lucky"]'); await p.waitForTimeout(120);
     // "불꽃만"만 남기고 보통 난이도로 실제 시작
     await p.click('#modeList [data-rule="shuffle"]'); await p.waitForTimeout(120);
     await p.click('#modeList .diffbtn[data-diff="NORMAL"]');

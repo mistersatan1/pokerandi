@@ -28,10 +28,11 @@
       mods: { fieldType: 'FIRE', summonTree: 'FIRE', treeTypeWeight: 3, typeDamageMul: { FIRE: 3 }, finalBossHpMul: RPD.Modes.NORMAL.modifiers.finalBossHpMul * 0.3 }
     },
     {
-      id: 'cost2', icon: '💰', name: '소환 비용 2배', tone: 'hard',
-      desc: '소환 한 번에 드는 골드가 두 배. 방출 환급도 들인 만큼(절반)이라 같이 오른다.',
-      /* 세션 99 측정(80판씩): 클리어 1% · 중앙 46R · 판당 소환 190 → 68회(규칙 없음 15% · 중앙 64R). 요청대로 2배 그대로 — 보정 없음 */
-      mods: { summonCostMul: 2 }              // EconomyManager.summonCost
+      // id 는 'cost2' 그대로(세션 99 기록 키) — 값만 1.5배로(세션 100)
+      id: 'cost2', icon: '💰', name: '소환 비용 1.5배', tone: 'hard',
+      desc: '소환 한 번에 드는 골드가 1.5배. 방출 환급도 들인 만큼(절반)이라 같이 오른다.',
+      /* 세션 99 측정(80판씩): 2배 → 클리어 1% · 중앙 46R · 판당 소환 190 → 68회(규칙 없음 15% · 중앙 64R) — 너무 어려워 세션 100 에 1.5배로 */
+      mods: { summonCostMul: 1.5 }            // EconomyManager.summonCost
     },
     {
       id: 'shuffle', icon: '🎲', name: '조합식 랜덤', tone: 'mix',
@@ -40,11 +41,14 @@
       mods: { recipeShuffle: true }           // SpecialRunManager.applyShuffle — RecipeData 재료를 판 시드로 섞는다
     },
     {
-      id: 'lucky', icon: '🍀', name: '높은 등급 확률 증가', tone: 'mix',
-      desc: '소환에서 안흔함 ×1.3 · 특별함 ×1.8, 흔함 최소 비중 50% → 35%. 희귀함 · 전설은 지금처럼 조합으로만 얻는다.',
+      id: 'lucky', icon: '🍀', name: '높은 등급 확률 증가', tone: 'easy',
+      desc: '매 라운드 소환권 1장(소환권은 열린 등급 중 위에서 두 번째 이상). 소환에서 안흔함 ×1.3 · 특별함 ×1.8, 흔함 최소 비중 50% → 35%. 희귀함 · 전설은 지금처럼 조합으로만 얻는다.',
       /* 세션 99 측정(80판씩): 클리어 10% · 흔함 바닥 0.42 → 10% · 0.5 → 11%(규칙 없음 15%) — 잡음 안에서 쉬워지지 않는다.
        * 후반은 61R 벽 · 조합 전설이 가르고, 흔함이 줄면 재료가 모자라 판이 빨라지지 않는다. 그래서 tone 'mix'(쉬움 표시 안 함) */
-      mods: { summonTierMul: { T2: 1.3, T3: 1.8 }, minCommonShare: 0.35 }   // SummonTable.weightsFor · SummonManager.currentWeights
+      /* 세션 100: 확률만으로는 안 쉬워져 소환권을 더한다(ticketEvery — SpecialRunManager 가 game:wave 에 N 라운드마다 1장).
+       * 소환권 소환은 열린 등급 중 위에서 두 번째 이상(SummonTable.ticketFloorOffset)이라 "높은 등급"이 실제로 더 자주 나온다.
+       * 80판씩: 2라운드마다 19% · 매 라운드 30%(같은 때 기준 8.8% · 세션 99 기준 15%) — 확실히 쉬운 규칙이 되게 매 라운드 */
+      mods: { summonTierMul: { T2: 1.3, T3: 1.8 }, minCommonShare: 0.35, ticketEvery: 1 }   // SummonTable.weightsFor · SummonManager.currentWeights
     }
   ];
 

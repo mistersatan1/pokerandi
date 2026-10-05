@@ -3359,7 +3359,7 @@ check('특수 런 — 규칙이 모드에 합쳐진다 · 기록은 따로 · �
   const m = RPD.effectiveMode('NORMAL', 'HARD', ['lucky', 'cost2', 'nope']);
   if (m.rules.join() !== 'cost2,lucky') throw new Error('규칙 정리 ' + m.rules);
   if (m.recordKey !== 'SPECIAL:cost2+lucky:HARD') throw new Error('기록 키 ' + m.recordKey);
-  if (m.modifiers.summonCostMul !== 2 || m.modifiers.minCommonShare !== 0.35 || m.modifiers.finalBossHpMul == null) throw new Error('보정 ' + JSON.stringify(m.modifiers));
+  if (m.modifiers.summonCostMul !== 1.5 || m.modifiers.minCommonShare !== 0.35 || m.modifiers.finalBossHpMul == null) throw new Error('보정 ' + JSON.stringify(m.modifiers));
   if (RPD.effectiveMode('BOSS_RUSH', 'NORMAL', ['cost2']).rules.length) throw new Error('보스 러시에 규칙');
   if (RPD.effectiveMode('NORMAL', 'NORMAL', []).recordKey !== 'NORMAL:NORMAL') throw new Error('규칙 없는 기록 키');
   spStart(['cost2']);
@@ -3370,19 +3370,34 @@ check('특수 런 — 규칙이 모드에 합쳐진다 · 기록은 따로 · �
   if (RPD.GameManager.mode.rules.length) throw new Error('규칙 끄기');
 });
 
-check('특수 런 — 소환 비용 2배 · 높은 등급 확률(흔함 최소 35%)', () => {
+check('특수 런 — 소환 비용 1.5배 · 높은 등급 확률(흔함 최소 35% · 매 라운드 소환권) · 챌린지 tierMul 적용', () => {
   spStart([]);
   const base = RPD.EconomyManager.summonCost(), T = RPD.SummonTable;
   const o0 = T.oddsFor(30);
   spStart(['cost2']);
-  if (RPD.EconomyManager.summonCost() !== base * 2) throw new Error('비용 ' + base + ' → ' + RPD.EconomyManager.summonCost());
+  if (RPD.EconomyManager.summonCost() !== Math.round(base * 1.5)) throw new Error('비용 1.5배 ' + base + ' → ' + RPD.EconomyManager.summonCost());
   spStart(['lucky']);
   const o1 = T.oddsFor(30);
   if (!(o0.T1 >= 49.9 && o1.T1 < o0.T1 && o1.T1 >= 34.9 && o1.T3 > o0.T3 * 1.4)) throw new Error('확률 ' + JSON.stringify({ o0, o1 }));
   if (o1.T4 || o1.T5) throw new Error('희귀함 · 전설이 소환에 나왔다');
+  // 매 라운드 소환권 1장(세션 100) — 라운드 시작(game:wave)에만, 이어하기(resumeRound)에선 안 준다
+  const t0 = RPD.SummonManager.tickets;
+  RPD.GameManager.setWave(31); RPD.GameManager.setWave(32);
+  if (RPD.SummonManager.tickets !== t0 + 2) throw new Error('라운드 소환권 ' + t0 + ' → ' + RPD.SummonManager.tickets);
+  RPD.WaveManager.resumeRound(32);
+  if (RPD.SummonManager.tickets !== t0 + 2) throw new Error('이어하기에 소환권을 또 줬다');
+  spStart([]);
+  const t1 = RPD.SummonManager.tickets; RPD.GameManager.setWave(33);
+  if (RPD.SummonManager.tickets !== t1) throw new Error('규칙 없는 판에 라운드 소환권');
   RPD.GameManager.setWave(30);
   const w = RPD.SummonManager.currentOdds();
   if (w.T1 < 34.9) throw new Error('천장 보정 뒤 흔함 ' + w.T1);
+  // 챌린지 "상위 등급 확률" tierMul(세션 100 — 예전엔 안 읽혔다): 특별함 가중치 ×0.75
+  RPD.Game.resetAll('CHALLENGE', 'NORMAL', { rules: [] });
+  const wc = T.weightsFor(40);
+  RPD.Game.resetAll('NORMAL', 'NORMAL', { rules: [] });
+  const wn = T.weightsFor(40);
+  if (Math.abs(wc.T3 / wc.T2 - (wn.T3 / wn.T2) * 0.75) > 1e-6) throw new Error('챌린지 tierMul ' + JSON.stringify({ wc, wn }));
 });
 
 check('특수 런 "불꽃만" — 전투 칸 거절 · 응원 칸 · 자동 배치는 창고로 · 소환 종은 불꽃 계열', () => {

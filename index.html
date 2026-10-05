@@ -97,6 +97,7 @@
     <button type="button" class="iconbtn iconbtn--gshop" id="btnGoldShop" title="골드 상점 (G)" aria-label="골드 상점">골드<br>상점</button>
     <button type="button" class="iconbtn iconbtn--elite" id="btnElite" title="정예 소환 (E)" aria-label="정예 소환">정예<br>소환</button>
     <button type="button" class="iconbtn" id="btnDex" title="도감" aria-label="도감"><span class="ico ico--book"></span></button>
+    <button type="button" class="iconbtn iconbtn--ach" id="btnAchieve" title="업적 · 칭호" aria-label="업적">🏆</button>
     <!-- 휴대폰에서만(☰ 메뉴) — PC 는 F11 · 브라우저 설치 버튼이 있다 -->
     <button type="button" class="iconbtn iconbtn--mobile" id="btnSynergy" title="타입 시너지" aria-label="시너지"><span class="ico ico--synergy"></span></button>
     <button type="button" class="iconbtn iconbtn--mobile" id="btnFullscreen" title="전체 화면" aria-label="전체 화면">⛶</button>
@@ -186,6 +187,20 @@
         </div>
       </div>
 
+
+      <!-- 업적 · 칭호(세션 98) — AchieveUI -->
+      <div class="dex achieve" id="achieveOverlay" hidden>
+        <div class="dex__card pane achieve__card">
+          <div class="dex__head">
+            <h2 class="pane__title">🏆 업적 · 칭호</h2>
+            <span class="dex__count" id="achieveCount">0 / 0</span>
+          </div>
+          <div class="achbar" id="achieveEquipped"></div>
+          <div class="achieve__body" id="achieveBody"></div>
+          <button type="button" class="btn btn--ghost" id="btnAchieveClose">닫기</button>
+        </div>
+      </div>
+      <div class="achtoast" id="achieveToast" aria-live="polite"></div>
 
       <div class="chatlog" id="chatLog" aria-live="polite"></div>
       <div class="chatbar" id="chatBar" hidden>
@@ -393,6 +408,7 @@
           <dl class="result__stats" id="resultStats"></dl>
           <p class="result__best" id="resultBest"></p>
           <p class="result__trainer" id="resultTrainer" hidden></p>
+          <p class="result__ach" id="resultAch" hidden></p>
           <p class="result__note" id="resultNote"></p>
           <button type="button" class="bigbtn bigbtn--gold" id="btnResultRestart"><span class="bigbtn__name">다시 시작</span></button>
         </div>
@@ -629,6 +645,7 @@
 <script src="js/data/traits.js"></script>
 <script src="js/data/auras.js"></script>
 <script src="js/data/titles.js"></script>
+<script src="js/data/achievements.js"></script>
 <script src="js/data/spells.js"></script>
 <script src="js/data/roletuning.js"></script>
 <script src="js/data/craftpower.js"></script>
@@ -657,6 +674,7 @@
 <script src="js/systems/WaveManager.js"></script>
 <script src="js/systems/SaveManager.js"></script>
 <script src="js/systems/ProgressManager.js"></script>
+<script src="js/systems/AchievementManager.js"></script>
 <script src="js/systems/SpellManager.js"></script>
 <script src="js/systems/LegendAdvisor.js"></script>
 <script src="js/systems/RunSave.js"></script>
@@ -691,6 +709,7 @@
 <script src="js/ui/BossIntroUI.js"></script>
 <script src="js/ui/EliteUI.js"></script>
 <script src="js/ui/SpellUI.js"></script>
+<script src="js/ui/AchieveUI.js"></script>
 <script src="js/main.js"></script>
 
 </body>

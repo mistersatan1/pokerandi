@@ -137,6 +137,7 @@
 
     if (el.modeList) {
       el.modeList.addEventListener('click', function (e) {
+        if (e.target.closest('[data-open-ach]')) { if (RPD.AchieveUI) RPD.AchieveUI.open(); return; }   // 업적 창(세션 98) — 모드 선택 위에 뜬다
         var diff = e.target.closest('.diffbtn');
         if (diff) {
           hideModePick();
@@ -1338,7 +1339,8 @@
     var PM = RPD.ProgressManager;
     if (!PM) { el.trainerInfo.hidden = true; return; }
     var t = PM.title(), b = PM.lastBonus && PM.describeBonus(PM.lastBonus);
-    el.trainerInfo.innerHTML = '<b>' + (t ? t.name : '새 트레이너') + '</b>' +
+    var badge = RPD.AchieveUI ? RPD.AchieveUI.titleBadge() : '';   // 업적 칭호(세션 98)
+    el.trainerInfo.innerHTML = badge + '<b>' + (t ? t.name : '새 트레이너') + '</b>' +
       '<span>클리어 ' + PM.clears() + '회</span>' +
       (b ? '<span class="ti__bonus">이번 판 시작 보너스 · ' + b + '</span>' : '');
     el.trainerInfo.hidden = false;
@@ -1354,6 +1356,7 @@
     return n ? '<b class="is-clear">클리어 ' + n + '회</b>' : '<b>최고 ' + rec.wave + 'R</b>';
   }
 
+  UIManager.showModePick = function () { showModePick(); };   // 업적 캡처(achshots) · 다른 화면이 부른다
   function showModePick() {
     if (!el.modeOverlay || !el.modeList) return;
     var PM = RPD.ProgressManager;
@@ -1369,6 +1372,9 @@
                : '<span class="trainer__bonus is-none">한 번 클리어하면 시작 보너스가 생깁니다</span>') +
         (PM.specialTitles().length ? '<span class="trainer__special">' +
           PM.specialTitles().map(function (x) { return '🏅 ' + x.name; }).join(' · ') + '</span>' : '') +
+        (RPD.AchievementManager ? '<span class="trainer__ach">' + (RPD.AchieveUI ? RPD.AchieveUI.titleBadge() : '') +
+          '<button type="button" class="btn btn--ghost trainer__achbtn" data-open-ach="1">🏆 업적 ' +
+          RPD.AchievementManager.count() + ' / ' + RPD.AchievementManager.total() + '</button></span>' : '') +
       '</div>';
     }
 

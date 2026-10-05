@@ -3250,6 +3250,101 @@ check('소환 템포 — 특별함 소환도 화면 가운데 카드 없이 칸 
   RPD.CraftFx.reset();
 });
 
+/* ---------- 업적 · 칭호(세션 98) ---------- */
+function achFresh() {
+  lockFresh();
+  const D = RPD.SaveManager.data;
+  D.achievements = {}; D.achProgress = {}; D.title = null;
+  RPD.AchievementManager.unlockedThisRun = [];
+  RPD.AchieveUI.queue.length = 0; RPD.AchieveUI.showing = false;
+}
+check('업적 — 전설 조합(첫 · 한 판 5마리) · 누적 조합 · 첫 업적 칭호를 바로 단다 · 알림', () => {
+  achFresh();
+  const AM = RPD.AchievementManager, PD = RPD.PokemonData;
+  const legend = RPD.UnitManager.create(PD.list.find(d => d.tier === 'T5').id);
+  for (let i = 0; i < 4; i++) RPD.bus.emit('recipe:crafted', { unit: legend, tier: 'T5', materials: [], from: [], fromStore: 0 });
+  if (!AM.has('craft_first') || !AM.has('legend_first')) throw new Error('첫 조합 · 첫 전설');
+  if (AM.has('legend_run5')) throw new Error('4마리에 한 판 5마리가 됐다');
+  if (AM.equipped().id !== 'craft_first') throw new Error('첫 업적 칭호를 안 달았다 ' + RPD.SaveManager.data.title);
+  if (!nodes.achieveToast.classList.contains('is-on') || !/업적 달성/.test(nodes.achieveToast.innerHTML)) throw new Error('알림 ' + nodes.achieveToast.innerHTML);
+  // 새 판이면 한 판 수가 처음부터(누적 수는 그대로)
+  lockFresh();
+  if (AM.run.legends !== 0) throw new Error('새 판인데 한 판 전설 수 ' + AM.run.legends);
+  for (let i = 0; i < 5; i++) RPD.bus.emit('recipe:crafted', { unit: legend, tier: 'T5', materials: [], from: [], fromStore: 0 });
+  if (!AM.has('legend_run5')) throw new Error('한 판 5마리');
+  if (RPD.SaveManager.data.achProgress.crafts !== 9) throw new Error('누적 조합 ' + RPD.SaveManager.data.achProgress.crafts);
+  if (AM.equipped().id !== 'craft_first') throw new Error('이미 단 칭호를 다른 업적이 바꿨다');
+  if (AM.has('boss_first')) throw new Error('보스를 안 잡았는데 첫 보스(새 판 reset 의 boss:cleared 를 처치로 셌다)');
+  RPD.bus.emit('enemy:died', { enemy: { isBoss: false, defId: 'x' } });
+  if (AM.has('boss_first')) throw new Error('일반 적 처치를 보스로 셌다');
+  RPD.bus.emit('enemy:died', { enemy: { isBoss: true, defId: 'x' } });
+  if (!AM.has('boss_first')) throw new Error('보스 처치를 안 셌다');
+});
+
+check('업적 — 불멸 3종 동시 보유 · "불멸 없이 60R" 은 판 안에서 한 번이라도 불멸을 가졌으면 안 된다', () => {
+  achFresh();
+  const AM = RPD.AchievementManager, PD = RPD.PokemonData, GM = RPD.GameManager;
+  GM.setWave(61); RPD.bus.emit('wave:started', {});
+  if (!AM.has('wall_noimm')) throw new Error('불멸 없이 61R 인데 안 됐다');
+  achFresh();
+  const imm = PD.list.filter(d => d.tier === 'T6').slice(0, 3);
+  RPD.StorageManager.add(RPD.UnitManager.create(imm[0].id)); RPD.bus.emit('storage:changed', RPD.StorageManager.units);
+  if (!AM.run.hadImmortal) throw new Error('불멸을 가졌는데 기록 안 됨');
+  RPD.StorageManager.reset(); RPD.bus.emit('storage:changed', []);   // 방출해도 "가졌던 판" 이다
+  GM.setWave(61); RPD.bus.emit('wave:started', {});
+  if (AM.has('wall_noimm')) throw new Error('불멸을 가졌던 판인데 불멸 없이 60R 이 됐다');
+  imm.slice(0, 2).forEach(d => RPD.StorageManager.add(RPD.UnitManager.create(d.id)));
+  RPD.bus.emit('storage:changed', RPD.StorageManager.units);
+  if (AM.has('immortal_3')) throw new Error('2종에 3종 업적');
+  RPD.StorageManager.add(RPD.UnitManager.create(imm[1].id)); RPD.bus.emit('storage:changed', RPD.StorageManager.units);
+  if (AM.has('immortal_3')) throw new Error('같은 종 두 마리를 2종으로 셌다');
+  RPD.StorageManager.add(RPD.UnitManager.create(imm[2].id)); RPD.bus.emit('storage:changed', RPD.StorageManager.units);
+  if (!AM.has('immortal_3')) throw new Error('3종인데 안 됐다');
+});
+
+check('업적 — 판 이어하기에 한 판 기록이 남고 · 예전 저장본(기록 없음)도 버리지 않는다', () => {
+  achFresh();
+  const AM = RPD.AchievementManager, RS = RPD.RunSave;
+  AM.run.legends = 3; AM.run.hadImmortal = true;
+  const snap = RS.snapshot();
+  if (!snap.state.AchievementManager || snap.state.AchievementManager.legends !== 3) throw new Error('저장 안 됨 ' + JSON.stringify(snap.state.AchievementManager));
+  AM.reset(); AM.loadState(snap.state.AchievementManager);
+  if (AM.run.legends !== 3 || !AM.run.hadImmortal) throw new Error('복원 ' + JSON.stringify(AM.run));
+  const old = JSON.parse(JSON.stringify(snap)); delete old.state.AchievementManager;
+  if (!RS.validate(old)) throw new Error('업적 기록 없는 예전 저장본을 버렸다');
+  AM.loadState(undefined);
+  if (AM.run.legends !== 0 || AM.run.hadImmortal) throw new Error('없는 기록에서 시작 ' + JSON.stringify(AM.run));
+});
+
+check('업적 — 칭호 달기 · 떼기 · 이루지 않은 업적은 못 단다 · 숨은 업적은 ??? · 기록 옮기기에 남는다', () => {
+  achFresh();
+  const AM = RPD.AchievementManager;
+  if (AM.equip('boss_first')) throw new Error('이루지 않은 업적을 달았다');
+  AM.unlock('boss_first'); AM.unlock('dex_50');
+  if (!AM.equip('dex_50') || AM.equipped().id !== 'dex_50') throw new Error('달기');
+  RPD.AchieveUI.open();
+  const h = nodes.achieveBody.innerHTML;
+  if (!/data-equip="boss_first"/.test(h)) throw new Error('이룬 업적에 [칭호 달기]가 없다');
+  if (/초월자/.test(h) || !/숨은 업적/.test(h)) throw new Error('숨은 업적 이름이 드러났다');
+  if (nodes.achieveCount.textContent !== '2 / ' + AM.total()) throw new Error('개수 ' + nodes.achieveCount.textContent);
+  if (!/도감 수집가/.test(nodes.achieveEquipped.innerHTML)) throw new Error('단 칭호 줄 ' + nodes.achieveEquipped.innerHTML);
+  RPD.AchieveUI.close();
+  const imp = RPD.SaveManager.parseImport(RPD.SaveManager.exportText());
+  if (!imp.ok || !imp.data.achievements.dex_50 || imp.data.title !== 'dex_50') throw new Error('기록 옮기기 ' + JSON.stringify(imp.data && imp.data.achievements));
+  if (!AM.equip(null) || AM.equipped()) throw new Error('떼기');
+});
+
+check('업적 — 클리어 판정(불멸 없이 · 안 놓치고 · 모드) · 결과 화면 "이번 판 업적"', () => {
+  achFresh();
+  const AM = RPD.AchievementManager;
+  RPD.StatsManager.leaks = 2;
+  AM.checkClear();
+  if (!AM.has('clear_noimm') || AM.has('clear_noleak') || AM.has('bossrush_clear')) throw new Error('노멀 클리어 판정 ' + JSON.stringify(RPD.SaveManager.data.achievements));
+  RPD.AchieveUI.renderResult();
+  if (nodes.resultAch.hidden || !/순수한 승리/.test(nodes.resultAch.innerHTML)) throw new Error('결과 화면 ' + nodes.resultAch.innerHTML);
+  RPD.StatsManager.leaks = 0;
+});
+
 wakePromise.then(() => {
   console.log(`\n────────────────────────────`);
   console.log(failures === 0 ? '부팅 경로 이상 없음' : `부팅 문제 ${failures}건`);

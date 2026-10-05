@@ -38,6 +38,7 @@
     RPD.ShardManager.init();
     RPD.RewardManager.init();
     RPD.BossManager.init();
+    if (RPD.AchievementManager) RPD.AchievementManager.init();   // SaveManager 보다 먼저 — 클리어 업적이 판 기록 · 결과 화면보다 먼저 정해지게
     RPD.SaveManager.init();
     RPD.ProgressManager.init();
     RPD.SpellManager.init();
@@ -66,6 +67,7 @@
     if (RPD.BossIntroUI) RPD.BossIntroUI.init();
     if (RPD.EliteUI) RPD.EliteUI.init();
     if (RPD.SpellUI) RPD.SpellUI.init();
+    if (RPD.AchieveUI) RPD.AchieveUI.init();
     if (RPD.HudPanels) RPD.HudPanels.init();
     if (RPD.MobileSheet) RPD.MobileSheet.init();
     if (RPD.MobileToolbar) RPD.MobileToolbar.init();

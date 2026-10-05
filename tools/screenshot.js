@@ -1746,6 +1746,15 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     if (dx.problems.length) process.exitCode = 1;
   }
 
+  /* ㊴ 업적 · 칭호(세션 98) — tools/achshots.js. 40_ach_* */
+  {
+    const ac = await require('./achshots.js').run(browser);
+    console.log('ach', JSON.stringify(ac.report).slice(0, 300));
+    console.log('ach problems', JSON.stringify(ac.problems));
+    report.push({ ach: ac.report });
+    if (ac.problems.length) process.exitCode = 1;
+  }
+
   /* ㉘ 응원 칸(세션 82) — tools/cheershots.js(단독으로도 돈다). (b) 빈 응원 칸 (c) 2마리 + 요약 줄 (d) 응원 칸 카드 (e) 받는 버프 (f) 거절 알림 (g) 2라운드 */
   {
     const ch = await require('./cheershots.js').run(browser);

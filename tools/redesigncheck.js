@@ -1092,7 +1092,14 @@ section('도감 영구 버프');
 {
   const DB = RPD.DexBonus;
   check('등록 수에 따라 보너스가 열린다',
-    DB.activeFor(0).length === 0 && DB.activeFor(30).length === 3, `30종=${DB.activeFor(30).length}`);
+    DB.activeFor(0).length === 0 && DB.activeFor(30).length === 6, `30종=${DB.activeFor(30).length}`);
+  // 세션 97 — 10 · 20 · 40 · 60 · 100 · 151 이정표 사이를 잘게(빈 구간이 20종을 넘지 않는다) · 창고는 최대 +24
+  const ats = DB.steps.map(s => s.at), gaps = ats.map((a, i) => a - (ats[i - 1] || 0));
+  check('도감 보상이 잘게 나뉜다(19단계 이상 · 빈 구간 ≤ 15종)', ats.length >= 19 && Math.max.apply(null, gaps) <= 15, `단계 ${ats.length} · 최대 빈 구간 ${Math.max.apply(null, gaps)}`);
+  check('151종 이정표가 있다', ats.indexOf(151) >= 0);
+  const fullT = DB.totals(PD.all().length);
+  check('도감 100% 창고 +24칸 · 시작 조각 · 소환권이 붙는다', fullT.storage === 24 && fullT.startShards > 0 && fullT.startTickets > 0, JSON.stringify(fullT));
+  check('화면용 요약은 종류별 한 줄', DB.summary(PD.all().length).length === 8 && DB.summary(0).length === 0);
   check('다음 보상을 알려 준다', DB.nextFor(25).at === 30, `next=${DB.nextFor(25).at}`);
   check('전부 채우면 다음이 없다', DB.nextFor(PD.all().length) === null);
 

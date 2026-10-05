@@ -227,7 +227,7 @@
     try {
       SM.bonus = SM.baseBonus();
       if (SK) { SK.buff = null; SK.passive = SK.passiveFor([RPD.PokemonData.get(defId)]); }
-      if (DB) DB.totals = function () { return { damage: 0, attackSpeed: 0, gold: 0, critRate: 0, startGold: 0 }; };
+      if (DB) DB.totals = function () { return { damage: 0, attackSpeed: 0, gold: 0, critRate: 0, startGold: 0, startShards: 0, startTickets: 0, storage: 0 }; };
       if (GS) { GS.attackMul = function () { return 1; }; GS.speedMul = function () { return 1; }; }
       if (GM) GM.targetAll = null;
       unit = UnitManager.create(defId);        // create 가 recompute(unit, 0) 까지 한다 — 위 중립 상태에서

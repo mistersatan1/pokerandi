@@ -591,11 +591,9 @@
       el.dexMiniBar.style.width = (total ? have / total * 100 : 0).toFixed(1) + '%';
     }
     if (!el.dexMiniList || !RPD.DexBonus) return;
-    var on = RPD.DexBonus.activeFor(have);
     var next = RPD.DexBonus.nextFor(have);
-    var rows = on.map(function (b) {
-      var m = b.label.match(/^(.*?)\s*(\+[\d.]+%?p?|\+\d+)$/);
-      return '<li class="is-on"><span>' + (m ? m[1] : b.label) + '</span><b>' + (m ? m[2] : '') + '</b></li>';
+    var rows = RPD.DexBonus.summary(have).map(function (b) {   // 종류별 합계 한 줄씩(세션 97)
+      return '<li class="is-on"><span>' + b.name + '</span><b>' + b.value + '</b></li>';
     });
     if (next) {
       rows.push('<li class="is-next"><span>' + next.at + '종 · ' + next.label + '</span><b>' + (next.at - have) + '종 남음</b></li>');

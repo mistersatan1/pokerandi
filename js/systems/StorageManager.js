@@ -19,9 +19,13 @@
     capacity: 0
   };
 
+  /* 판의 창고 칸 = 기본(Config.storageBase) + 도감 보상(세션 97) */
+  StorageManager.baseCapacity = function () {
+    return RPD.Config.storageBase + (RPD.DexBonus ? RPD.DexBonus.totals().storage || 0 : 0);
+  };
   StorageManager.reset = function () {
     this.units = [];
-    this.capacity = RPD.Config.storageBase;
+    this.capacity = this.baseCapacity();
     RPD.bus.emit('storage:changed', this.units);
   };
 
@@ -172,7 +176,7 @@
   StorageManager.loadState = function (s) {
     var self = this;
     // 옛 저장(용량 14 · 확장으로 늘린 값)이 지금 기본값보다 작을 수 있다 — 더 큰 쪽(세션 76 에 골드 확장을 없앴다)
-    this.capacity = Math.max(s.capacity || 0, RPD.Config.storageBase);
+    this.capacity = Math.max(s.capacity || 0, this.baseCapacity());
     (s.units || []).forEach(function (d) { var u = RPD.UnitManager.revive(d); if (u) self.add(u); });
     RPD.bus.emit('storage:changed', this.units);
   };

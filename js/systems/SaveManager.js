@@ -25,6 +25,9 @@
       spells: {},         // { 주문 id: 처음 발견한 시각 } — 조합 사전·도감이 주문을 보여 준다
       totals: { runs: 0, clears: 0, kills: 0, bossKills: 0, playSeconds: 0 },
       settings: { speed: 1 },
+      achievements: {},   // { 업적 id: 이룬 시각 } — 세션 98(AchievementManager)
+      achProgress: {},    // { crafts, craftT5, bosses, elites … } — 업적 누적 수
+      title: null,        // 단 칭호(업적 id)
       updatedAt: 0
     };
   }
@@ -251,7 +254,7 @@
     var d = o.data;
     if (typeof d.version !== 'number' || typeof o.version !== 'number') return { ok: false, reason: 'FORMAT' };
     if (d.version > CURRENT_VERSION) return { ok: false, reason: 'VERSION' };     // 더 새 게임에서 내보낸 것 — 덮어써서 망치지 않게
-    var objs = ['pokedex', 'records', 'clearsBy', 'spells'];
+    var objs = ['pokedex', 'records', 'clearsBy', 'spells', 'achievements', 'achProgress'];
     for (var i = 0; i < objs.length; i++) if (d[objs[i]] != null && (typeof d[objs[i]] !== 'object' || Array.isArray(d[objs[i]]))) return { ok: false, reason: 'FORMAT' };
     var data = normalize(JSON.parse(JSON.stringify(d)));
     return { ok: true, data: data, summary: this.summaryOf(data) };

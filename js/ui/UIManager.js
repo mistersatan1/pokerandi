@@ -137,6 +137,7 @@
 
     if (el.modeList) {
       el.modeList.addEventListener('click', function (e) {
+        if (e.target.closest('[data-open-ach]')) { if (RPD.AchieveUI) RPD.AchieveUI.open(); return; }   // 업적 창(세션 98) — 모드 선택 위에 뜬다
         var diff = e.target.closest('.diffbtn');
         if (diff) {
           hideModePick();
@@ -1338,7 +1339,8 @@
     var PM = RPD.ProgressManager;
     if (!PM) { el.trainerInfo.hidden = true; return; }
     var t = PM.title(), b = PM.lastBonus && PM.describeBonus(PM.lastBonus);
-    el.trainerInfo.innerHTML = '<b>' + (t ? t.name : '새 트레이너') + '</b>' +
+    var badge = RPD.AchieveUI ? RPD.AchieveUI.titleBadge() : '';   // 업적 칭호(세션 98)
+    el.trainerInfo.innerHTML = badge + '<b>' + (t ? t.name : '새 트레이너') + '</b>' +
       '<span>클리어 ' + PM.clears() + '회</span>' +
       (b ? '<span class="ti__bonus">이번 판 시작 보너스 · ' + b + '</span>' : '');
     el.trainerInfo.hidden = false;
@@ -1354,6 +1356,7 @@
     return n ? '<b class="is-clear">클리어 ' + n + '회</b>' : '<b>최고 ' + rec.wave + 'R</b>';
   }
 
+  UIManager.showModePick = function () { showModePick(); };   // 업적 캡처(achshots) · 다른 화면이 부른다
   function showModePick() {
     if (!el.modeOverlay || !el.modeList) return;
     var PM = RPD.ProgressManager;
@@ -1369,6 +1372,9 @@
                : '<span class="trainer__bonus is-none">한 번 클리어하면 시작 보너스가 생깁니다</span>') +
         (PM.specialTitles().length ? '<span class="trainer__special">' +
           PM.specialTitles().map(function (x) { return '🏅 ' + x.name; }).join(' · ') + '</span>' : '') +
+        (RPD.AchievementManager ? '<span class="trainer__ach">' + (RPD.AchieveUI ? RPD.AchieveUI.titleBadge() : '') +
+          '<button type="button" class="btn btn--ghost trainer__achbtn" data-open-ach="1">🏆 업적 ' +
+          RPD.AchievementManager.count() + ' / ' + RPD.AchievementManager.total() + '</button></span>' : '') +
       '</div>';
     }
 
@@ -2493,12 +2499,16 @@
     if (el.dexCount) el.dexCount.textContent = have + ' / ' + total;
 
     if (el.dexBonus) {
-      var cur = RPD.DexBonus ? RPD.DexBonus.activeFor(have) : [];
+      // 세션 97 — 단계가 19개로 늘어 종류별 합계 한 줄씩("창고 +12칸")
+      var cur = RPD.DexBonus ? RPD.DexBonus.summary(have) : [];
       var next = RPD.DexBonus ? RPD.DexBonus.nextFor(have) : null;
+      var steps = RPD.DexBonus ? RPD.DexBonus.steps : [];
+      var gotN = steps.filter(function (s) { return have >= s.at; }).length;
       el.dexBonus.innerHTML =
+        '<div class="dex__bonusRow is-head"><span>도감 보상 ' + gotN + ' / ' + steps.length + '단계</span></div>' +
         (cur.length
           ? cur.map(function (b) {
-              return '<div class="dex__bonusRow"><span>' + b.label + '</span><strong>적용 중</strong></div>';
+              return '<div class="dex__bonusRow"><span>' + b.name + '</span><strong>' + b.value + '</strong></div>';
             }).join('')
           : '<div class="dex__bonusRow"><span>아직 보너스가 없습니다</span></div>') +
         (next

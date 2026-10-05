@@ -46,7 +46,7 @@
 
     /* 창고 — 조합식을 다 외울 수 없으니 재료를 쌓아 둘 곳이 필요하다.
      * 고정 칸(세션 76 에 골드 확장을 없앴다) — 한도는 두되 소환이 막히지 않을 만큼. 값은 tools/autoplay.js 의 창고 사용 최대치로 정했다(VERSION.md). */
-    storageBase: 36,
+    storageBase: 48,   // 세션 97 — 36 → 48(사용자 요청 "창고 대폭 확장") · 도감으로 +4 × 6 = 최대 72(DexBonus 'storage')
     summonCostStep: 12,      // 누적 소환 10회마다 +9
     summonCostStepEvery: 10,
     summonCostCap: 190,

@@ -72,6 +72,13 @@
       if (Object.prototype.hasOwnProperty.call(band.weights, k)) out[k] = band.weights[k];
     }
 
+    // 특수 런 "높은 등급 확률 증가"(세션 99) — 등급별 배수. 흔함 최소 비중도 규칙이 낮춘다(아래 clampCommon)
+    var tmul = RPD.modeMod ? RPD.modeMod('summonTierMul', null) : null;
+    if (tmul) for (var mk in tmul) if (out[mk]) out[mk] *= tmul[mk];
+    // 모드 보정 tierMul(챌린지 "상위 등급 확률 절반") — RPD.js 에 적혀 있었지만 읽는 곳이 없어 적용된 적이 없었다(세션 99 발견 · 세션 100 적용)
+    var mmul = RPD.modeMod ? RPD.modeMod('tierMul', null) : null;
+    if (mmul) for (var mm in mmul) if (out[mm]) out[mm] *= mmul[mm];
+
     // 해금 직후 보정
     for (var t = 0; t < RPD.TIER_ORDER.length; t++) {
       var id = RPD.TIER_ORDER[t];
@@ -80,7 +87,12 @@
         out[id] *= this.unlockBoostMul;
       }
     }
-    return clampCommon(out, this.minCommonShare);
+    return clampCommon(out, this.commonShare());
+  };
+
+  /* 흔함 최소 비중 — 특수 런이 낮출 수 있다(세션 99 · minCommonShare) */
+  SummonTable.commonShare = function () {
+    return RPD.modeMod ? RPD.modeMod('minCommonShare', this.minCommonShare) : this.minCommonShare;
   };
 
   /* 흔함이 minCommonShare 밑으로 가지 않게 나머지 등급을 줄인다.

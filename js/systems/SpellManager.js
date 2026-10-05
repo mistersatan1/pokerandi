@@ -97,7 +97,7 @@
     // 조합식과 같은 규칙 — 재료 중 가장 높은 강화 레벨의 절반을 이어받는다
     var topLevel = c.found.reduce(function (m, f) { return Math.max(m, (f.unit && f.unit.level) || 0); }, 0);
     unit.level = Math.min(RPD.Config.upgradeMaxLevel, Math.floor(topLevel / 2));
-    if (!(slotForResult >= 0 && RPD.FieldManager.place(slotForResult, unit)) && !RPD.SummonManager.autoPlace(unit)) RPD.StorageManager.add(unit);
+    if (!(slotForResult >= 0 && RPD.FieldManager.canPlace(slotForResult, unit).ok && RPD.FieldManager.place(slotForResult, unit)) && !RPD.SummonManager.autoPlace(unit)) RPD.StorageManager.add(unit);
     RPD.UnitManager.recomputeAll();
 
     if (spell.kind === 'transcend') { this.transcendShards -= 1; this.transcendUsed = true; }

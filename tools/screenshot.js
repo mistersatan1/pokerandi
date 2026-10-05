@@ -1755,6 +1755,15 @@ const URL = 'file://' + require('path').join(__dirname, '..', 'dist') + '/' + en
     if (ac.problems.length) process.exitCode = 1;
   }
 
+  /* ㊵ 특수 런(세션 99) — tools/specialshots.js. 41_special_* */
+  {
+    const sp = await require('./specialshots.js').run(browser);
+    console.log('special', JSON.stringify(sp.report).slice(0, 300));
+    console.log('special problems', JSON.stringify(sp.problems));
+    report.push({ special: sp.report });
+    if (sp.problems.length) process.exitCode = 1;
+  }
+
   /* ㉘ 응원 칸(세션 82) — tools/cheershots.js(단독으로도 돈다). (b) 빈 응원 칸 (c) 2마리 + 요약 줄 (d) 응원 칸 카드 (e) 받는 버프 (f) 거절 알림 (g) 2라운드 */
   {
     const ch = await require('./cheershots.js').run(browser);

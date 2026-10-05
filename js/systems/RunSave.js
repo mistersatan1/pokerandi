@@ -30,9 +30,9 @@
   var KEY = RPD.SAVE_KEY + ':run';
   var ORDER = ['GameManager', 'FieldManager', 'StorageManager', 'SummonManager', 'EconomyManager', 'ShardManager',
                'RewardManager', 'SpellManager', 'StatsManager', 'GoldShopManager', 'EliteManager', 'RecipeManager', 'TraitManager',
-               'AchievementManager'];
+               'AchievementManager', 'SpecialRunManager'];
   // 나중에 더한 매니저 — 이 기록이 없는 예전 저장본도 버리지 않는다(loadState(undefined) 가 새 값으로 시작)
-  var OPTIONAL = { AchievementManager: 1 };
+  var OPTIONAL = { AchievementManager: 1, SpecialRunManager: 1 };
   var NOT_SAVED = {
     WaveManager: '라운드 진행 — 저장된 라운드를 처음부터 다시 짠다(GameManager.wave)',
     EnemyManager: '라운드 도중의 적 — 안 남긴다(되살려 골드를 또 버는 악용 방지)',
@@ -87,6 +87,7 @@
     if (!d || d.schema !== SCHEMA || !d.state || !d.summary) return false;
     var st = d.state, g = st.GameManager;
     if (!g || !RPD.Modes[g.mode] || (g.mode === 'NORMAL' && !RPD.Difficulties[g.difficulty])) return false;
+    if ((g.rules || []).some(function (id) { return !RPD.SpecialRules || !RPD.SpecialRules.get(id); })) return false;   // 지금 없는 특수 규칙(세션 99)
     if (ORDER.some(function (n) { return !st[n] && !OPTIONAL[n]; })) return false;
     var units = [];
     (st.FieldManager.units || []).forEach(function (e) { units.push(e.unit); });
@@ -118,7 +119,7 @@
     var st = d.state, g = st.GameManager;
     this.restoring = true;
     try {
-      RPD.Game.resetAll(g.mode, g.difficulty, { restore: true });
+      RPD.Game.resetAll(g.mode, g.difficulty, { restore: true, rules: g.rules || [] });
       ORDER.forEach(function (name) { RPD[name].loadState(st[name]); });
       RPD.UnitManager.recomputeAll();
       RPD.RecipeManager.refresh();

@@ -19,10 +19,12 @@
     started: false
   };
 
-  GameManager.reset = function (modeId, diffId) {
-    // 난이도를 주지 않으면 지난번 난이도를 유지한다(다시 시작 버튼)
-    var keep = this.mode && this.mode.id === modeId ? this.mode.difficulty : 'NORMAL';
-    this.mode = RPD.effectiveMode(modeId, diffId || keep);
+  GameManager.reset = function (modeId, diffId, rules) {
+    // 난이도 · 특수 규칙을 주지 않으면 지난번 것을 유지한다(다시 시작 버튼)
+    var same = this.mode && this.mode.id === modeId;
+    var keep = same ? this.mode.difficulty : 'NORMAL';
+    if (rules === undefined) rules = same ? (this.mode.rules || []) : [];
+    this.mode = RPD.effectiveMode(modeId, diffId || keep, rules);
     this.wave = 0;
     this.targetAll = null;   // 공격 대상 "전체 적용" — 판마다 초기화(UnitManager.setTargetingAll)
     var mod = this.mode.modifiers || {};
@@ -138,12 +140,12 @@
 
   /* ---------- 판 이어하기(RunSave · 세션 70) — 라운드 시작 때의 상태만 ---------- */
   GameManager.saveState = function () {
-    return { mode: this.mode.id, difficulty: this.mode.difficulty, wave: this.wave, gold: this.gold, life: this.life,
+    return { mode: this.mode.id, difficulty: this.mode.difficulty, rules: this.mode.rules || [], wave: this.wave, gold: this.gold, life: this.life,
              shield: this.shield, elapsed: this.elapsed, targetAll: this.targetAll || null };
   };
   /* 모드는 RunSave 가 먼저 확인한다. wave 는 값만 넣는다 — game:wave 를 내면 라운드 시작 효과(특성 골드 등)가 두 번 나간다 */
   GameManager.loadState = function (s) {
-    this.mode = RPD.effectiveMode(s.mode, s.difficulty);
+    this.mode = RPD.effectiveMode(s.mode, s.difficulty, s.rules || []);
     this.wave = s.wave; this.gold = s.gold; this.life = s.life; this.shield = s.shield || 0;
     this.elapsed = s.elapsed || 0; this.targetAll = s.targetAll || null;
     this.emitStats();

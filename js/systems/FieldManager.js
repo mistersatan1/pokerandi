@@ -103,6 +103,9 @@
     if (!slot) return { ok: false, reason: 'NO_SLOT' };
     if (!slot.unlocked) return { ok: false, reason: 'LOCKED' };
     if (unit && slot.zone === 'cheer' && !(RPD.CheerData && RPD.CheerData.isCheerable(unit.defId))) return { ok: false, reason: 'NOT_CHEERABLE' };
+    // 특수 런 "불꽃만 사용"(세션 99) — 전투 칸엔 그 타입만. 응원 칸은 싸우지 않아 그대로
+    var only = RPD.modeMod('fieldType', null);
+    if (unit && only && slot.zone !== 'cheer' && (unit.types || []).indexOf(only) < 0) return { ok: false, reason: 'TYPE_RULE', type: only };
     return { ok: true };
   };
   function reject(index, unit, reason) {
@@ -121,10 +124,13 @@
   FieldManager.getSelected = function () { return this.get(this.selectedIndex); };
 
   /* 빈 전투 칸 — 소환 · 상점 · 보상의 "필드 여유"는 전투 칸만 본다(응원 칸은 응원 가능 포켓몬 전용이라 자동으로 채우지 않는다) */
-  FieldManager.firstEmpty = function () {
+  /* unit 을 주면 그 개체가 설 수 있는 칸만(특수 런 "불꽃만" · 세션 99). 안 주고 타입 규칙이 켜져 있으면 null —
+   * "필드에 자리가 있으니 창고가 차도 된다"는 앞선 검사가 실제 개체를 못 놓아 골드만 쓰고 개체를 잃지 않게 */
+  FieldManager.firstEmpty = function (unit) {
+    if (!unit && RPD.modeMod('fieldType', null)) return null;
     for (var i = 0; i < this.slots.length; i++) {
       var s = this.slots[i];
-      if (s.unlocked && !s.unit && s.zone !== 'cheer') return s;
+      if (s.unlocked && !s.unit && s.zone !== 'cheer' && (!unit || this.canPlace(i, unit).ok)) return s;
     }
     return null;
   };
@@ -210,7 +216,8 @@
   FieldManager.place = function (index, unit) {
     var slot = this.get(index);
     if (!slot || !slot.unlocked || slot.unit) return false;
-    if (!this.canPlace(index, unit).ok) return reject(index, unit, 'NOT_CHEERABLE');
+    var can = this.canPlace(index, unit);
+    if (!can.ok) return reject(index, unit, can.reason);
     slot.unit = unit;
     unit.slotIndex = index;
     unit.x = slot.x;
@@ -237,8 +244,9 @@
     if (!sa || !sb || a === b) return false;
     if (!sa.unlocked || !sb.unlocked) return false;
     // 응원 칸으로 들어가는 쪽이 응원 가능해야 한다(양쪽 다 본다 — 응원 칸 ↔ 전투 칸 맞바꿈)
-    if (sa.unit && !this.canPlace(b, sa.unit).ok) return reject(b, sa.unit, 'NOT_CHEERABLE');
-    if (sb.unit && !this.canPlace(a, sb.unit).ok) return reject(a, sb.unit, 'NOT_CHEERABLE');
+    var ca = sa.unit ? this.canPlace(b, sa.unit) : { ok: true }, cb = sb.unit ? this.canPlace(a, sb.unit) : { ok: true };
+    if (!ca.ok) return reject(b, sa.unit, ca.reason);
+    if (!cb.ok) return reject(a, sb.unit, cb.reason);
 
     var tmp = sa.unit;
     sa.unit = sb.unit;
@@ -287,7 +295,7 @@
       if (!slot || !slot.unlocked || !u) return;
       // 규칙이 바뀌어 그 칸에 못 두게 된 개체(세션 83 — 뮤는 더는 응원 칸에 못 둔다)는 빈 전투 칸 → 창고로. 저장본의 개체를 잃지 않는다
       if (!self.canPlace(e.slot, u).ok || slot.unit) {
-        var alt = self.firstEmpty();
+        var alt = self.firstEmpty(u);
         if (!(alt && self.place(alt.index, u)) && RPD.StorageManager) RPD.StorageManager.add(u);
         return;
       }

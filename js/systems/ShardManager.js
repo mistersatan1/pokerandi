@@ -82,7 +82,7 @@
 
     /* 필드가 차 있으면 창고로 보낸다 — 소환과 같은 규칙.
      * 이게 없으면 후반(필드가 늘 꽉 차 있는 시점)에 조각 상점이 통째로 잠긴다. */
-    var slot = RPD.FieldManager.firstEmpty();
+    var slot = RPD.FieldManager.firstEmpty({ defId: speciesId, types: def.types || [] });   // 특수 런 "불꽃만" — 못 서는 종은 창고로(세션 99)
     var toStorage = false;
     if (!slot) {
       if (RPD.StorageManager.isFull()) return { ok: false, reason: 'NO_ROOM' };

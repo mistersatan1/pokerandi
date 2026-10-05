@@ -148,6 +148,9 @@
     if (RPD.GoldShopManager) atk *= RPD.GoldShopManager.attackMul(def);
     // 조합 난이도 보정 — 까다롭게 만든 것 · 히든은 더 세다(js/data/craftpower.js)
     if (RPD.CraftPower) atk *= RPD.CraftPower.mulOf(def);
+    // 특수 런 "불꽃만 사용"(세션 99) — 그 타입 공격력 보정(typeDamageMul). 칸이 반 넘게 비는 판을 메운다
+    var tdm = RPD.modeMod('typeDamageMul', null);
+    if (tdm) for (var ti = 0; ti < (def.types || []).length; ti++) if (tdm[def.types[ti]]) { atk *= tdm[def.types[ti]]; break; }
     // 역할 보정 — 연쇄·광역 살짝 ↓, 단일·보스킬러 피해 ↑ (js/data/roletuning.js)
     if (RPD.RoleTuning) atk *= RPD.RoleTuning.attack(def.role);
 

@@ -127,6 +127,8 @@
       </div>
 
       <div class="board__banner" id="waveBanner" aria-live="polite"></div>
+      <!-- 특수 런(세션 99) — 이번 판 규칙. 누르면 설명 -->
+      <div class="rulestrip" id="ruleStrip" role="button" tabindex="0" title="이번 판 특수 규칙 — 눌러서 설명" hidden></div>
       <!-- 보스 이름표(세션 86) — BossIntroUI 가 boss:appeared 때 채운다. 클릭을 막지 않는다 -->
       <div class="bossintro" id="bossIntro" aria-live="polite"></div>
       <div class="nextreward" id="nextReward" title="보스를 잡으면 받는 보상"></div>
@@ -646,6 +648,7 @@
 <script src="js/data/auras.js"></script>
 <script src="js/data/titles.js"></script>
 <script src="js/data/achievements.js"></script>
+<script src="js/data/specialrules.js"></script>
 <script src="js/data/spells.js"></script>
 <script src="js/data/roletuning.js"></script>
 <script src="js/data/craftpower.js"></script>
@@ -675,6 +678,7 @@
 <script src="js/systems/SaveManager.js"></script>
 <script src="js/systems/ProgressManager.js"></script>
 <script src="js/systems/AchievementManager.js"></script>
+<script src="js/systems/SpecialRunManager.js"></script>
 <script src="js/systems/SpellManager.js"></script>
 <script src="js/systems/LegendAdvisor.js"></script>
 <script src="js/systems/RunSave.js"></script>
@@ -710,6 +714,7 @@
 <script src="js/ui/EliteUI.js"></script>
 <script src="js/ui/SpellUI.js"></script>
 <script src="js/ui/AchieveUI.js"></script>
+<script src="js/ui/SpecialRunUI.js"></script>
 <script src="js/main.js"></script>
 
 </body>

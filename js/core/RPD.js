@@ -279,7 +279,8 @@
   RPD.DIFFICULTY_ORDER = ['EASY', 'NORMAL', 'HARD', 'HELL'];
 
   /* 모드 + 난이도 → 이번 판에 실제로 쓰는 모드. 난이도는 일반 모드에만 있다. */
-  RPD.effectiveMode = function (modeId, diffId) {
+  /* rules: 특수 런 규칙 id 목록(세션 99 · js/data/specialrules.js) — 일반 모드에만. 규칙의 mods 를 modifiers 에 더한다 */
+  RPD.effectiveMode = function (modeId, diffId, rules) {
     var base = RPD.Modes[modeId] || RPD.Modes.NORMAL;
     var diff = (base.id === 'NORMAL' && RPD.Difficulties[diffId]) || RPD.Difficulties.NORMAL;
     var mods = {};
@@ -297,6 +298,17 @@
     mode.label = base.id === 'NORMAL' ? base.label + ' · ' + diff.label : base.label;
     // 기록은 난이도별로 따로 남긴다
     mode.recordKey = base.id === 'NORMAL' ? 'NORMAL:' + diff.id : base.id;
+    // 특수 런 — 기록은 규칙 조합 · 난이도별로 따로(일반 기록 · 난이도 칭호와 섞지 않는다)
+    var ids = base.id === 'NORMAL' && RPD.SpecialRules ? RPD.SpecialRules.normalize(rules) : [];
+    mode.rules = ids;
+    if (ids.length) {
+      ids.forEach(function (id) {
+        var add = RPD.SpecialRules.get(id).mods || {};
+        for (var q in add) mods[q] = add[q];
+      });
+      mode.recordKey = 'SPECIAL:' + ids.join('+') + ':' + diff.id;
+      mode.label += ' · ' + ids.map(function (id) { return RPD.SpecialRules.get(id).icon; }).join('');
+    }
     return mode;
   };
 

@@ -74,7 +74,7 @@
     if (!unit) return { ok: false, reason: 'NO_UNIT' };
 
     var slot = fieldIndex === undefined || fieldIndex === null
-      ? RPD.FieldManager.firstEmpty()
+      ? RPD.FieldManager.firstEmpty(unit)
       : RPD.FieldManager.get(fieldIndex);
 
     if (!slot) return { ok: false, reason: 'NO_SLOT' };

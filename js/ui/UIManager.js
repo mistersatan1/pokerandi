@@ -138,10 +138,18 @@
     if (el.modeList) {
       el.modeList.addEventListener('click', function (e) {
         if (e.target.closest('[data-open-ach]')) { if (RPD.AchieveUI) RPD.AchieveUI.open(); return; }   // 업적 창(세션 98) — 모드 선택 위에 뜬다
+        var rule = e.target.closest('[data-rule]');
+        if (rule) {   // 특수 런 규칙 켜고 끄기(세션 99) — 고른 채로 남는다
+          var cur = pickedRules(), id = rule.getAttribute('data-rule'), at = cur.indexOf(id);
+          if (at >= 0) cur.splice(at, 1); else cur.push(id);
+          RPD.SaveManager.setSetting('specialRules', RPD.SpecialRules.normalize(cur));
+          showModePick();
+          return;
+        }
         var diff = e.target.closest('.diffbtn');
         if (diff) {
           hideModePick();
-          RPD.Game.startRun('NORMAL', diff.dataset.diff);
+          RPD.Game.startRun('NORMAL', diff.dataset.diff, pickedRules());
           return;
         }
         var card = e.target.closest('.modecard');
@@ -1349,6 +1357,26 @@
 
   /* ---------- 모드 선택 ---------- */
 
+  /* 특수 런(세션 99) — 고른 규칙(설정에 남는다 · 다음에 열어도 그대로) */
+  function pickedRules() {
+    return RPD.SpecialRules ? RPD.SpecialRules.normalize(RPD.SaveManager.getSetting('specialRules', []) || []) : [];
+  }
+  UIManager.pickedRules = pickedRules;
+  function rulePickHtml() {
+    if (!RPD.SpecialRules) return '';
+    var on = pickedRules();
+    return '<div class="rulepick">' +
+      '<span class="rulepick__head">특수 런 <small>규칙을 골라 얹기 · 여러 개 가능 · 기록은 따로</small></span>' +
+      '<div class="rulepick__list">' + RPD.SpecialRules.list.map(function (r) {
+        var sel = on.indexOf(r.id) >= 0;
+        return '<button type="button" class="rulechip is-' + r.tone + (sel ? ' is-on' : '') + '" data-rule="' + r.id + '" aria-pressed="' + sel + '" title="' + r.desc + '">' +
+          '<span class="rulechip__icon">' + r.icon + '</span><span class="rulechip__name">' + r.name + '</span></button>';
+      }).join('') + '</div>' +
+      (on.length ? '<ul class="rulepick__desc">' + on.map(function (id) { var r = RPD.SpecialRules.get(id); return '<li>' + r.icon + ' <b>' + r.name + '</b> — ' + r.desc + '</li>'; }).join('') + '</ul>'
+                 : '<p class="rulepick__none">규칙 없음 — 보통 일반 모드</p>') +
+    '</div>';
+  }
+
   function recordHtml(key) {
     var rec = RPD.SaveManager.recordFor(key);
     var n = RPD.SaveManager.clearsFor(key);
@@ -1390,7 +1418,7 @@
             '" style="--dc:' + d.color + '">' +
             '<span class="diffbtn__name">' + d.label + '</span>' +
             '<span class="diffbtn__desc">' + d.desc + '</span>' +
-            '<span class="diffbtn__rec">' + recordHtml('NORMAL:' + did) + '</span>' +
+            '<span class="diffbtn__rec">' + recordHtml(RPD.effectiveMode('NORMAL', did, pickedRules()).recordKey) + '</span>' +
           '</button>';
         }).join('');
         return '<div class="modecard modecard--normal">' +
@@ -1399,6 +1427,7 @@
             '<span class="modecard__tag">' + m.tagline + '</span>' +
             '<span class="modecard__desc">' + m.desc + '</span>' +
           '</span>' +
+          rulePickHtml() +
           '<div class="difflist">' + diffs + '</div>' +
         '</div>';
       }
@@ -2094,11 +2123,12 @@
 
   function cellHtml(r) {
       var t = RPD.Tiers[r.g.def.tier];
-      return '<button type="button" class="scell' + (r.mat ? ' is-material' : '') +
+      var bench = RPD.modeMod('fieldType', null) && (r.g.def.types || []).indexOf(RPD.modeMod('fieldType', null)) < 0;   // 특수 런 "불꽃만" — 전투 칸에 못 선다(세션 99)
+      return '<button type="button" class="scell' + (r.mat ? ' is-material' : '') + (bench ? ' is-bench' : '') +
         (r.g.stored ? ' has-stored' : '') + (r.g.field ? '' : ' is-storedOnly') +
         '" data-def="' + r.id + '" style="--tier:' + t.color +
         '" title="' + r.g.def.name + ' · ' + t.label +
-        (r.g.stored ? ' · 창고 ' + r.g.stored : '') + (r.mat ? ' · 조합 재료' : '') + (RPD.CheerData.isCheerable(r.id) ? ' · ✨ 응원 가능' : '') + '">' +
+        (r.g.stored ? ' · 창고 ' + r.g.stored : '') + (r.mat ? ' · 조합 재료' : '') + (RPD.CheerData.isCheerable(r.id) ? ' · ✨ 응원 가능' : '') + (bench ? ' · 이번 판엔 전투 칸에 못 섬(재료 · 응원용)' : '') + '">' +
         RPD.UI.sprite(r.g.def, 'spr--cell') +
         '<span class="scell__n">' + r.g.total + '</span>' +
         (r.g.locked ? '<span class="scell__lock" title="잠근 ' + r.g.locked + '마리">🔒' + (r.g.locked > 1 ? r.g.locked : '') + '</span>' : '') +

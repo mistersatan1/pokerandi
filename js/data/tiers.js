@@ -72,6 +72,10 @@
       if (Object.prototype.hasOwnProperty.call(band.weights, k)) out[k] = band.weights[k];
     }
 
+    // 특수 런 "높은 등급 확률 증가"(세션 99) — 등급별 배수. 흔함 최소 비중도 규칙이 낮춘다(아래 clampCommon)
+    var tmul = RPD.modeMod ? RPD.modeMod('summonTierMul', null) : null;
+    if (tmul) for (var mk in tmul) if (out[mk]) out[mk] *= tmul[mk];
+
     // 해금 직후 보정
     for (var t = 0; t < RPD.TIER_ORDER.length; t++) {
       var id = RPD.TIER_ORDER[t];
@@ -80,7 +84,12 @@
         out[id] *= this.unlockBoostMul;
       }
     }
-    return clampCommon(out, this.minCommonShare);
+    return clampCommon(out, this.commonShare());
+  };
+
+  /* 흔함 최소 비중 — 특수 런이 낮출 수 있다(세션 99 · minCommonShare) */
+  SummonTable.commonShare = function () {
+    return RPD.modeMod ? RPD.modeMod('minCommonShare', this.minCommonShare) : this.minCommonShare;
   };
 
   /* 흔함이 minCommonShare 밑으로 가지 않게 나머지 등급을 줄인다.

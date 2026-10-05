@@ -51,6 +51,12 @@ function boot() {
   // 도감 수 고정(세션 97): DEX=151 이면 도감 보상(전투 · 창고 · 시작 골드 · 조각 · 소환권)을 다 받은 판. 없으면 판을 거듭하며 도감이 쌓인다(예전 그대로)
   if (process.env.DEX != null) { const dexN = parseInt(process.env.DEX, 10) || 0; R.SaveManager.dexCount = () => dexN; }
   R.SpellManager.init();
+  if (R.SpecialRunManager) R.SpecialRunManager.init();
+  // 특수 런 실험: FIRE_MUL=2 (불꽃만 사용의 불꽃 공격력 배율) · LUCKY_T3=1.8 · LUCKY_COMMON=0.35
+  if (process.env.FIRE_MUL) R.SpecialRules.get('fireOnly').mods.typeDamageMul = { FIRE: Number(process.env.FIRE_MUL) };
+  if (process.env.FIRE_BOSS) R.SpecialRules.get('fireOnly').mods.finalBossHpMul = R.Modes.NORMAL.modifiers.finalBossHpMul * Number(process.env.FIRE_BOSS);   // 노멀 70R 보스 대비 배율
+  if (process.env.LUCKY_T3) R.SpecialRules.get('lucky').mods.summonTierMul.T3 = Number(process.env.LUCKY_T3);
+  if (process.env.LUCKY_COMMON) R.SpecialRules.get('lucky').mods.minCommonShare = Number(process.env.LUCKY_COMMON);   // 특수 런(세션 99) — SPECIAL=fireOnly,cost2,shuffle,lucky
   R.RewardManager.init();
   R.TraitManager.init();
   // 조합 난이도 보정(까다로운 조합 보너스 · 히든 1.5배)을 끄고 재 보려면 NO_CRAFTPOWER=1
@@ -129,7 +135,7 @@ function newGame(modeId) {
   const diffId = process.argv[4] || 'NORMAL';
   EM.reset(); WM.reset(); EC.reset(); ST.reset(); SM.reset();
   CM.reset(); RM.reset(); SH.reset(); BM.reset(); SG.reset(); SK.reset(); R.RewardManager.reset(); R.TraitManager.reset();
-  F.init(); GM.reset(modeId, diffId);
+  F.init(); GM.reset(modeId, diffId, process.env.SPECIAL ? process.env.SPECIAL.split(',') : []);
   R.SpellManager.reset();
   if (process.env.STORAGE_CAP) SG.capacity = parseInt(process.env.STORAGE_CAP, 10);   // 실험 — 창고 칸을 덮어쓴다(수요 측정은 아주 크게)
   // 도감 보상의 시작 조각 · 소환권(게임에선 ProgressManager.applyStartBonus — 봇은 화면 · 칭호를 안 불러 여기서). 시작 골드 · 창고는 GM · SG 가 이미 넣었다
@@ -279,13 +285,18 @@ function act(stats) {
   manageCheer(stats);
 
   // 창고에서 더 센 개체를 필드로 올린다
+  // 특수 런 "불꽃만"(세션 99) — 그 칸에 설 수 있는 개체만 후보로
+  const fits = (slotIdx, u) => F.canPlace(slotIdx, u).ok;
   for (let g = 0; g < 10; g++) {
-    const empty = F.firstEmpty();
-    if (!empty || !SG.units.length) break;
-    let best = 0;
-    for (let i = 1; i < SG.units.length; i++) {
-      if (SG.units[i].dps > SG.units[best].dps) best = i;
+    const anyEmpty = F.slots.find(s => s.unlocked && !s.unit && s.zone !== 'cheer');
+    if (!anyEmpty || !SG.units.length) break;
+    let best = -1;
+    for (let i = 0; i < SG.units.length; i++) {
+      if (!fits(anyEmpty.index, SG.units[i])) continue;
+      if (best < 0 || SG.units[i].dps > SG.units[best].dps) best = i;
     }
+    if (best < 0) break;
+    const empty = anyEmpty;
     if (!SG.deploy(best, empty.index).ok) break;
     stats.deploys++;
   }
@@ -295,10 +306,12 @@ function act(stats) {
     if (!SG.units.length) break;
     const worstSlot = weakest();
     if (!worstSlot) break;
-    let best = 0;
-    for (let i = 1; i < SG.units.length; i++) {
-      if (SG.units[i].dps > SG.units[best].dps) best = i;
+    let best = -1;
+    for (let i = 0; i < SG.units.length; i++) {
+      if (!fits(worstSlot.index, SG.units[i])) continue;
+      if (best < 0 || SG.units[i].dps > SG.units[best].dps) best = i;
     }
+    if (best < 0) break;
     if (SG.units[best].dps <= worstSlot.unit.dps * 1.3) break;
     if (!SG.deploy(best, worstSlot.index).ok) break;
     stats.deploys++;

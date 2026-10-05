@@ -48,7 +48,7 @@
 
     /* 흔함 최소 비중 — 소프트 천장이 상위 등급을 부풀려도 흔함이 minCommonShare 밑으로
      * 내려가지 않게 나머지를 줄인다. (확정 천장·소환권은 "보장"이라 이 규칙 밖이다.) */
-    var minShare = T.minCommonShare || 0;
+    var minShare = (T.commonShare ? T.commonShare() : T.minCommonShare) || 0;
     if (minShare > 0 && w.T1) {
       var rest = 0;
       for (var r in w) if (r !== 'T1') rest += w[r];
@@ -128,7 +128,14 @@
      * 예전에는 판마다 계열을 추첨했다(PoolManager). 조합식 개편 v2 에서 없앴다 —
      * 재료가 전부 이름으로 못박혀 있어, 추첨에서 빠진 계열이 있으면 조합이 막힌다. */
     var pool = opts && opts.reward ? RPD.PokemonData.rewardPool(tier) : RPD.PokemonData.summonPool(tier);
+    // 특수 런 "불꽃만 사용"(세션 99) — 그 타입 계열(타입 + 조합 재료 전부)로 좁힌다. 그 등급에 계열 종이 없으면 그대로
+    var tree = RPD.SpecialRunManager ? RPD.SpecialRunManager.tree : null;
+    if (tree) {
+      var narrowed = pool.filter(function (id) { return tree[id]; });
+      if (narrowed.length) pool = narrowed;
+    }
     if (!pool.length) return [];
+    var treeType = tree ? RPD.modeMod('summonTree', null) : null, treeW = RPD.modeMod('treeTypeWeight', 1);
 
     var T = RPD.SummonTable;
     var wanted = RPD.RecipeManager ? RPD.RecipeManager.missingMaterials(T.recipeBoostMaxMissing) : {};
@@ -145,6 +152,7 @@
       var weight = 1;
       if (wanted[id]) weight *= T.recipeBoostMul;
       if ((owned[id] || 0) >= T.duplicateSoftenFrom) weight *= T.duplicateSoftenMul;
+      if (treeType && (RPD.PokemonData.get(id).types || []).indexOf(treeType) >= 0) weight *= treeW;
       entries.push({ id: id, weight: weight });
     }
     return entries;
@@ -168,6 +176,7 @@
     for (var i = 0; i < F.slots.length; i++) {
       var slot = F.slots[i];
       if (!slot.unlocked || slot.unit || slot.zone === 'cheer') continue;   // 응원 칸은 자동으로 채우지 않는다
+      if (!F.canPlace(slot.index, unit).ok) continue;                         // 특수 런 "불꽃만" — 못 서는 개체는 창고로(세션 99)
       var cover = RPD.MapData.coverageAt(slot.x, slot.y, unit.range);
       if (cover > bestCover) { bestCover = cover; best = slot; }
     }

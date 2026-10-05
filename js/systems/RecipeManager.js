@@ -292,6 +292,13 @@
     // 응원 칸에서 쓴 재료의 자리는 결과 자리 후보가 아니다(결과가 응원 가능하지 않을 수 있다 — 세션 82)
     var battleSlots = fieldSlots.filter(function (i) { return !F.isCheer(i); });
     var keep = battleSlots.length ? bestSlot(battleSlots) : null;
+    /* 특수 런 "불꽃만"(세션 99) — 결과가 전투 칸에 못 서면 창고로 가야 한다. 재료가 전부 필드에서 오고 창고가 차 있으면
+     * 재료를 없애기 전에 멈춘다(예전엔 재료 칸이 늘 결과 자리라 이 경우가 없었다) */
+    var probe = { defId: resultId, types: (RPD.PokemonData.get(resultId) || {}).types || [] };
+    if (keep !== null && !F.canPlace(keep, probe).ok) keep = null;
+    if (keep === null && !F.firstEmpty(probe) && SM.isFull() && !mats.some(function (m) { return m.where === 'store'; })) {
+      return { ok: false, reason: 'NO_ROOM' };
+    }
 
     // 연출용 — 재료가 있던 자리(필드 칸 좌표 · 창고에서 온 수). 규칙엔 안 쓴다(세션 87 · CraftFx 가 결과 칸으로 모이는 빛을 그린다)
     var fromXY = fieldSlots.map(function (i) { var sl = F.get(i); return { x: sl.x, y: sl.y }; });
@@ -313,7 +320,7 @@
     made.level = Math.min(RPD.Config.upgradeMaxLevel, Math.floor(topLevel / 2));
 
     if (keep === null) {
-      var empty = F.firstEmpty();
+      var empty = F.firstEmpty(made);
       if (empty) keep = empty.index;
     }
     if (keep !== null && !F.place(keep, made)) keep = null;

@@ -91,8 +91,8 @@
   EconomyManager.summonCost = function () {
     var step = Math.floor(this.summonCount / CFG.summonCostStepEvery) * CFG.summonCostStep;
     var cost = Math.min(CFG.summonCostCap, CFG.summonBaseCost + step);
-    // 벌레 시너지: 소환 비용 할인
-    return Math.max(5, Math.round(cost * RPD.SynergyManager.bonus.summonCostMul));
+    // 벌레 시너지: 소환 비용 할인 · 특수 런 "소환 비용 2배"(세션 99 · summonCostMul)
+    return Math.max(5, Math.round(cost * RPD.SynergyManager.bonus.summonCostMul * RPD.modeMod('summonCostMul', 1)));
   };
 
   /* 방출 환급. 그 개체에 실제로 넣은 골드의 절반을 돌려준다.

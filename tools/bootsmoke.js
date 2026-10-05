@@ -2018,10 +2018,11 @@ check('판 저장을 지우거나 망가뜨려도 진행 기록(도감 · 칭호
   const SM = RPD.SaveManager;
   SM.data.pokedex.charizard = { seen: true, best: 1 };
   SM.data.spells.articuno_spell = 12345; SM.data.clearsBy['NORMAL:NORMAL'] = 2;
-  SM.save();
-  const progress = LS.getItem(RPD.SAVE_KEY);
   if (RS.KEY === RPD.SAVE_KEY) throw new Error('같은 키');
   richRun();
+  // 판 도중 업적(세션 98)이 진행 기록을 정당하게 저장할 수 있다 — 판을 세운 뒤의 기록을 기준으로 본다(판 저장을 지우는 일만 따로)
+  SM.save();
+  const progress = LS.getItem(RPD.SAVE_KEY);
   LS.setItem(RS.KEY, 'garbage{{'); RS.read(); RS.clear(); RUI.render();
   if (LS.getItem(RPD.SAVE_KEY) !== progress) throw new Error('진행 기록 문자열이 바뀌었다');
   SM.load();
@@ -3343,6 +3344,133 @@ check('업적 — 클리어 판정(불멸 없이 · 안 놓치고 · 모드) · 
   RPD.AchieveUI.renderResult();
   if (nodes.resultAch.hidden || !/순수한 승리/.test(nodes.resultAch.innerHTML)) throw new Error('결과 화면 ' + nodes.resultAch.innerHTML);
   RPD.StatsManager.leaks = 0;
+});
+
+/* ---------- 특수 런(세션 99) ---------- */
+function spStart(rules) {
+  MS.forceMobile = false;
+  RPD.Config.autosave = false;
+  RPD.Game.resetAll('NORMAL', 'NORMAL', { rules: rules });
+  RPD.Game.startRun('NORMAL', 'NORMAL', rules);
+  RPD.GameManager.gold = 99999; RPD.GameManager.life = 999;
+  RPD.StorageManager.reset();
+}
+check('특수 런 — 규칙이 모드에 합쳐진다 · 기록은 따로 · 일반 모드 밖에선 무시 · 다시 시작은 규칙 유지', () => {
+  const m = RPD.effectiveMode('NORMAL', 'HARD', ['lucky', 'cost2', 'nope']);
+  if (m.rules.join() !== 'cost2,lucky') throw new Error('규칙 정리 ' + m.rules);
+  if (m.recordKey !== 'SPECIAL:cost2+lucky:HARD') throw new Error('기록 키 ' + m.recordKey);
+  if (m.modifiers.summonCostMul !== 2 || m.modifiers.minCommonShare !== 0.35 || m.modifiers.finalBossHpMul == null) throw new Error('보정 ' + JSON.stringify(m.modifiers));
+  if (RPD.effectiveMode('BOSS_RUSH', 'NORMAL', ['cost2']).rules.length) throw new Error('보스 러시에 규칙');
+  if (RPD.effectiveMode('NORMAL', 'NORMAL', []).recordKey !== 'NORMAL:NORMAL') throw new Error('규칙 없는 기록 키');
+  spStart(['cost2']);
+  if (RPD.GameManager.mode.rules.join() !== 'cost2') throw new Error('판에 규칙이 안 들어감');
+  RPD.Game.restart();
+  if (RPD.GameManager.mode.rules.join() !== 'cost2') throw new Error('다시 시작에 규칙이 빠짐');
+  RPD.Game.resetAll('NORMAL', 'NORMAL', { rules: [] });
+  if (RPD.GameManager.mode.rules.length) throw new Error('규칙 끄기');
+});
+
+check('특수 런 — 소환 비용 2배 · 높은 등급 확률(흔함 최소 35%)', () => {
+  spStart([]);
+  const base = RPD.EconomyManager.summonCost(), T = RPD.SummonTable;
+  const o0 = T.oddsFor(30);
+  spStart(['cost2']);
+  if (RPD.EconomyManager.summonCost() !== base * 2) throw new Error('비용 ' + base + ' → ' + RPD.EconomyManager.summonCost());
+  spStart(['lucky']);
+  const o1 = T.oddsFor(30);
+  if (!(o0.T1 >= 49.9 && o1.T1 < o0.T1 && o1.T1 >= 34.9 && o1.T3 > o0.T3 * 1.4)) throw new Error('확률 ' + JSON.stringify({ o0, o1 }));
+  if (o1.T4 || o1.T5) throw new Error('희귀함 · 전설이 소환에 나왔다');
+  RPD.GameManager.setWave(30);
+  const w = RPD.SummonManager.currentOdds();
+  if (w.T1 < 34.9) throw new Error('천장 보정 뒤 흔함 ' + w.T1);
+});
+
+check('특수 런 "불꽃만" — 전투 칸 거절 · 응원 칸 · 자동 배치는 창고로 · 소환 종은 불꽃 계열', () => {
+  spStart(['fireOnly']);
+  const F = RPD.FieldManager, PD = RPD.PokemonData, UM = RPD.UnitManager;
+  const fire = UM.create('charmander'), water = UM.create('squirtle');
+  const open = F.slots.filter(s => s.unlocked && s.zone !== 'cheer' && !s.unit);
+  const c = F.canPlace(open[0].index, water);
+  if (c.ok || c.reason !== 'TYPE_RULE') throw new Error('물 타입을 전투 칸에 ' + JSON.stringify(c));
+  if (!F.canPlace(open[0].index, fire).ok) throw new Error('불꽃을 거절');
+  if (F.firstEmpty() !== null) throw new Error('개체 없이 빈 칸을 줬다(앞선 검사가 창고 없이 통과)');
+  if (!F.firstEmpty(fire) || F.firstEmpty(water)) throw new Error('개체별 빈 칸');
+  let rejected = 0; const h = p => { if (p && p.reason === 'TYPE_RULE') rejected++; };
+  RPD.bus.on('field:rejected', h);
+  const placed = RPD.SummonManager.autoPlace(water);
+  RPD.bus.off('field:rejected', h);
+  if (placed || rejected) throw new Error('자동 배치가 물 타입을 두거나 거절 알림을 냈다');
+  const cheer = F.slots.find(s => s.zone === 'cheer' && s.unlocked && !s.unit);
+  const cheerId = PD.list.find(d => RPD.CheerData.isCheerable(d.id) && !(d.types || []).includes('FIRE') && d.tier !== 'T6').id;
+  if (cheer && !F.canPlace(cheer.index, UM.create(cheerId)).ok) throw new Error('응원 칸까지 막았다');
+  const tree = RPD.SpecialRunManager.tree;
+  if (!tree || !tree.charmander || !tree.charizard || tree.pikachu) throw new Error('불꽃 계열 ' + Object.keys(tree || {}).length);
+  for (const t of ['T1', 'T2', 'T3']) {
+    const ids = RPD.SummonManager.speciesWeights(t).map(e => e.id);
+    if (!ids.length || ids.some(id => !tree[id])) throw new Error(t + ' 소환 종이 계열 밖 ' + ids);
+  }
+  const ws = RPD.SummonManager.speciesWeights('T1');
+  const fw = ws.find(e => e.id === 'charmander').weight, ow = ws.find(e => e.id !== 'charmander').weight;
+  if (!(fw > ow * 2)) throw new Error('불꽃 가중치 ' + fw + ' / ' + ow);
+  const atkFire = UM.create('charmander').attack;
+  spStart([]);
+  const atkPlain = UM.create('charmander').attack;
+  if (!(atkFire > atkPlain * 1.5)) throw new Error('불꽃 공격력 보정 ' + atkFire + ' / ' + atkPlain);
+});
+
+check('특수 런 "불꽃만" — 결과가 못 서는 조합은 창고가 차 있으면 재료를 없애기 전에 멈춘다', () => {
+  spStart(['fireOnly']);
+  const F = RPD.FieldManager, SM = RPD.StorageManager, PD = RPD.PokemonData, UM = RPD.UnitManager;
+  const r = RPD.RecipeData.list.find(x => PD.get(x.id).tier === 'T2' && !(PD.get(x.id).types || []).includes('FIRE') && x.materials.every(m => (PD.get(m).types || []).includes('FIRE')))
+    || null;
+  // 불꽃 재료로 비불꽃을 만드는 조합식이 없으면, 필드 재료를 불꽃 규칙과 상관없이 직접 둔다
+  const rec = r || RPD.RecipeData.list.find(x => PD.get(x.id).tier === 'T2' && !(PD.get(x.id).types || []).includes('FIRE') && !PD.get(x.id).hidden);
+  const open = F.slots.filter(s => s.unlocked && s.zone !== 'cheer' && !s.unit);
+  rec.materials.forEach((m, i) => { const u = UM.create(m); open[i].unit = u; u.slotIndex = open[i].index; });
+  while (!SM.isFull()) SM.add(UM.create('charmander'));
+  const before = F.getAllUnits().length;
+  const res = RPD.RecipeManager.craft(rec.key);
+  if (res.ok || res.reason !== 'NO_ROOM') throw new Error('멈추지 않았다 ' + JSON.stringify(res));
+  if (F.getAllUnits().length !== before) throw new Error('재료가 사라졌다');
+  SM.removeAt(0);
+  const ok = RPD.RecipeManager.craft(rec.key);
+  if (!ok.ok || !ok.toStorage) throw new Error('창고 자리가 있으면 창고로 ' + JSON.stringify({ ok: ok.ok, s: ok.toStorage, r: ok.reason }));
+});
+
+check('특수 런 "조합식 랜덤" — 같은 등급 · 같은 무리끼리 일대일 · 히든 그대로 · 같은 시드 같은 판 · 끄면 원래대로', () => {
+  spStart([]);
+  const RD = RPD.RecipeData, PD = RPD.PokemonData, SR = RPD.SpecialRunManager;
+  const orig = RD.list.map(r => r.materials.join(','));
+  spStart(['shuffle']);
+  const seed = SR.seed;
+  const now = RD.list.map(r => r.materials.join(','));
+  const changed = now.filter((x, i) => x !== orig[i]).length;
+  if (!seed || changed < RD.list.length * 0.5) throw new Error('거의 안 섞였다 ' + changed + '/' + RD.list.length);
+  RD.list.forEach((r, i) => {
+    const b = r.base;
+    r.materials.forEach((m, k) => {
+      const a = PD.get(b[k]), z = PD.get(m);
+      if (a.tier !== z.tier) throw new Error('등급이 바뀜 ' + b[k] + '→' + m);
+      if (a.hidden !== z.hidden || (a.hidden && m !== b[k])) throw new Error('히든 ' + b[k] + '→' + m);
+      if (!!a.summon !== !!z.summon) throw new Error('무리가 바뀜 ' + b[k] + '→' + m);
+      if (RPD.tierRank(z.tier) >= RPD.tierRank(PD.get(r.id).tier)) throw new Error('재료가 결과보다 높다');
+    });
+    if (new Set(b).size !== new Set(r.materials).size) throw new Error('서로 다른 재료 수가 바뀜 ' + r.key);
+  });
+  const used = Object.keys(RD.byMaterial).reduce((a, k) => a + RD.byMaterial[k].length, 0);
+  const need = RD.list.reduce((a, r) => a + new Set(r.materials).size, 0);
+  if (used !== need || RD.byMaterial[RD.list[0].materials[0]].indexOf(RD.list[0]) < 0) throw new Error('쓰이는 곳 색인');
+  // 판 이어하기 — 시드가 남아 같은 조합식으로
+  const snap = RPD.RunSave.snapshot();
+  if (snap.state.SpecialRunManager.seed !== seed || snap.state.GameManager.rules.join() !== 'shuffle') throw new Error('저장 ' + JSON.stringify(snap.state.SpecialRunManager));
+  spStart([]);
+  if (RD.list.map(r => r.materials.join(',')).join('|') !== orig.join('|')) throw new Error('규칙 없는 판인데 원래대로 안 돌아옴');
+  RPD.Game.resetAll('NORMAL', 'NORMAL', { restore: true, rules: snap.state.GameManager.rules });
+  RPD.SpecialRunManager.loadState(snap.state.SpecialRunManager);
+  if (RD.list.map(r => r.materials.join(',')).join('|') !== now.join('|')) throw new Error('이어하기에 다른 조합식');
+  const bad = JSON.parse(JSON.stringify(snap)); bad.state.GameManager.rules = ['없는규칙'];
+  if (RPD.RunSave.validate(bad)) throw new Error('모르는 규칙 저장본을 받았다');
+  spStart([]);
 });
 
 wakePromise.then(() => {

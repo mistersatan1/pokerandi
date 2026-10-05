@@ -38,6 +38,7 @@
     RPD.ShardManager.init();
     RPD.RewardManager.init();
     RPD.BossManager.init();
+    if (RPD.SpecialRunManager) RPD.SpecialRunManager.init();   // 특수 런(세션 99) — game:reset 에 조합식 섞기 · 계열
     if (RPD.AchievementManager) RPD.AchievementManager.init();   // SaveManager 보다 먼저 — 클리어 업적이 판 기록 · 결과 화면보다 먼저 정해지게
     RPD.SaveManager.init();
     RPD.ProgressManager.init();
@@ -68,6 +69,7 @@
     if (RPD.EliteUI) RPD.EliteUI.init();
     if (RPD.SpellUI) RPD.SpellUI.init();
     if (RPD.AchieveUI) RPD.AchieveUI.init();
+    if (RPD.SpecialRunUI) RPD.SpecialRunUI.init();
     if (RPD.HudPanels) RPD.HudPanels.init();
     if (RPD.MobileSheet) RPD.MobileSheet.init();
     if (RPD.MobileToolbar) RPD.MobileToolbar.init();
@@ -159,20 +161,23 @@
     if (RPD.AttackFx) RPD.AttackFx.reset();
     RPD.FieldManager.init();
     RPD.Loop.setPaused(false);
-    GM.reset(modeId, diffId);
+    GM.reset(modeId, diffId, opts && opts.rules);   // rules 를 안 주면(undefined) 같은 모드의 지난 규칙 유지(세션 99)
     // 클리어 횟수에 따른 시작 보너스(칭호)
     if (RPD.ProgressManager && !(opts && opts.restore)) RPD.ProgressManager.applyStartBonus();
     RPD.UIManager.refreshAll();
   };
 
-  Game.startRun = function (modeId, diffId) {
+  /* rules — 특수 런 규칙 id 목록(세션 99). 안 주면 지금 판의 규칙 그대로 */
+  Game.startRun = function (modeId, diffId, rules) {
     if (GM.isPlayable()) return;
     var target = (modeId && RPD.Modes[modeId]) ? modeId : GM.mode.id;
     var diff = diffId || (target === GM.mode.id ? GM.mode.difficulty : 'NORMAL');
-    // 모드·난이도가 바뀌거나 지난 판이 끝났으면 처음부터 다시 세운다
-    if (target !== GM.mode.id || diff !== GM.mode.difficulty ||
+    var want = rules === undefined ? (target === GM.mode.id ? (GM.mode.rules || []) : []) : RPD.SpecialRules.normalize(rules);
+    var sameRules = want.join('+') === (GM.mode.rules || []).join('+');
+    // 모드·난이도·규칙이 바뀌거나 지난 판이 끝났으면 처음부터 다시 세운다
+    if (target !== GM.mode.id || diff !== GM.mode.difficulty || !sameRules ||
         GM.state === S.GAMEOVER || GM.state === S.VICTORY) {
-      Game.resetAll(target, diff);
+      Game.resetAll(target, diff, { rules: want });
     }
     RPD.WaveManager.begin();
   };

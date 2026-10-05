@@ -593,6 +593,46 @@ button.dc__mon:hover { background: var(--panel-3); transform: translateY(-2px); 
 .rt__new b { font-size: 16px; }
 .rt__next { color: var(--muted); font-size: 12px; }
 
+/* ---------- 특수 런(세션 99) — 모드 선택 규칙 칩 · 필드 띠 ---------- */
+.rulepick { display: grid; gap: 6px; padding: 8px 10px; border-radius: 10px; background: var(--inset); }
+.rulepick__head { font-size: 13px; font-weight: 900; color: var(--text); }
+.rulepick__head small { margin-left: 6px; font-size: 11px; font-weight: 600; color: var(--muted); }
+.rulepick__list { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.rulechip {
+  --rc: var(--blue-hi);
+  display: flex; align-items: center; gap: 6px; padding: 7px 9px; border-radius: 10px; text-align: left;
+  border: 2px solid color-mix(in srgb, var(--rc) 35%, transparent); background: var(--panel-2);
+  color: var(--muted); font-size: 12px; font-weight: 800; box-shadow: var(--press-1);
+}
+.rulechip.is-hard { --rc: #ff8a6a; }
+.rulechip.is-easy { --rc: #5ee08a; }
+.rulechip.is-mix { --rc: #c89bff; }
+.rulechip__icon { font-size: 18px; filter: grayscale(.8); }
+.rulechip.is-on { border-color: var(--rc); background: color-mix(in srgb, var(--rc) 18%, var(--panel-2)); color: var(--text); }
+.rulechip.is-on .rulechip__icon { filter: none; }
+.rulechip:active { transform: translateY(2px); box-shadow: none; }
+.rulepick__desc { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; font-size: 11px; color: var(--muted); line-height: 1.4; }
+.rulepick__desc b { color: var(--text); }
+.rulepick__none { margin: 0; font-size: 11px; color: var(--faint); }
+@media (max-width: 1099.98px) { .rulepick__list { grid-template-columns: repeat(2, 1fr); } }
+
+.rulestrip {
+  position: absolute; left: 10px; top: 10px; z-index: 6; max-width: min(60%, 520px);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px;
+  padding: 5px 10px; border-radius: 12px; cursor: pointer;
+  background: rgba(8, 20, 46, 0.86); border: 1px solid var(--line-2); box-shadow: var(--shadow-panel);
+  font-size: 12px; font-weight: 800; color: var(--text);
+}
+.rulestrip[hidden] { display: none; }
+.rulestrip__kicker { font-size: 10px; color: var(--gold); letter-spacing: .04em; }
+.rulestrip__rule { padding: 1px 7px; border-radius: 999px; background: var(--inset); }
+.rulestrip__rule.is-hard { color: #ffb19c; }
+.rulestrip__rule.is-easy { color: #9cf0b8; }
+.rulestrip__rule.is-mix { color: #dcc2ff; }
+.rulestrip__desc { flex-basis: 100%; margin: 4px 0 0; padding: 0; list-style: none; display: grid; gap: 2px; font-size: 11px; font-weight: 600; color: var(--muted); line-height: 1.4; }
+.scell.is-bench { opacity: .55; }
+.scell.is-bench::after { content: '🚫'; position: absolute; left: 2px; bottom: 2px; font-size: 10px; }
+
 /* ---------- 업적 · 칭호(세션 98) — AchieveUI ---------- */
 .iconbtn--ach { font-size: 17px; }
 .achtitle {
